@@ -3356,6 +3356,7 @@ function enviarTicket(){
   }
   window._envArmado=false; clearTimeout(window._envArmT);
   if(_btnE){_btnE.textContent=_etiqEnv;_btnE.style.background='';}
+  if(window._envEnviando){ toast('Ya se está enviando este ticket…','#C9A227'); return; }
 
   // Col T: Facial
   const _fac=FACIALES.find(f=>f.sku===T.facial)||{sku:'',n:''};
@@ -3665,6 +3666,7 @@ function enviarTicket(){
   if(T.pack6) _packsNuevos.push({sku:T.pack6, nombre:(_p6&&_p6.n)||pack6Txt||T.pack6});
   var _facialNombre=(_fac&&_fac.n)||'';
 
+  window._envEnviando=true;
   Promise.all([_gcPromise].concat(_slotPromises)).then(function(){
     return fetch(APPS_SCRIPT_URL,{
       method:'POST',
@@ -3674,8 +3676,10 @@ function enviarTicket(){
   })
   .then(function(r){ return r.json(); })
   .then((d)=>{
-    if(d&&d.error){ toast('❌ '+d.error,'#B86B6B'); if(btn){btn.disabled=false;btn.textContent='✓ Enviar Ticket';} return; }
+    if(d&&d.error){ window._envEnviando=false; toast('❌ '+d.error,'#B86B6B'); if(btn){btn.disabled=false;btn.textContent='✓ Enviar Ticket';} return; }
+    if(d&&d.duplicado){ window._envEnviando=false; toast('✅ '+(d.mensaje||('Este ticket ya se envió ('+(d.ticket||d.so_num||'')+')')),'#6A9E7A'); if(typeof _ticketNuevoEnBlanco==='function') _ticketNuevoEnBlanco(); else T=newT(); if(btn){btn.disabled=false;btn.textContent='✓ Enviar Ticket';} if(typeof renderTicket==='function') renderTicket(document.getElementById('content')); return; }
     if(d&&d.pendiente_aprobar){
+      window._envEnviando=false;
       toast('✅ Listo. Quedó pendiente de aprobar (Fac. '+(d.factura||window._migoVincularFac||'')+'). Una administradora lo revisa.','#6A9E7A');
       window._migoVincularFac=''; window._migoForma=''; window._migoPrefillAviso='';
       if(typeof _ticketNuevoEnBlanco==='function') _ticketNuevoEnBlanco(); else T=newT();
@@ -3688,6 +3692,7 @@ function enviarTicket(){
     var _gcMsg='';
     if(_gcV&&_gcV.gcFila) _gcMsg+=' · GC '+_gcV.codigo;
     if(_slotsGC.length) _gcMsg+=' · '+_slotsGC.length+' GC(s) paquete';
+    window._envEnviando=false;
     toast('✅ '+((d&&(d.ticket||d.beta_num))||_tkNum)+' registrado'+_gcMsg,'#6A9E7A');
     if(d&&d.gc_error) setTimeout(function(){ toast('⚠️ '+d.gc_error,'#C9A227'); },1800);
     if(d&&d.cuadre&&(Number(d.cuadre.borradores_vinculados||0)>0||Number(d.cuadre.links||0)>0)){
@@ -3798,6 +3803,7 @@ function enviarTicket(){
     }
   })
   .catch(err=>{
+    window._envEnviando=false;
     toast('❌ Error: '+err.message,'#B86B6B');
     if(btn){btn.disabled=false;btn.textContent='✓ Enviar Ticket';}
   });
@@ -4807,6 +4813,12 @@ function _pdfRecorta(doc, txt, maxW){
   return txt+'…';
 }
 // ── Tarjeta digital del paquete: PDF pequeño para enviar a la clienta ──
+function _usoHecho(u){ return !!(u && (u.u || u.usado || u.f || u.fecha)); }
+function _usoTxt(u){ return String((u && (u.f || u.fecha)) || ''); }
+function _normUsosPaq(usos){
+  return (usos||[]).map(function(u){ var hecho=_usoHecho(u), txt=_usoTxt(u); return Object.assign({}, u, { u:hecho, f:txt, usado:!!(u&&u.usado)||hecho, fecha:txt }); });
+}
+function _cedClavePaq(v){ return String(v||'').split('.')[0].replace(/\D/g,'').replace(/^0+/,''); }
 function tarjetaPaquete(i){
   var x=(window._segPaqItems||[])[i];
   if(!x){toast('❌ No encontré el paquete','#B86B6B');return;}
@@ -4828,7 +4840,12 @@ function _pdfTarjetaPaquete(x, fondo, cbTP){
     var doc=new window.jspdf.jsPDF({unit:'pt',format:[W,H],orientation:'landscape'});
     var NAVY='#3D5A7A', TXT='#4A5568', GOLD='#8A6D1A', VERDE='#2E7D52';
     if(fondo) doc.addImage(_fondoCardSunsu(fondo),'JPEG',0,0,W,H);
-    var p=x.p;
+    var p=x.p||{};
+    p.usos=_normUsosPaq(p.usos);
+    var _contados=(p.usos||[]).filter(_usoHecho).length;
+    if(!x.usados) x.usados=_contados;
+    x.usados=Math.min(Math.max(Number(x.usados)||0, _contados), x.total||p.usos.length||3);
+    x.pend=Math.max(0, (x.total||3)-x.usados);
     var nomCli=((p.nombre||'')+' '+(p.apellido||'')).trim();
     var limpiaFac=function(s){return (s||'').toString().replace(/SUNSU-\d+\s*[-—:·]*\s*/gi,'').trim();};
     var y=96;
@@ -4852,7 +4869,7 @@ function _pdfTarjetaPaquete(x, fondo, cbTP){
       var cx=gx+(s%cols)*cw+cw/2;
       var cy=gy+Math.floor(s/cols)*ch;
       var uso=(p.usos||[])[s]||{};
-      var usada=s<x.usados;
+      var usada=s<x.usados || _usoHecho(uso);
       if(usada){ doc.setFillColor(61,90,122); doc.circle(cx,cy+12,11,'F'); doc.setTextColor('#FFFFFF'); }
       else { doc.setDrawColor(61,90,122); doc.setLineWidth(1.2); doc.circle(cx,cy+12,11,'D'); doc.setTextColor(NAVY); }
       doc.setFont('helvetica','bold'); doc.setFontSize(10);
@@ -4866,7 +4883,7 @@ function _pdfTarjetaPaquete(x, fondo, cbTP){
         // dos sesiones caen el mismo dia (una pisa a la otra). El slot es correcto siempre.
         // NBSP y espacios raros, si no el separador ' · ' no parte y el apellido
         // se queda pegado al facial en vez de bajar a la línea del nombre.
-        var rawF=(uso.f||'').toString()
+        var rawF=_usoTxt(uso).toString()
           .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\uFEFF]/g,' ')
           .replace(/[ \t]{2,}/g,' ')
           .trim();
@@ -4929,8 +4946,9 @@ function renderSegPaquetes(c){
       var esP3=P3.some(function(s){return p.sku.indexOf(s)>=0;});
       var total=p.total||(esP3?3:6);
       var usados=0, ultima=null;
+      p.usos=_normUsosPaq(p.usos);
       p.usos.slice(0,total).forEach(function(u){
-        if(u.u||u.f) usados++;
+        if(_usoHecho(u)) usados++;
         var f=parseF(u.f);
         if(f&&(!ultima||f>ultima)) ultima=f;
       });
@@ -12904,9 +12922,10 @@ function renderTarjetasPendientes(c){
     ((paqs.items)||[]).forEach(function(p){
       var esP3=P3.some(function(s){return p.sku.indexOf(s)>=0;});
       var total=p.total||(esP3?3:6);
-      var usados=0; p.usos.slice(0,total).forEach(function(u){if(u.u||u.f)usados++;});
+      p.usos=_normUsosPaq(p.usos);
+      var usados=0; p.usos.slice(0,total).forEach(function(u){if(_usoHecho(u))usados++;});
       var it={p:p,total:total,usados:Math.min(usados,total),pend:Math.max(0,total-usados)};
-      var k=(p.cedula||'').split('.')[0];
+      var k=_cedClavePaq(p.cedula);
       if(k){(window._tarjPaqPorCed[k]=window._tarjPaqPorCed[k]||[]).push(it);}
     });
     window._tarjDia=window._tarjDia||0; // 0=hoy 1=ayer 2=antier
@@ -12988,11 +13007,17 @@ function _pintarTarjetasPend(){
     var fFmt=fp.length===3?(fp[2]+'/'+fp[1]+'/'+fp[0]):t.fecha;
     // ¿La clienta tiene paquete? → botón para adjuntar también su control de paquete
     var ced=(t.cedula||'').split('.')[0];
-    var paqsCli=(window._tarjPaqPorCed||{})[ced]||[];
-    // SOLO paquetes VIGENTES (con sesiones por usar). Un paquete ya completo
-    // no se ofrece: sin el fallback a paqsCli[0], una clienta con su paquete
-    // terminado en 2025 que hoy vino a un facial suelto no muestra nada de paquete.
-    var paqAct=paqsCli.filter(function(x){return x.pend>0;})[0];
+    var paqsCli=(window._tarjPaqPorCed||{})[ced]||(window._tarjPaqPorCed||{})[_cedClavePaq(ced)]||[];
+    // Paquete de HOY (aunque se haya completado en este ticket) o, si no, uno vigente.
+    // Un paquete terminado en otro año no se ofrece junto a un facial suelto.
+    var dmyPaq='';
+    if((t.fecha||'').length>=10){ var fp=(t.fecha||'').split('-'); dmyPaq=fp[2]+'/'+fp[1]+'/'+String(fp[0]).slice(2); }
+    var paqHoy=dmyPaq?paqsCli.filter(function(x){ return (x.p.usos||[]).some(function(u){ return _usoTxt(u).indexOf(dmyPaq)===0; }); })[0]:null;
+    if(paqHoy){
+      var ses=0; (paqHoy.p.usos||[]).forEach(function(u,i){ if(!ses && _usoTxt(u).indexOf(dmyPaq)===0) ses=i+1; });
+      if(ses){ paqHoy.sesion=ses; paqHoy.usados=Math.max(paqHoy.usados||0, ses); paqHoy.pend=Math.max(0,(paqHoy.total||3)-paqHoy.usados); }
+    }
+    var paqAct=paqHoy||paqsCli.filter(function(x){return x.pend>0;})[0];
     // Tres mensajes: saludo corto (abre y siembra el chat) + cada PDF con el suyo
     var msgHola=encodeURIComponent(_msg('MENSAJE TARJETA SALUDO',{nombre:(t.nombre||'').split(' ')[0]}));
     var msg=encodeURIComponent(_msg('MENSAJE TARJETA TRATAMIENTO',{}));
@@ -15702,8 +15727,9 @@ function _cargarTodosPaquetes(){
       p.cedula=_cedTxt(p.cedula); p.notas=_paqNotaTxt(p.notas);
       var esP3=P3.some(function(s){return p.sku.indexOf(s)>=0;});
       var total=p.total||(esP3?3:6);
+      p.usos=_normUsosPaq(p.usos);
       var usados=0;
-      p.usos.slice(0,total).forEach(function(u){if(u.u||u.f)usados++;});
+      p.usos.slice(0,total).forEach(function(u){if(_usoHecho(u))usados++;});
       var aL=parseInt(p.ano)||0; if(aL>0&&aL<100)aL+=2000;
       var compra=new Date(aL,parseInt(p.mes)-1,parseInt(p.dia));
       return {p:p,total:total,usados:Math.min(usados,total),pend:Math.max(0,total-usados),compra:isNaN(compra)?new Date(0):compra};
