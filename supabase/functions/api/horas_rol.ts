@@ -125,6 +125,14 @@ export function clasificarHorasRol(opts: {
     const dato = opts.dias[fecha];
     const nom = dato && dato.nomMin > 0 ? dato.nomMin : 0;
 
+    // TK199: un feriado que cae en día de descanso se paga y se muestra como feriado (mismo 100 %).
+    if (esDesc && esFest && !esFuturo && nom > 0) {
+      diasFest++;
+      minsFest += (dato?.festMin || 0) + (dato?.descMin || 0) || nom;
+      minsNomina += nom;
+      minsNoct += dato?.noctMin || 0;
+      continue;
+    }
     if (esDesc) {
       if (nom > 0) {
         diasDesc++;
