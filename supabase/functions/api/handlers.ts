@@ -9,7 +9,8 @@ import {
   compraParaComision, desglosePaquetesTramo, listaExtrasPagados, marcaDePersona, PCT_COMISION_PRODUCTO, toCosmMark,
   cotCalcular, ecuadorParts, esCanje, esInterno, estadoTicket, facialSku, hashPin, hmUtc, isAdmin, n, newSalt,
   nombreEsAdmin, normCedula, normNombre, normalizarTramos, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
-  s, skuCode, validarBitacora, validarPromo, ymdUtc, codigoPaquete, colTicket, telefonoEc, type Row, type TicketIn, esCancelado, FACIALES_2, FACIALES_3, facialesDeTicket, paquetesDeTicket, pagaComisionFacial, personaEsRecepcionista, comisionPaquetesTramo, siguienteCodigoPaq, tarifaFacial, detectarIdentificacion } from "./domain.ts";
+  s, skuCode, validarBitacora, validarPromo, ymdUtc, codigoPaquete, colTicket, telefonoEc, type Row, type TicketIn, esCancelado, FACIALES_2, FACIALES_3, facialesDeTicket, paquetesDeTicket, pagaComisionFacial, personaEsRecepcionista, comisionPaquetesTramo, siguienteCodigoPaq, tarifaFacial, detectarIdentificacion, factorTk } from "./domain.ts";
+import { ETIQUETA_TARDE, factorComisionTicket } from "./fecha_atencion.ts";
 import { patchSlotsGC } from "./paquete_venta.ts";
 import { backfillSO, backfillSQ, filasSerie, leerSerie, tomarNumero } from "./series.ts";
 import { BODEGA_CABINA, BODEGA_CABINA_2, BODEGA_CABINA_3, BODEGA_CASA, BODEGA_VENTA } from "./erp.ts";
@@ -344,6 +345,7 @@ function toIn(r: R, cats?: Map<string, R>): TicketIn {
     productos: productQtys(r),
     netoPack: cats ? subtotalDe(cats, pack3) : undefined,
     netoPack6: cats ? subtotalDe(cats, pack6) : undefined,
+    ...(factorComisionTicket(r) < 1 ? { factor: factorComisionTicket(r) } : {}),
   };
 }
 async function marks(ctx: Ctx) {
@@ -388,22 +390,26 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
     const enCiclo = (t: TicketIn) => t.fecha >= ciclo && t.fecha <= finCiclo && t.cosm === p.cosm;
     const propios = tks.filter((t) => enCiclo(t) && !t.exclProducto);
     const items = propios.flatMap((t) => t.productos.map((pr) => {
+      const factor = factorTk(t);
       if (pr.ventaNeta == null) {
-        return { venta: subtotalDe(cmap, pr.sku), compra: compraParaComision(cmap.get(skuCode(pr.sku))), qty: pr.qty, excluido: false, sku: pr.sku };
+        return { venta: subtotalDe(cmap, pr.sku), compra: compraParaComision(cmap.get(skuCode(pr.sku))), qty: pr.qty, excluido: false, sku: pr.sku, factor };
       }
       const qty = pr.qty || 1;
       const venta = round2(n(pr.ventaNeta) / qty);
-      return { venta, compra: round2(n(pr.compraComision) / qty), qty, excluido: false, sku: pr.sku, comisionFija: venta > 0 ? 0 : n(pr.comision) };
+      return { venta, compra: round2(n(pr.compraComision) / qty), qty, excluido: false, sku: pr.sku, comisionFija: venta > 0 ? 0 : n(pr.comision), factor };
     }));
     p.comProductos = comisionProductos(items, cfg.pctProd, cfg.productoSku);
     p.totalProductos = propios.reduce((a, t) => a + t.productos.reduce((b, pr) => b + pr.qty, 0), 0);
     const nombres: string[] = [];
     const facMap = new Map<string, LineaCom>();
-    const packsRaw: { sku: string; nombre: string; neto: number; fecha: string; tipo?: string }[] = [];
+    const packsRaw: { sku: string; nombre: string; neto: number; fecha: string; tipo?: string; factor?: number }[] = [];
     for (const t of tks) {
       if (!enCiclo(t)) continue;
+      // TK210: lo de un ticket subido tarde va en su propia línea «… · Subido tarde · 50%».
+      const fx = factorTk(t);
+      const sufTarde = fx < 1 ? " · " + ETIQUETA_TARDE : "";
       if (!t.exclExtras) {
-        for (const nombre of listaExtrasPagados(t.extras)) nombres.push(nombre);
+        for (const nombre of listaExtrasPagados(t.extras)) nombres.push(nombre + sufTarde);
       }
       for (const f of facialesDeTicket(t)) {
         const skuFac = f.sku;
@@ -411,32 +417,35 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
         if (!(FACIALES_2.includes(skuFac) || FACIALES_3.includes(skuFac) || overFacial != null)) continue;
         const venta = subtotalDe(cmap, skuFac) * f.cantidad;
         const cobra = pagaComisionFacial(marcaDePersona(marcas, t.cosm), t.fecha);
-        const com = cobra ? tarifaFacial(skuFac, cfg) * f.cantidad : 0;
-        const prev = facMap.get(skuFac) || { sku: skuFac, nombre: catNombre(cmap, skuFac) || skuFac, qty: 0, monto: 0, vendido: 0 };
+        const com = cobra ? tarifaFacial(skuFac, cfg) * f.cantidad * fx : 0;
+        const kFac = skuFac + (fx < 1 ? "|tarde" : "");
+        const prev = facMap.get(kFac) || { sku: skuFac, nombre: (catNombre(cmap, skuFac) || skuFac) + sufTarde, qty: 0, monto: 0, vendido: 0 };
         prev.qty += f.cantidad;
         prev.monto = round2(prev.monto + com);
         prev.vendido = round2(prev.vendido + venta);
-        facMap.set(skuFac, prev);
+        facMap.set(kFac, prev);
       }
       if (!t.exclPaquete) {
         for (const pk of paquetesDeTicket(t)) {
           const sku = facialSku(pk.texto) || skuCode(pk.texto) || s(pk.texto);
-          packsRaw.push({ sku, nombre: catNombre(cmap, sku) || sku, neto: Number(pk.neto) || 0, fecha: t.fecha, tipo: pk.tipo });
+          packsRaw.push({ sku, nombre: (catNombre(cmap, sku) || sku) + sufTarde, neto: Number(pk.neto) || 0, fecha: t.fecha, tipo: pk.tipo, factor: fx });
         }
       }
     }
     const productos = cuadrarLineas(agruparProductos(items, cfg.pctProd, cfg.productoSku, (sku) => catNombre(cmap, sku)), p.comProductos);
+    p.tardeProductos = round2(comisionProductos(items.map((it) => ({ ...it, factor: 1 })), cfg.pctProd, cfg.productoSku) - p.comProductos);
     const extras = cuadrarLineas(agruparExtras(nombres, cfg.extra), p.comExtras);
     const faciales = cuadrarLineas([...facMap.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)), p.comFaciales);
     const packMap = new Map<string, LineaCom>();
     const esPack = !!(marcaDePersona(marcas, p.cosm)?.es);
     packsRaw.forEach((pk, i) => {
-      const monto = esPack ? comisionPaquetesTramo(i + 1, tramos, packsRaw.map((x) => x.neto)).monto - (i ? comisionPaquetesTramo(i, tramos, packsRaw.map((x) => x.neto)).monto : 0) : 0;
-      const prev = packMap.get(pk.sku) || { sku: pk.sku, nombre: pk.nombre, qty: 0, monto: 0, vendido: 0 };
+      const monto = (esPack ? comisionPaquetesTramo(i + 1, tramos, packsRaw.map((x) => x.neto)).monto - (i ? comisionPaquetesTramo(i, tramos, packsRaw.map((x) => x.neto)).monto : 0) : 0) * (pk.factor == null ? 1 : pk.factor);
+      const kPk = pk.sku + (pk.factor != null && pk.factor < 1 ? "|tarde" : "");
+      const prev = packMap.get(kPk) || { sku: pk.sku, nombre: pk.nombre, qty: 0, monto: 0, vendido: 0 };
       prev.qty += 1;
       prev.monto = round2(prev.monto + monto);
       prev.vendido = round2(prev.vendido + pk.neto);
-      packMap.set(pk.sku, prev);
+      packMap.set(kPk, prev);
     });
     const paquetes = cuadrarLineas([...packMap.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)), p.comPaquetes);
     lineas.set(p.cosm, {
@@ -504,41 +513,43 @@ function armarResumenHoy(
   const dia = tks.filter((t) => t.fecha === ymd && t.cosm === cosm);
   const cobraFacial = (fecha: string) => pagaComisionFacial(mark, fecha);
   for (const t of dia) {
+    const fx = factorTk(t);
     for (const f of facialesDeTicket(t)) {
       if (!(FACIALES_2.includes(f.sku) || FACIALES_3.includes(f.sku) || (cfg.facialSku && cfg.facialSku[f.sku] != null))) continue;
       out.faciales += f.cantidad;
-      if (cobraFacial(t.fecha)) out.comFaciales += tarifaFacial(f.sku, cfg) * f.cantidad;
+      if (cobraFacial(t.fecha)) out.comFaciales += tarifaFacial(f.sku, cfg) * f.cantidad * fx;
     }
     if (!t.exclPaquete) out.paquetes += paquetesDeTicket(t).length;
     if (!t.exclExtras) {
       const ex = contarExtras(t.extras);
       const pagados = ex.n - ex.cortesia;
       out.extras += pagados;
-      out.comExtras += pagados * cfg.extra;
+      out.comExtras += pagados * cfg.extra * fx;
     }
     if (!t.exclProducto) out.productos += t.productos.reduce((a, pr) => a + (pr.qty || 0), 0);
   }
   const items = dia.filter((t) => !t.exclProducto).flatMap((t) => t.productos.map((pr) => {
+    const factor = factorTk(t);
     if (pr.ventaNeta == null) {
-      return { venta: subtotalDe(cmap, pr.sku), compra: compraParaComision(cmap.get(skuCode(pr.sku))), qty: pr.qty, excluido: false, sku: pr.sku };
+      return { venta: subtotalDe(cmap, pr.sku), compra: compraParaComision(cmap.get(skuCode(pr.sku))), qty: pr.qty, excluido: false, sku: pr.sku, factor };
     }
     const qty = pr.qty || 1;
     const venta = round2(n(pr.ventaNeta) / qty);
-    return { venta, compra: round2(n(pr.compraComision) / qty), qty, excluido: false, sku: pr.sku, comisionFija: venta > 0 ? 0 : n(pr.comision) };
+    return { venta, compra: round2(n(pr.compraComision) / qty), qty, excluido: false, sku: pr.sku, comisionFija: venta > 0 ? 0 : n(pr.comision), factor };
   }));
   out.comProductos = comisionProductos(items, cfg.pctProd, cfg.productoSku);
-  const packsRaw: { neto: number; fecha: string }[] = [];
+  const packsRaw: { neto: number; fecha: string; factor?: number }[] = [];
   for (const t of tks) {
     if (t.fecha < ciclo || t.fecha > fin || t.cosm !== cosm || t.exclPaquete) continue;
     for (const pk of paquetesDeTicket(t)) {
       if (pk.tipo === "pack6" && regimen === "nivel") packsRaw.push({ neto: Number(pk.neto) || 0, fecha: t.fecha }, { neto: Number(pk.neto) || 0, fecha: t.fecha });
-      else packsRaw.push({ neto: Number(pk.neto) || 0, fecha: t.fecha });
+      else packsRaw.push({ neto: Number(pk.neto) || 0, fecha: t.fecha, factor: factorTk(t) });
     }
   }
   const esPack = !!(mark && mark.es);
   packsRaw.forEach((pk, i) => {
     if (pk.fecha !== ymd) return;
-    const monto = esPack ? comisionPaquetesTramo(i + 1, tramos, packsRaw.map((x) => x.neto)).monto - (i ? comisionPaquetesTramo(i, tramos, packsRaw.map((x) => x.neto)).monto : 0) : 0;
+    const monto = (esPack ? comisionPaquetesTramo(i + 1, tramos, packsRaw.map((x) => x.neto)).monto - (i ? comisionPaquetesTramo(i, tramos, packsRaw.map((x) => x.neto)).monto : 0) : 0) * (pk.factor == null ? 1 : pk.factor);
     out.comPaquetes = round2(out.comPaquetes + monto);
   });
   out.comFaciales = round2(out.comFaciales);
@@ -558,19 +569,20 @@ function cuadrarLineas(lineas: LineaCom[], oficial: number): LineaCom[] {
   return lineas;
 }
 function agruparProductos(
-  items: { venta: number; compra: number; qty: number; excluido: boolean; sku?: string }[],
+  items: { venta: number; compra: number; qty: number; excluido: boolean; sku?: string; factor?: number }[],
   pct: number, porSku: Parameters<typeof comisionProductos>[2], nombreDe: (sku: string) => string,
 ): LineaCom[] {
   const groups = new Map<string, typeof items>();
   for (const it of items) {
     const sku = skuCode(it.sku || "") || "—";
-    const g = groups.get(sku) || [];
+    const k = sku + (factorTk(it) < 1 ? "|tarde" : "");
+    const g = groups.get(k) || [];
     g.push(it);
-    groups.set(sku, g);
+    groups.set(k, g);
   }
-  return [...groups.entries()].map(([sku, its]) => ({
-    sku,
-    nombre: nombreDe(sku) || sku,
+  return [...groups.entries()].map(([k, its]) => ({
+    sku: k.split("|")[0],
+    nombre: (nombreDe(k.split("|")[0]) || k.split("|")[0]) + (k.endsWith("|tarde") ? " · " + ETIQUETA_TARDE : ""),
     qty: its.reduce((a, it) => a + it.qty, 0),
     monto: comisionProductos(its, pct, porSku),
     vendido: round2(its.reduce((a, it) => a + (it.excluido ? 0 : (it.venta || 0) * (it.qty || 0)), 0)),
@@ -579,7 +591,7 @@ function agruparProductos(
 function agruparExtras(nombres: string[], tarifa: number): LineaCom[] {
   const map = new Map<string, number>();
   for (const nombre of nombres) map.set(nombre, (map.get(nombre) || 0) + 1);
-  return [...map.entries()].map(([nombre, qty]) => ({ sku: "", nombre, qty, monto: round2(qty * tarifa), vendido: 0 })).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  return [...map.entries()].map(([nombre, qty]) => ({ sku: "", nombre, qty, monto: round2(qty * tarifa * (nombre.endsWith(ETIQUETA_TARDE) ? 0.5 : 1)), vendido: 0 })).sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
 function multasDe(nombre: string, ciclo: string, fin: string, rows: R[]) {
   let mlt = 0, desc = 0;
@@ -883,6 +895,9 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   const errJ = exigeJustificacionDescuento((montoDesc > 0.004 || hayDescLbl) ? Math.max(montoDesc, hayDescLbl ? 1 : 0) : 0, p.justificacion_descuento);
   if (errJ) return { error: errJ };
   const ec = ecuadorParts(ctx.now);
+  // TK210: fecha real de la atención (subido otro día). No bloquea: fecha inválida/futura → hoy.
+  const { resolverFechaAtencion, timestampAtencion, origSubidoTarde, PROMPT_TARDE_TEXTO } = await import("./fecha_atencion.ts");
+  const fAt = resolverFechaAtencion(p.fecha_atencion, ec.ymd);
   const ident = await asignarTicketBeta(ctx.db, ctx.now);
   const actorPrev = actorOf(ses);
   if (!previewPedido(p)) {
@@ -913,7 +928,7 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     sheet_row: null,
     origin: ident.origin,
     beta_num: ident.beta_num,
-    timestamp: ec.isoWall,
+    timestamp: fAt.tarde ? timestampAtencion(fAt.fecha) : ec.isoWall,
     atendido_por: cosm,
     id_3: s(p.cedula),
     nombre: s(p.nombre),
@@ -936,6 +951,7 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
       ...(descLineas(p.lineDescuentos).length ? { desc_lineas: descLineas(p.lineDescuentos) } : {}),
       ...(s(p.justificacion_descuento).trim() ? { justificacion_descuento: s(p.justificacion_descuento).trim().slice(0, 400) } : {}),
       ...(s(p.tipo_identificacion) ? { tipo_identificacion: s(p.tipo_identificacion), tipo_identificacion_sri: s(p.tipo_identificacion_sri) } : {}),
+      ...(fAt.tarde ? origSubidoTarde(fAt.fecha, ec.isoWall, fAt.dias) : {}),
     },
   };
   const prod = productosPatch((p.productos || {}) as R, false, base);
@@ -991,9 +1007,9 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     const txt = s(p.pack3) || s(p.pack6);
     const skuM = txt.match(/SUNSU-\d+/);
     const paqSaved = await ctx.db.write(actor, "paquetes", "insert", {}, {
-      sheet_row: paqRow, dia: ec.d, mes: ec.m, ano: ec.y, cedula: s(p.cedula),
+      sheet_row: paqRow, dia: fAt.tarde ? Number(fAt.fecha.slice(8, 10)) : ec.d, mes: fAt.tarde ? Number(fAt.fecha.slice(5, 7)) : ec.m, ano: fAt.tarde ? Number(fAt.fecha.slice(0, 4)) : ec.y, cedula: s(p.cedula),
       nombres: s(p.nombre), apellidos: s(p.apellido), sku: skuM ? skuM[0] : txt, paquete: txt,
-      vendido_por: s(p.cosmetologa), notas: "", orig: { ticket, so_num: soNum, ts: ec.isoWall, codigo: paqCodigo }, ...(paqCodigo.startsWith("PQ-") ? { beta_codigo: paqCodigo } : {}),
+      vendido_por: s(p.cosmetologa), notas: "", orig: { ticket, so_num: soNum, ts: fAt.tarde ? timestampAtencion(fAt.fecha) : ec.isoWall, codigo: paqCodigo }, ...(paqCodigo.startsWith("PQ-") ? { beta_codigo: paqCodigo } : {}),
     });
     // En Modo prueba la fila se guarda con sheet_row negativo: usar la fila REAL guardada,
     // si no la marca de la 1ª sesión apuntaba a otra fila y el paquete quedaba 0/3.
@@ -1015,6 +1031,7 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     ok: true, fila: null, ticket, beta_num: ident.beta_num, so_num: soNum, origin: ident.origin, id: saved?.id,
     inventario: inventario || undefined,
     paqueteFila,
+    ...(fAt.tarde ? { subido_tarde: true, fecha_atencion: fAt.fecha, comision_factor: 0.5, aviso_tarde: PROMPT_TARDE_TEXTO } : {}),
     gc: gcAplicada && gcAplicada.ok ? gcAplicada : undefined,
     gc_venta: ventaGc.hechos.length ? ventaGc.hechos : undefined,
     gc_error: ventaGc.errores.length ? "Gift card sin registrar: " + ventaGc.errores.join(" · ") + ". Avisa a administración." : undefined,
@@ -1041,7 +1058,7 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
       const { aplicarUsoExplicit } = await import("./ticket_edicion_api.ts");
       const cosm = s(base.atendido_por) || actor;
       const facial = s(p.facial);
-      const nota = ecuadorParts(ctx.now).ymd.split("-").reverse().map((x, i) => i === 2 ? x.slice(-2) : x).join("/") + " " + (facial || "Facial") + " · " + cosm;
+      const nota = (fAt.tarde ? fAt.fecha : ecuadorParts(ctx.now).ymd).split("-").reverse().map((x, i) => i === 2 ? x.slice(-2) : x).join("/") + " " + (facial || "Facial") + " · " + cosm;
       out.uso_paquete = await aplicarUsoExplicit(ctx, actor, { fila: pick.fila, idx: pick.idx, ticket: soNum || ticket, nota, cosm });
     }
   } catch { /* el ticket ya quedó */ }

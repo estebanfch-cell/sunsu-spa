@@ -1,11 +1,12 @@
 // Cruce de tickets con facturas vivas de Migo (solo lectura). No emite ni anula facturas.
-import { b, n, s, type Row, round2 } from "./domain.ts";
+import { b, n, normCedula, s, type Row, round2 } from "./domain.ts";
 
 import { compararFacturaYTickets, lineasDeTicket, normalizarLineaFactura, type LineaNorm } from "./migo_lineas.ts";
 import { difPorSku, totalTicketCuadre } from "./cuadre_sku.ts";
 import type { AliasMap } from "./inventario_modelo.ts";
 import { tipoSinCobro } from "./sin_cobro.ts";
 import { cruzarPerfilesSku, esCanjeCero, perfilSku } from "./cuadre_lineas.ts";
+import { candidatosVentana, resolverVentana, VENTANA_AUTO_DESDE, type ResultadoVentana } from "./cuadre_ventana.ts";
 export const TOL_MONTO = 0.05;
 export const NUNCA_TICKET_ID = 1820;
 export const FALTA_CUADRE_DESDE = "2026-11-01";
@@ -124,15 +125,23 @@ export type FacturaVivo = {
   total: number; subtotal?: number; descuento?: number; forma?: string;
   formas_pago?: { forma: string; valor: number }[];
   lineas?: LineaFactura[];
+  /** TK210: documento y correo del RIDE (solo para el cruce; no se muestran). */
+  ruc?: string; email?: string;
 };
 export type LinkCuadre = {
-  ticket_id: number; factura: string; tipo: "numero" | "nombre_fecha_monto" | "sku_fecha" | "sku_fecha_suma" | "facturas_suma"; confianza: "alta" | "media";
+  ticket_id: number; factura: string; tipo: "numero" | "nombre_fecha_monto" | "sku_fecha" | "sku_fecha_suma" | "facturas_suma" | "ventana_3d"; confianza: "alta" | "media";
   diferencia_monto: number; diferencia_fecha: number; estado: "cuadra" | "redondeo" | "diferencia";
   motivo: string; cliente_migo: string; total_factura: number; total_tickets: number;
   /** TK135: todas las facturas cuando un ticket cuadra con varias del mismo día. */
   facturas?: string[];
 };
-export type OptsCuadre = { catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>; aliases?: AliasMap };
+export type OptsCuadre = {
+  catalogo?: Map<string, { nombre?: string; pvpConIva?: number; pvpSinIva?: number }>; aliases?: AliasMap;
+  /** TK210: ventana ±3 días. false = apagada. desde: solo auto-vincula facturas desde ese día ("" = todas, para dry-run). */
+  ventana?: false | { desde?: string; dias?: number };
+  /** TK210: recibe vínculos y sugerencias de la ventana (dry-run / bandeja). */
+  onVentana?: (r: ResultadoVentana & { aplicados: string[] }) => void;
+};
 export type FlagDeseada = { ticket_id: number; ticket_clave: string; kind: "monto" | "clienta" | "sinfac" | "lineas" | "forma"; motivo: string; detalle: string; factura: string | null };
 
 function nombreTicket(t: Row): string {
@@ -179,13 +188,14 @@ export function cruzar(facturas: FacturaVivo[], tickets: Row[], opts?: OptsCuadr
     usedT.add(n(t.id)); usedInv.add(seq);
   }
   const links: LinkCuadre[] = [];
-  const pushGroup = (invs: FacturaVivo[], ts: Row[], tipo: LinkCuadre["tipo"], confianza: LinkCuadre["confianza"]) => {
+  const pushGroup = (invs: FacturaVivo[], ts: Row[], tipo: LinkCuadre["tipo"], confianza: LinkCuadre["confianza"], motivoExtra?: string) => {
     const invList = invs;
     const tsum = ts.reduce((a, t) => a + totalTicket(t), 0);
     const invTotal = invList.reduce((a, inv) => a + inv.total, 0);
     const diff = Math.round((tsum - invTotal) * 100) / 100;
     const estado: LinkCuadre["estado"] = Math.abs(diff) <= 0 ? "cuadra" : Math.abs(diff) <= TOL_MONTO ? "redondeo" : "diferencia";
     const motivos: string[] = [];
+    if (motivoExtra) motivos.push(motivoExtra);
     if (ts.length > 1) motivos.push("una factura cubre " + ts.length + " tickets");
     if (invList.length > 1) motivos.push(invList.length + " facturas cubren un ticket");
     if (estado === "diferencia") motivos.push("diferencia de monto $" + diff.toFixed(2));
@@ -309,7 +319,36 @@ export function cruzar(facturas: FacturaVivo[], tickets: Row[], opts?: OptsCuadr
     for (const inv of c.invs) usedInv.add(inv.seq);
     pushGroup(c.invs, c.ts, c.tipo, c.conf);
   }
+  // TK210: ventana ±3 días para lo que sigue suelto (ticket subido al día siguiente, etc.). Mismo día ya ganó arriba.
+  if (opts?.ventana !== false) {
+    const vt = (opts?.ventana || {}) as { desde?: string; dias?: number };
+    const desde = vt.desde === undefined ? VENTANA_AUTO_DESDE : vt.desde;
+    const restTk = tickets.filter((t) => !usedT.has(n(t.id)));
+    const restInv = facturas.filter((f) => !usedInv.has(f.seq) && s(f.fecha) >= FALTA_CUADRE_DESDE);
+    const res = resolverVentana(candidatosVentana(restInv, restTk, {
+      catalogo, aliases, dias: vt.dias, nombres: namesMatch, totalDe: totalTicket,
+      excluido: (t) => exentoCuadre(t, catalogo) || ticketSoloCero(t, catalogo) || ticketCancelado(t) || facturaPropiaDistinta(t),
+    }));
+    const aplicados: string[] = [];
+    for (const c of res.links) {
+      if (desde && c.fecha_factura < desde) continue; // histórico: solo dry-run hasta el sí de Emilia
+      const inv = restInv.find((f) => f.factura === c.factura);
+      if (!inv || usedInv.has(inv.seq) || c.ticket_ids.some((id) => usedT.has(id))) continue;
+      for (const id of c.ticket_ids) usedT.add(id);
+      usedInv.add(inv.seq);
+      pushGroup([inv], c.tickets, "ventana_3d", "alta", c.motivo);
+      aplicados.push(c.factura);
+    }
+    if (opts?.onVentana) opts.onVentana({ ...res, aplicados });
+  }
   return links;
+}
+
+/** TK210: el ticket ya trae otro número de factura (aunque no esté importada): no se le ofrece otra. */
+function facturaPropiaDistinta(t: Row): boolean {
+  const v = s(t.facturaBeta || t.fac_7);
+  if (!v || /sin/i.test(v)) return false;
+  return !!facSeq(v);
 }
 
 /** Día de la semana de un YMD (0=domingo … 1=lunes), mediodía UTC para no cruzar fecha. */
@@ -493,6 +532,8 @@ export function parseFacturaVivo(x: Row): FacturaVivo | null {
     // TK91: pago mixto de Migo (Cobros Realizados): cada forma con su monto.
     formas_pago: (Array.isArray(x.formas_pago) ? x.formas_pago as Row[] : []).map((f) => ({ forma: s(f.forma || f.metodo).slice(0, 80), valor: Math.round(n(f.valor ?? f.monto) * 100) / 100 })).filter((f) => f.valor > 0),
     lineas,
+    ...(s(x.cliente_ruc) ? { ruc: s(x.cliente_ruc).slice(0, 20) } : {}),
+    ...(s(x.cliente_email) ? { email: s(x.cliente_email).slice(0, 120) } : {}),
   };
 }
 
@@ -517,6 +558,15 @@ export function fechasCandidatasBorrador(fechaFac: string): string[] {
   return dowYmd(prev) === 1 ? [prev, f] : [f];
 }
 
+/** TK210: ventana de la bandeja: 3 días antes a 3 días después de la factura (mismo día primero). */
+export function fechasVentanaBorrador(fechaFac: string, d = 3): string[] {
+  const f = s(fechaFac).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) return [];
+  const out: string[] = [];
+  for (let i = -d; i <= d; i++) out.push(addDaysYmd(f, i));
+  return out;
+}
+
 export type CandidatoBorrador = {
   ticket_ids: number[];
   claves: string[];
@@ -531,6 +581,9 @@ export type CandidatoBorrador = {
   diferencia: number;
   motivo: string;
   total: number;
+  /** TK210: máximo de días entre la factura y los tickets (0 = mismo día). */
+  dias?: number;
+  senales?: string[];
 };
 
 /** Fila vacía o clave «r1899» (sin SO): no se sugiere ni aparece en la búsqueda. */
@@ -621,8 +674,21 @@ function etiquetaNoCuadra(sum: number, invTotal: number): string {
  * Combos de 2 o 3 que cuadran (±$0.05) van primero, marcados ✅ Cuadra.
  * Misma familia (apellido) suma puntos. No vincula solo: la admin elige.
  */
-export function candidatosParaFactura(inv: { fecha: string; cliente: string; total: number; lineas?: Row[] }, tickets: Row[], opts?: OptsCuadre): CandidatoBorrador[] {
-  const dias = new Set(fechasCandidatasBorrador(inv.fecha));
+export function candidatosParaFactura(inv: { fecha: string; cliente: string; total: number; lineas?: Row[]; ruc?: string; email?: string; formas_pago?: { forma: string; valor: number }[] }, tickets: Row[], opts?: OptsCuadre): CandidatoBorrador[] {
+  // TK210: ±3 días (antes: mismo día, y el lunes si la factura es del martes).
+  const dias = new Set([...fechasCandidatasBorrador(inv.fecha), ...fechasVentanaBorrador(inv.fecha)]);
+  const rucInv = normCedula(inv.ruc);
+  const mailInv = s(inv.email).trim().toLowerCase();
+  const diasBase = new Set(fechasCandidatasBorrador(inv.fecha)); // mismo día (y el lunes si la factura es del martes) = 0
+  const diasDe = (t: Row) => diasBase.has(s(t.fecha).slice(0, 10)) ? 0 : Math.abs(Math.round((Date.parse(s(t.fecha).slice(0, 10) + "T12:00:00Z") - Date.parse(s(inv.fecha).slice(0, 10) + "T12:00:00Z")) / 86400000));
+  const señales = (t: Row): string[] => {
+    const out: string[] = [];
+    if (rucInv && normCedula(t.id_3) === rucInv) out.push("documento");
+    if (mailInv && ((t.emails_cliente as string[] | undefined) || []).includes(mailInv)) out.push("correo");
+    const tot = totalTicket(t);
+    if (((t.ocr_vouchers as Row[] | undefined) || []).some((o) => s(o.fecha) === inv.fecha && n(o.monto) > 0 && (montoCerca(n(o.monto), tot) || montoCerca(n(o.monto), inv.total)))) out.push("voucher");
+    return out;
+  };
   const pool = tickets.filter((t) => {
     if (!ticketClaveValida(t)) return false;
     if (exentoCuadre(t, opts?.catalogo)) return false;
@@ -641,6 +707,9 @@ export function candidatosParaFactura(inv: { fecha: string; cliente: string; tot
     total: totalTicket(t),
     fecha: s(t.fecha).slice(0, 10),
     cosm: s(t.atendido_por || t.cosmetologa),
+    dias: diasDe(t),
+    senales: señales(t),
+    ced: normCedula(t.id_3),
   });
   const avisoNombre = (nombres: string[], scores: number[]): string => {
     const max = Math.max(0, ...scores);
@@ -656,8 +725,13 @@ export function candidatosParaFactura(inv: { fecha: string; cliente: string; tot
     const sum = xs.reduce((a, x) => a + x.total, 0);
     const scores = xs.map((x) => namesMatch(x.nombre, inv.cliente));
     const cuadra = montoCerca(sum, inv.total);
-    const motivo = (cuadra ? etiquetaCuadra(sum, inv.total) : etiquetaNoCuadra(sum, inv.total)) + " " + avisoNombre(xs.map((x) => x.nombre), scores);
+    const sen = [...new Set(xs.flatMap((x) => x.senales))];
+    const dmax = Math.max(0, ...xs.map((x) => x.dias));
+    const motivo = (cuadra ? etiquetaCuadra(sum, inv.total) : etiquetaNoCuadra(sum, inv.total)) + " " + avisoNombre(xs.map((x) => x.nombre), scores)
+      + (sen.length ? " Coincide " + sen.join(" y ") + " de la factura." : "")
+      + (dmax ? " Ticket " + dmax + (dmax === 1 ? " día" : " días") + " fuera de la fecha de la factura." : "");
     return {
+      dias: dmax, senales: sen,
       ticket_ids: xs.map((x) => x.id), claves: xs.map((x) => x.clave), nombres: xs.map((x) => x.nombre),
       totales: xs.map((x) => x.total), fechas: xs.map((x) => x.fecha), cosmetologas: xs.map((x) => x.cosm),
       tipo, names: Math.max(0, ...scores), familia: familiaEn(xs.map((x) => x.nombre)),
@@ -678,6 +752,8 @@ export function candidatosParaFactura(inv: { fecha: string; cliente: string; tot
     const itemsOk = !!(sku && (sku.mismoPrecio || sku.mismaCantidad));
     // TK135: el nombre distinto no descarta si los SKU del mismo día cuadran (también si el valor difiere por un descuento).
     if (tokens < 1 && !exact && !itemsOk) continue;
+    // TK210: otro día (±3) solo con una señal fuerte: SKU, documento/correo/voucher, o nombre + monto.
+    if (x.dias > 0 && !itemsOk && !x.senales.length && !(tokens >= 1 && exact)) continue;
     const tipo: CandidatoBorrador["tipo"] = exact && tokens >= 1 ? "nombre_monto" : exact ? "monto" : "nombre";
     singles.push(item([x], tipo));
   }
@@ -685,7 +761,9 @@ export function candidatosParaFactura(inv: { fecha: string; cliente: string; tot
   // TK90: un ticket que cuadra solo va solo: nunca se mezcla en combinaciones de 2 o 3.
   const solos = new Set(singles.filter((c) => c.cuadra).map((c) => c.ticket_ids[0]));
   const combos: CandidatoBorrador[] = [];
-  const P = pool.map(pub).filter((x) => !solos.has(x.id));
+  // TK210: en combinaciones, los tickets de otro día entran solo con nombre o señal (documento/correo/voucher).
+  const cedConSenal = new Set(pool.map(pub).filter((x) => x.senales.length > 0 && x.ced).map((x) => x.ced));
+  const P = pool.map(pub).filter((x) => !solos.has(x.id) && (x.dias === 0 || x.senales.length > 0 || namesMatch(x.nombre, inv.cliente) >= 1 || (!!x.ced && cedConSenal.has(x.ced))));
   for (let i = 0; i < P.length; i++) {
     for (let j = i + 1; j < P.length; j++) {
       const two = [P[i], P[j]];
@@ -700,6 +778,8 @@ export function candidatosParaFactura(inv: { fecha: string; cliente: string; tot
 
   const rank = (a: CandidatoBorrador, b: CandidatoBorrador) => {
     if (a.cuadra !== b.cuadra) return a.cuadra ? -1 : 1;
+    // TK210: el mismo día sigue primero.
+    if ((a.dias || 0) !== (b.dias || 0)) return (a.dias || 0) - (b.dias || 0);
     const as = a.names + a.familia, bs = b.names + b.familia;
     if (as !== bs) return bs - as;
     if (a.names !== b.names) return b.names - a.names;
