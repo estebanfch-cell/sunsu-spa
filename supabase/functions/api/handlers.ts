@@ -17,7 +17,7 @@ import { BODEGA_CABINA, BODEGA_CABINA_2, BODEGA_CABINA_3, BODEGA_CASA, BODEGA_VE
 import { descontarVentaTicket } from "./compras_flujo.ts";
 import { ticketRecienCreado } from "./ticket_idempotencia.ts";
 import { CORTE_MIN, CORTE_VENTA, aperturaVenta, aplicarTrasCorte, despuesDeTicket, type MovCorte } from "./stock_corte.ts";
-import { datosGiftConvPaquete, etiquetaGift, familiaDe, infoSaldoGift, montoGcAplicado, notasConvPaqueteGC, saldoGift } from "./ventas.ts";
+import { datosGiftConvPaquete, etiquetaGift, familiaDe, infoSaldoGift, montoGcAplicado, notasConServicio, notasConvPaqueteGC, saldoGift, servicioDesignadoGift } from "./ventas.ts";
 import { cfgAplicada, reemplazarTramos } from "./comision_cfg.ts";
 import { activarPrueba, ocultarPrueba, purgarPrueba } from "./prueba.ts";
 import { enPrueba, type Db } from "./db.ts";
@@ -962,11 +962,14 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   let gcAplicada: R | null = null;
   if (s(p.colR)) {
     const { consumirGiftAlCrear } = await import("./ventas_api.ts");
-    gcAplicada = await consumirGiftAlCrear(ctx, ses, s(p.colR), identRef, s(p.nombre), n(p.facialPrecio));
-    if (gcAplicada && gcAplicada.error && /alcanza|saldo|aplica/i.test(s(gcAplicada.error))) return gcAplicada;
+    gcAplicada = await consumirGiftAlCrear(ctx, ses, s(p.colR), identRef, s(p.nombre), n(p.facialPrecio), s(p.facial));
+    if (gcAplicada && gcAplicada.error && /alcanza|saldo|aplica|cubre|especif/i.test(s(gcAplicada.error))) return gcAplicada;
     if (gcAplicada && gcAplicada.ok) {
       (base.orig as R).gc_aplica = gcAplicada.aplicado;
       (base.orig as R).gc_facial_cobro = gcAplicada.facialCobro;
+      if (n(gcAplicada.facialCobro) === 0 && n(p.facialPrecio) > 0) {
+        base.estimado = Math.max(0, Math.round((n(p.estimado) - n(p.facialPrecio) + n(p.gcAplica)) * 100) / 100);
+      }
     }
   }
   const fotosWarn: string[] = [];
@@ -2030,7 +2033,12 @@ export async function registrarVentaGiftTicket(ctx: Ctx, ses: Ses, p: R, ticket:
   const cods = codigosVentaGift(p.colS);
   if (!cods.length || ctx.db.prueba) return out;
   const actor = actorOf(ses), ec = ecuadorParts(ctx.now);
+  const catsVenta = await ctx.db.all("catalogo").catch(() => [] as R[]);
+  const notaVenta = s(p.gc_nota) || (p.gcVenta && typeof p.gcVenta === "object" ? s((p.gcVenta as R).nota) : "") || s(p.colS).replace(/^[^,]+,\s*[^,]+,?\s*/i, "").trim();
+  const facialVenta = s(p.gc_facial) || (p.gcVenta && typeof p.gcVenta === "object" ? s((p.gcVenta as R).facial) : "");
+  const servVenta = servicioDesignadoGift({ notas: [facialVenta, notaVenta].filter(Boolean).join(". "), valor: "", sku: "SUNSU-35" } as R, { facial: facialVenta }, catsVenta);
   const venta: R = { dia: ec.d, mes: ec.m, ano: ec.y, cedula_comprador: s(p.cedula), nombre_comprador: s(p.nombre), apellido_comprador: s(p.apellido), sku: "SUNSU-35" };
+  if (notaVenta || facialVenta) venta.notas = notasConServicio(notaVenta, facialVenta || (servVenta ? servVenta.etiqueta : ""));
   for (const c of cods) {
     try {
       const rows = await ctx.db.all("gift_cards");
@@ -2038,8 +2046,11 @@ export async function registrarVentaGiftTicket(ctx: Ctx, ses: Ses, p: R, ticket:
       const g = vivas.find((r) => vendidaGc(r) && mismoComprador(r, s(p.cedula), s(p.nombre), s(p.apellido))) || vivas.find((r) => !vendidaGc(r)) || null;
       if (g) {
         const go = g.orig && typeof g.orig === "object" ? g.orig as R : {};
-        const patch: R = { orig: { ...go, ticket_venta: ticket } };
+        const o2: R = { ...go, ticket_venta: ticket };
+        if (facialVenta || servVenta) o2.facial = facialVenta || servVenta!.etiqueta;
+        const patch: R = { orig: o2 };
         if (!vendidaGc(g)) Object.assign(patch, venta);
+        else if (venta.notas && !s(g.notas).trim()) patch.notas = venta.notas;
         await ctx.db.write(actor, "gift_cards", "update", g.id != null ? { id: g.id } : { sheet_row: g.sheet_row }, patch);
         await ajusteTicketVenta(ctx, actor, g, ticket, vendidaGc(g) ? "VENTA (ticket)" : "VENTA");
         out.hechos.push({ codigo: c, accion: vendidaGc(g) ? "vinculada" : "vendida" });
@@ -2060,7 +2071,7 @@ export async function registrarVentaGiftTicket(ctx: Ctx, ses: Ses, p: R, ticket:
       }
       if (rows.some((r) => normCodGc(r.codigo_gc) === c)) { out.errores.push(c + " está eliminada; pide a administración que la restaure"); continue; }
       const sheet_row = await nextSheet(ctx.db, "gift_cards");
-      const nueva = await ctx.db.write(actor, "gift_cards", "insert", {}, { sheet_row, codigo_gc: c, ...venta, usado: false, origin: "beta", orig: { codigo: c, beta: true, ts: ec.isoWall, ticket_venta: ticket } });
+      const nueva = await ctx.db.write(actor, "gift_cards", "insert", {}, { sheet_row, codigo_gc: c, ...venta, usado: false, origin: "beta", orig: { codigo: c, beta: true, ts: ec.isoWall, ticket_venta: ticket, ...(facialVenta || servVenta ? { facial: facialVenta || servVenta!.etiqueta } : {}) } });
       if (nueva) { await ajusteTicketVenta(ctx, actor, nueva, ticket, "VENTA"); out.hechos.push({ codigo: c, accion: "creada" }); }
       else out.errores.push(c + " no se pudo guardar");
     } catch (e) { out.errores.push(c + ": " + (e instanceof Error ? e.message : String(e))); }
@@ -2112,6 +2123,8 @@ reg("buscarGiftCards", "any", async (p, ctx) => {
   const resultados = [];
   const cats = await ctx.db.all("catalogo").catch(() => [] as R[]);
   const packs = await ctx.db.all("paquetes").catch(() => [] as R[]);
+  const digs = new Map((await ctx.db.all("gift_cards_digitales").catch(() => [] as R[])).map((d) => [s(d.codigo).trim().toUpperCase(), d]));
+  const ajs = new Map((await ctx.db.all("beta_gift_ajustes").catch(() => [] as R[])).map((a) => [String(a.gift_id), a]));
   for (const r of await ctx.db.all("gift_cards")) {
     const codigo = s(r.codigo_gc);
     if (!codigo) continue;
@@ -2119,13 +2132,14 @@ reg("buscarGiftCards", "any", async (p, ctx) => {
     const nom = s(r.nombre_comprador), ape = s(r.apellido_comprador);
     const blob = [codigo, s(r.cedula_comprador), nom, ape, nom + " " + ape, s(r.usado_por), s(r.notas)].join(" ").toLowerCase();
     if (!todas && !blob.includes(q)) continue;
-    const info = infoSaldoGift(r, cats, packs);
+    const extra = { facial: digs.get(codigo.toUpperCase())?.facial, servicio: ajs.get(String(r.id))?.servicio };
+    const info = infoSaldoGift(r, cats, packs, extra);
     resultados.push({
       fila: r.sheet_row, codigo, dia: r.dia, mes: r.mes, ano: r.ano, cedula: s(r.cedula_comprador),
       nombre: nom, apellido: ape, factura: s(r.factura), sku: s(r.sku), valor: s(r.valor),
       usado: b(r.usado), fechaUso: s(r.fecha_uso), usadoPor: s(r.usado_por), notas: s(r.notas),
       saldo: info.saldo, facial: info.facial, saldoOrigen: info.origen,
-      etiqueta: etiquetaGift(r, cats, packs), prueba: s(r.origin) === "test",
+      etiqueta: etiquetaGift(r, cats, packs, extra), prueba: s(r.origin) === "test",
     });
   }
   return { resultados };
@@ -2833,10 +2847,22 @@ reg("guardarGCDigital", "any", async (p, ctx, ses) => {
     return { ok: true, prueba: true };
   }
   const store = await kvGet(ctx.db, "SUNSU_GC_DIGITALES");
-  const gc = { mensaje: s(p.mensaje), ts: ecuadorParts(ctx.now).isoWall, por: ses.name, imagen: s(p.imagen).startsWith("http") ? s(p.imagen) : "", codigo: s(p.codigo) };
+  const gc = { mensaje: s(p.mensaje), ts: ecuadorParts(ctx.now).isoWall, por: ses.name, imagen: s(p.imagen).startsWith("http") ? s(p.imagen) : "", codigo: s(p.codigo), para: s(p.para), de: s(p.de), facial: s(p.facial), valido: s(p.valido), usuario: s(p.usuario) || ses.name };
   store[s(p.codigo)] = gc;
   await kvSet(ctx.db, actorOf(ses), "SUNSU_GC_DIGITALES", store);
   await espejo(ctx.db, actorOf(ses), "gift_cards_digitales", gc);
+  const facial = s(p.facial).trim();
+  if (facial) {
+    const row = (await ctx.db.all("gift_cards")).find((r) => !r.borrado_at && s(r.codigo_gc).trim().toUpperCase() === s(p.codigo).trim().toUpperCase());
+    if (row) {
+      const go = row.orig && typeof row.orig === "object" ? row.orig as R : {};
+      const notas = notasConServicio(s(row.notas), facial);
+      const serv = servicioDesignadoGift({ ...row, notas }, { facial }, []);
+      if (serv || notas !== s(row.notas) || s(go.facial) !== facial) {
+        await ctx.db.write(actorOf(ses), "gift_cards", "update", row.id != null ? { id: row.id } : { sheet_row: row.sheet_row }, { notas, orig: { ...go, facial } });
+      }
+    }
+  }
   return { ok: true };
 });
 reg("eliminarGCDigital", "any", async (p, ctx, ses) => {

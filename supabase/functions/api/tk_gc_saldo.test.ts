@@ -128,9 +128,13 @@ describe("saldoGift · facial en notas/valor (TK145 Andrea)", () => {
     assert.equal(infoSaldoGift(row, CAT).facial, "Reset");
     assert.equal(etiquetaGift(row, CAT), "26-080 · $95 (Reset)");
   });
-  it("saldo numérico explícito sigue ganando sobre el facial", () => {
-    assert.equal(saldoGift({ ...base, saldo: 40, notas: "1 GEISHA" }, CAT), 40);
-    assert.equal(saldoGift({ ...base, saldo: 0, notas: "SKIN RESET" }, CAT), 0);
+  it("un facial específico gana sobre un saldo residual de SUNSU-35 ($65 o SALDO:0)", () => {
+    assert.equal(saldoGift({ ...base, saldo: 65, notas: "1 GEISHA" }, CAT), 145);
+    assert.equal(saldoGift({ ...base, saldo: 0, notas: "SKIN RESET" }, CAT), 95);
+    assert.equal(infoSaldoGift({ ...base, saldo: 65, notas: "1 GEISHA" }, CAT).origen, "servicio");
+  });
+  it("una gift ya usada sigue en $0 aunque nombre un facial", () => {
+    assert.equal(saldoGift({ ...base, usado: true, saldo: 0, notas: "1 GEISHA" }, CAT), 0);
   });
   it("«PREMIUM» solo no se interpreta como facial de $145 (se factura como Gift Card $65)", () => {
     assert.equal(saldoGift({ ...base, codigo_gc: "26-163", notas: "PREMIUM" }, CAT), 65);
@@ -220,5 +224,79 @@ describe("TK149 · conversión paquete→GC hereda el facial del paquete", () =>
     assert.match(js, /function facialDePackTxt/);
     assert.match(js, /SUNSU-44':'SUNSU-40/);
     assert.match(js, /encodeURIComponent\(notasConvPaqueteGC\(s\)\)/);
+  });
+});
+
+
+describe("TK213 · gift de servicio cubre el facial completo (26-104 Peeling Marino)", () => {
+  const card104: Row = {
+    codigo_gc: "26-104", sku: "SUNSU-35", valor: "Gift Card", saldo: 65, usado: false,
+    notas: "SALDO:0.00 | De: Chris, Cari y Mabe\nPara: Carol.",
+  };
+
+  it("digital.facial «Peeling Marino» vale $145 aunque el SKU sea SUNSU-35 y quede saldo $65", () => {
+    const info = infoSaldoGift(card104, CAT, [], { facial: "Peeling Marino" });
+    assert.equal(info.saldo, 145);
+    assert.equal(info.origen, "servicio");
+    assert.match(info.facial, /Peeling/i);
+    assert.equal(info.sku, "SUNSU-42");
+  });
+
+  it("aplicar contra SUNSU-42 de $145 (o un precio de catálogo más alto) deja cobro $0", async () => {
+    const db = new MemoryDb({
+      catalogo: CAT,
+      gift_cards: [{ ...card104, sheet_row: 104 }],
+      gift_cards_digitales: [{ codigo: "26-104", facial: "Peeling Marino" }],
+      log_acciones: [],
+      gift_card_movimientos: [],
+    });
+    const r = await aplicarGiftCard(db, "Evelyn", {
+      codigo: "26-104", aplica: 65, ticket: "TK-SO-1971", usadoPor: "Carol",
+      facialPrecio: 145, facialSku: "SUNSU-42", facialNombre: "Facial Peeling Marino de Perla",
+    });
+    assert.equal(r.error, undefined, String(r.error || ""));
+    assert.equal(r.aplicado, 145);
+    assert.equal(r.facialCobro, 0);
+    assert.equal(r.saldo, 0);
+    const r2 = await aplicarGiftCard(new MemoryDb({
+      catalogo: CAT,
+      gift_cards: [{ ...card104, sheet_row: 104 }],
+      gift_cards_digitales: [{ codigo: "26-104", facial: "Peeling Marino" }],
+      log_acciones: [],
+      gift_card_movimientos: [],
+    }), "Evelyn", {
+      codigo: "26-104", aplica: 65, ticket: "TK-SO-TEMP", usadoPor: "Carol",
+      facialPrecio: 160, facialSku: "SUNSU-42", facialNombre: "Facial Peeling Marino de Perla",
+    });
+    assert.equal(r2.aplicado, 160);
+    assert.equal(r2.facialCobro, 0);
+  });
+
+  it("no cubre un facial distinto (p. ej. Reset)", async () => {
+    const db = new MemoryDb({
+      catalogo: CAT,
+      gift_cards: [{ ...card104, sheet_row: 104 }],
+      gift_cards_digitales: [{ codigo: "26-104", facial: "Peeling Marino" }],
+      log_acciones: [],
+      gift_card_movimientos: [],
+    });
+    const r = await aplicarGiftCard(db, "Evelyn", {
+      codigo: "26-104", aplica: 65, ticket: "TK-SO-TEMP", usadoPor: "Carol",
+      facialPrecio: 95, facialSku: "SUNSU-40", facialNombre: "Facial Reset 3x1",
+    });
+    assert.match(String(r.error), /Peeling|no cubre/i);
+    assert.equal(r.ok, undefined);
+  });
+
+  it("«Facial Premium» / 26-103 sigue siendo monetaria de $65", () => {
+    const row: Row = { codigo_gc: "26-103", sku: "SUNSU-35", valor: "Gift Card", saldo: null, usado: false, notas: "De: Ana. Para: Bea." };
+    const info = infoSaldoGift(row, CAT, [], { facial: "Facial Premium" });
+    assert.equal(info.saldo, 65);
+    assert.equal(info.origen, "catalogo");
+    assert.equal(saldoGift({ ...row, notas: "PREMIUM" }, CAT), 65);
+  });
+
+  it("26-092 con «1 Facial Geisha» en notas sigue valiendo $145", () => {
+    assert.equal(saldoGift({ codigo_gc: "26-092", sku: "SUNSU-35", valor: "Gift Card", saldo: null, usado: false, notas: "1 Facial Geisha" }, CAT), 145);
   });
 });
