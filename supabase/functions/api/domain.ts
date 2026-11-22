@@ -759,6 +759,26 @@ export interface TicketIn {
   faciales?: FacialLinea[];
   /** Todos los paquetes no excluidos del ticket. Si está presente, manda sobre pack3/pack6. */
   paquetes?: PaqueteLinea[];
+  /** TK210: 0.5 si el ticket se subió tarde (desde el 21/11/2026); ausente = 1. Aplica a servicios y productos. */
+  factor?: number;
+}
+
+/** TK210: factor de comisión de un ticket (1 salvo «Subido tarde · 50%»). */
+export function factorTk(t: { factor?: number } | null | undefined): number {
+  const f = Number(t?.factor);
+  return Number.isFinite(f) && f > 0 && f < 1 ? f : 1;
+}
+
+/** TK210: comisión de paquetes por tramo con factor por unidad. Cada paquete paga su marginal × factor. */
+export function comisionPaquetesTramoFactor(netos: number[], factores: number[], tramos: TramoPaquete[] = TRAMOS_PAQUETE): { monto: number; etiqueta: string } {
+  const base = comisionPaquetesTramo(netos.length, tramos, netos);
+  if (!factores.some((f) => f < 1)) return base;
+  let monto = 0;
+  for (let i = 0; i < netos.length; i++) {
+    const marg = comisionPaquetesTramo(i + 1, tramos, netos).monto - (i ? comisionPaquetesTramo(i, tramos, netos).monto : 0);
+    monto += marg * (factores[i] == null ? 1 : factores[i]);
+  }
+  return { monto: round2(monto), etiqueta: base.etiqueta };
 }
 export interface TramoPaquete { desde: number; hasta: number; modo: "fijo" | "pct"; valor: number }
 /** Desde el ciclo que abre el 2026-10-26. pct guarda la fracción (0.05 = 5% del neto), redondeada hacia abajo. */
@@ -994,25 +1014,27 @@ export function compraParaComision(row: { compra_comision?: unknown; precio_comp
 }
 
 export function comisionProductos(
-  items: { venta: number; compra: number; qty: number; excluido: boolean; sku?: string; comisionFija?: number }[],
+  items: { venta: number; compra: number; qty: number; excluido: boolean; sku?: string; comisionFija?: number; factor?: number }[],
   pct = PCT_COMISION_PRODUCTO,
   porSku?: ComCfg["productoSku"],
 ): number {
   let t = 0;
   for (const it of items) {
     if (it.excluido) continue;
+    // TK210: «Subido tarde · 50%» multiplica la comisión del producto de ese ticket.
+    const fx = factorTk(it);
     // Canje / venta 0: no genera margen. Si el snapshot trae comisión fija (ciclo abierto, detalle sin ceros), se respeta.
     if (!(it.venta > 0)) {
-      if (n(it.comisionFija) > 0) t += n(it.comisionFija);
+      if (n(it.comisionFija) > 0) t += n(it.comisionFija) * fx;
       continue;
     }
     const over = it.sku && porSku ? porSku[skuCode(it.sku)] : undefined;
     // TK161: piso 0, igual que comisionUnidad. Una venta descontada bajo el costo de comisión no genera comisión negativa.
     const margen = Math.max(0, (it.venta - (it.compra || 0)) * it.qty);
     if (over && (over.pct != null || over.fijo != null)) {
-      if (over.pct != null) t += margen * over.pct;
-      if (over.fijo != null) t += over.fijo * it.qty;
-    } else t += margen * pct;
+      if (over.pct != null) t += margen * over.pct * fx;
+      if (over.fijo != null) t += over.fijo * it.qty * fx;
+    } else t += margen * pct * fx;
   }
   return round2(t);
 }
@@ -1110,18 +1132,22 @@ export function calcularCiclo(
   const tarifas = normalizarTramos(tramos);
   const by = new Map<string, {
     cosm: string; faciales: number; faciales2: number; faciales3: number; comFaciales: number; paquetes: number; extras: number; comExtras: number;
-    comProductos: number; totalProductos: number; comPaquetes: number; nivel: string; netos: number[];
+    comProductos: number; totalProductos: number; comPaquetes: number; nivel: string; netos: number[]; factores: number[];
+    /** TK210: lo que se dejó de pagar por tickets subidos tarde (faciales + extras + paquetes; productos aparte). */
+    tardeFaciales: number; tardeExtras: number; ticketsTarde: number;
   }>();
   const ensure = (cosm: string) => {
     let r = by.get(cosm);
     if (!r) {
-      r = { cosm, faciales: 0, faciales2: 0, faciales3: 0, comFaciales: 0, paquetes: 0, extras: 0, comExtras: 0, comProductos: 0, totalProductos: 0, comPaquetes: 0, nivel: "—", netos: [] };
+      r = { cosm, faciales: 0, faciales2: 0, faciales3: 0, comFaciales: 0, paquetes: 0, extras: 0, comExtras: 0, comProductos: 0, totalProductos: 0, comPaquetes: 0, nivel: "—", netos: [], factores: [], tardeFaciales: 0, tardeExtras: 0, ticketsTarde: 0 };
       by.set(cosm, r);
     }
     return r;
   };
   for (const t of propios) {
     const r = ensure(t.cosm);
+    const fx = factorTk(t);
+    if (fx < 1) r.ticketsTarde += 1;
     const cobraFacial = pagaComisionFacial(marcaDePersona(marksLimpios, t.cosm), t.fecha);
     for (const f of facialesDeTicket(t)) {
       const sku = f.sku;
@@ -1130,20 +1156,25 @@ export function calcularCiclo(
       r.faciales += f.cantidad;
       if (FACIALES_2.includes(sku)) r.faciales2 += f.cantidad;
       else if (FACIALES_3.includes(sku)) r.faciales3 += f.cantidad;
-      if (cobraFacial) r.comFaciales += tarifaFacial(sku, cfg) * f.cantidad;
+      if (cobraFacial) {
+        const full = tarifaFacial(sku, cfg) * f.cantidad;
+        r.comFaciales += full * fx;
+        if (fx < 1) r.tardeFaciales += full * (1 - fx);
+      }
     }
     if (!t.exclPaquete) {
       for (const pk of paquetesDeTicket(t)) {
         const neto = Number(pk.neto) || 0;
-        if (pk.tipo === "pack6" && regimen === "nivel") { r.paquetes += 2; r.netos.push(neto, neto); }
-        else { r.paquetes += 1; r.netos.push(neto); }
+        if (pk.tipo === "pack6" && regimen === "nivel") { r.paquetes += 2; r.netos.push(neto, neto); r.factores.push(fx, fx); }
+        else { r.paquetes += 1; r.netos.push(neto); r.factores.push(fx); }
       }
     }
     if (!t.exclExtras) {
       const ex = contarExtras(t.extras);
       const pagados = ex.n - ex.cortesia;
       r.extras += pagados;
-      r.comExtras += pagados * cfg.extra;
+      r.comExtras += pagados * cfg.extra * fx;
+      if (fx < 1) r.tardeExtras += pagados * cfg.extra * (1 - fx);
     }
   }
   const personas = [...by.values()].map((r) => {
@@ -1152,6 +1183,7 @@ export function calcularCiclo(
     const first = normNombre(r.cosm).split(" ")[0];
     const congelado = ciclo === BONO_N8_CICLO && (first === "andrea" || first === "daniela");
     let nivel = "—", premio = 0, next: { nivel: string; faltan: number; premio: number } | null = null;
+    let tardePaquetes = 0;
     if (congelado) {
       nivel = "N8";
       premio = BONO_N8;
@@ -1159,6 +1191,12 @@ export function calcularCiclo(
       const tramo = comisionPaquetesTramo(es ? r.paquetes : 0, tarifas, es ? r.netos : []);
       nivel = es ? tramo.etiqueta : "—";
       premio = es ? tramo.monto : 0;
+      // TK210: un paquete de un ticket subido tarde paga el 50% de su marginal (sigue contando para el tramo).
+      if (es && r.factores.some((f) => f < 1)) {
+        const conFx = comisionPaquetesTramoFactor(r.netos, r.factores, tarifas).monto;
+        tardePaquetes = round2(premio - conFx);
+        premio = conFx;
+      }
     } else if (bono && es) {
       for (const m of metas) {
         if (r.paquetes >= m.meta) { nivel = "N" + m.nivel; premio = m.premio; }
@@ -1171,7 +1209,10 @@ export function calcularCiclo(
     }
     r.comPaquetes = premio;
     r.nivel = nivel;
-    return { ...r, es, congelado, next, comFaciales: round2(r.comFaciales), comExtras: round2(r.comExtras), comPaquetes: round2(premio) };
+    return {
+      ...r, es, congelado, next, comFaciales: round2(r.comFaciales), comExtras: round2(r.comExtras), comPaquetes: round2(premio),
+      tardeFaciales: round2(r.tardeFaciales), tardeExtras: round2(r.tardeExtras), tardePaquetes, tardeProductos: 0,
+    };
   });
   return { ciclo, fin, totalClientas, n, bono, metas, regimen, personas, tramos: tarifas };
 }

@@ -1015,6 +1015,8 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     ...(paquete.uso ? [{ k: "paq", t: "Paquete " + paquete.uso, c: "info" }] : []),
     ...(flags.length ? [{ k: "flag", t: "Por corregir", c: "anulado" }] : []),
     ...(await otroNombre(ctx, r) ? [{ k: "otronombre", t: "Facturado a otro nombre", c: "neutro" }] : []),
+    // TK210: subido otro día que la atención (neutro; la comisión va al 50% si aplica).
+    ...(orig.subido_tarde === true ? [{ k: "tarde", t: "Subido tarde", c: "neutro" }] : []),
   ];
   return { info, tiene_tel, falta_factura: faltaFac || undefined, pago_directo: pagoDir || undefined, campos: DATOS_TK.filter(([k]) => (k !== "telefono" || conTelefono(ses)) && (k !== "email" || conEmail(ses) || conTelefono(ses))), corregidos: Object.keys(d), pagos, pagosFaltan, giftcards, paquete, envios, flags, reagendada: reag, faseA: faseA(r), chips, clienteKey: claveCliente(r),
     costosVisibles: admin };

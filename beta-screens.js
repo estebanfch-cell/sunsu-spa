@@ -3593,6 +3593,8 @@ function enviarTicket(){
     _motEd=String(_motEd).trim();
     if(_motEd.length<3){ toast('Escribe el motivo del cambio','#B86B6B'); return; }
   }
+  // TK210: atención de otro día → fecha real (formato que escriban) y aviso del 50%. No bloquea el envío.
+  if(!(window._tkEdicion&&window._tkEdicion.clave)&&window.SunsuTarde){ var _fAt=window.SunsuTarde.fechaParaEnvio(); if(_fAt) payload.fecha_atencion=_fAt; }
   if(btn){btn.disabled=true;btn.textContent=window._tkEdicion?'⏳ Enviando propuesta...':'⏳ Enviando...';}
   if(window._tkEdicion&&window._tkEdicion.clave){
     Promise.resolve(window.api('tk_edicion_pedir',{clave:window._tkEdicion.clave,form:payload,motivo:_motEd}))
@@ -20286,6 +20288,7 @@ function _migoPoblarTDesdeFac(b){
   if(revisa.length) notaFac+=' '+revisa.join(' ');
   T.notas=(T.notas?T.notas+'\n':'')+notaFac;
   window._migoVincularFac=T.factura;
+  if(b.fecha) T._fechaSugerida=String(b.fecha).slice(0,10); // TK210: si la factura es de otro día, se pregunta la fecha de atención
   window._migoForma=forma;
   window._migoPrefillAviso=sinItems
     ? 'Faltan los productos de la factura (detalle aún no importado). Cliente, fecha y forma de pago sí vienen de Migo.'
