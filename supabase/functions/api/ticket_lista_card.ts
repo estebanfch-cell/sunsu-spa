@@ -80,6 +80,36 @@ export function textoResumen(r: ResumenTk): string {
   return parts.join(" · ");
 }
 
+/** Importe de una línea (total_linea o precio×cantidad menos descuento). Ignora la línea DIF. */
+export function importeLinea(l: Row): number {
+  if (s(l.tipo) === "diferencia" || s(l.sku).toUpperCase() === "DIF" || /^Diferencia sin explicar$/i.test(s(l.nombre))) return 0;
+  if (n(l.total_linea)) return round2(n(l.total_linea));
+  const qty = n(l.cantidad) > 0 ? n(l.cantidad) : 1;
+  const bruto = round2(qty * n(l.precio_unit));
+  const tipo = s(l.descuento_tipo);
+  const desc = tipo === "$" ? n(l.descuento_valor) : tipo === "%" ? round2(bruto * n(l.descuento_valor) / 100) : 0;
+  return round2(Math.max(0, bruto - desc));
+}
+
+/** Valor del ticket = suma de sus líneas. Nunca lo cobrado ni el estimado de la hoja. */
+export function totalDeLineas(lineas: Row[] | undefined): number {
+  return round2((lineas || []).reduce((a, l) => a + importeLinea(l), 0));
+}
+
+/**
+ * Total a mostrar en listas y cruces: líneas beta, o líneas sintéticas del catálogo.
+ * No usa el estimado/cobrado de la hoja (TK207, Emilia: el valor del ticket, nunca lo cobrado).
+ */
+export function totalValorTicket(r: Row, opts?: { lineas?: Row[]; cab?: Row | null; map?: Map<string, Row>; canje?: boolean }): number {
+  const cab = opts?.cab;
+  if (cab && cab.lineas_beta === true && n(cab.total) > 0) return round2(n(cab.total));
+  if (opts?.lineas && opts.lineas.length) return totalDeLineas(opts.lineas);
+  const canje = opts?.canje ?? /^\s*SI\b/i.test(s(r.paquete));
+  const syn = lineasSinteticas(r, opts?.map, canje);
+  if (syn.length) return totalDeLineas(syn);
+  return 0;
+}
+
 /** Factura compacta para una sola línea en iPhone: Fac. 001-001-2982 */
 export function facListaTxt(fac: string): string {
   const t = s(fac).trim();
@@ -324,5 +354,12 @@ export async function enriquecerItemsLista(
     const tope = topeFotosCard(fotos);
     it.fotosCard = tope.fotosCard;
     it.fotosMore = tope.fotosMore;
+    // TK207: el monto de la tarjeta es el total de las líneas, nunca lo cobrado ni el estimado de la hoja.
+    const Lshow = Array.isArray(it.lineas) ? it.lineas as Row[] : [];
+    if (Lshow.length) {
+      const tot = totalDeLineas(Lshow);
+      it.total = tot;
+      it.estimado = tot;
+    }
   }
 }

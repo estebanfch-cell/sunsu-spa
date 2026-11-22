@@ -1,24 +1,31 @@
 // TK157: Claude Vision al subir voucher/transferencia + re-escaneo manual + alertas de descuadre para el Dashboard.
-import { extend } from "./handlers.ts";
+import { catMap, extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, logAccion } from "./lib.ts";
 import { esAdmin } from "./permisos.ts";
 import { n, round2, s, type Row } from "./domain.ts";
+import { totalValorTicket } from "./ticket_lista_card.ts";
 import { consultar } from "./query.ts";
 import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { veTicket } from "./inline_api.ts";
-import { OCR_HOOK, archivoIdDe, compsVivos, ticketPorClave } from "./tickets_beta_api.ts";
+import { OCR_HOOK, archivoIdDe, compsVivos, ticketPorClave, canjeFacial } from "./tickets_beta_api.ts";
 import { MODELO_OCR, cruzarVoucherConTicket, leerVoucherConClaude, resumenOcr, type ContextoCruce, type OcrVoucher } from "./voucher_ocr.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 const env = (ctx: Ctx) => (ctx.env || {}) as Record<string, string | undefined>;
 export const ocrActivo = (ctx: Ctx) => !!env(ctx).ANTHROPIC_API_KEY;
 
-/** Total del ticket (beta si está editado; si no, lo cobrado en la hoja) y la factura Migo vinculada. */
+/** Total del ticket: líneas (o hint del detalle), nunca el estimado/cobrado de la hoja. */
 export async function contextoVoucher(ctx: Ctx, r: Row, cab: Row | undefined, item: Row, comps: Row[], totalHint?: number): Promise<ContextoCruce> {
   const d = (cab?.datos || {}) as Row;
-  const totalTicket = n(totalHint) > 0 ? n(totalHint) : (cab && n(cab.total) > 0 && cab.lineas_beta === true ? n(cab.total) : n(r.estimado));
+  let totalTicket = n(totalHint) > 0 ? n(totalHint) : 0;
+  if (!(totalTicket > 0) && cab && cab.lineas_beta === true && n(cab.total) > 0) totalTicket = n(cab.total);
+  if (!(totalTicket > 0)) {
+    const map = await catMap(ctx);
+    totalTicket = totalValorTicket(r, { cab, map, canje: canjeFacial(r) });
+  }
+  if (!(totalTicket > 0)) totalTicket = n(r.estimado);
   let facturaMigo: string | null = null, totalFacturaMigo: number | null = null;
   const pm = d.pago_migo && typeof d.pago_migo === "object" ? d.pago_migo as Row : null;
   if (pm && s(pm.factura) && n(pm.total) > 0) { facturaMigo = s(pm.factura); totalFacturaMigo = n(pm.total); }
