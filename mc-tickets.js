@@ -135,7 +135,7 @@
       ".mctk2 .mctk-voucher{display:inline-flex;align-items:center;gap:6px;white-space:normal!important}.mctk-cam{font-size:1.05rem;line-height:1}.mctk-vlab{font-size:.72rem;font-weight:700}",
       ".mctk-wa-sel{position:fixed;inset:0;background:rgba(20,30,50,.4);z-index:10000;display:flex;align-items:flex-end;justify-content:center;padding:16px}.mctk-wa-box{background:#fff;border-radius:16px 16px 0 0;padding:16px 16px 20px;width:min(420px,100%);box-sizing:border-box}.mctk-wa-box h3{margin:0 0 4px;font-size:1rem}.mctk-wa-box p{margin:0 0 12px;color:var(--gray);font-size:.8rem}.mctk-wa-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.mctk-wa-chip{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;border:2px solid #DC2626;background:#fff;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap}.mctk-wa-chip.on{border-color:#16A34A;background:#f3faf6}.mctk-wa-dot{width:10px;height:10px;border-radius:50%;background:#DC2626}.mctk-wa-chip.on .mctk-wa-dot{background:#16A34A}.mctk-wa-acts{display:flex;justify-content:flex-end;gap:8px;align-items:center;flex-wrap:wrap}.mctk-wa-man{white-space:nowrap!important;color:var(--navy-d,#3D5A7A)}.mctk-wa-go{display:inline-flex!important;align-items:center;gap:8px;white-space:nowrap!important}",
       ".mctk-pills-desk{display:none}.mctk-estados{position:relative;flex:0 1 auto;max-width:100%;margin-left:auto}.mctk-estados>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--cream-d);border-radius:999px;padding:5px 12px;font-size:.74rem;font-weight:700;color:var(--navy-d);background:var(--white,#fff);max-width:100%;white-space:normal;overflow-wrap:anywhere}.mctk-estados>summary::-webkit-details-marker{display:none}.mctk-estados>summary:after{content:'▾';font-size:.7rem;color:var(--gray);flex:none}",
-      ".mctk-estados.mctk-est-rojo>summary{color:#8B2E2E;border-color:#E6A39B;background:#FDECEA}.mctk-estados.mctk-est-amarillo>summary{color:#7A5C12;border-color:#E8CF7A;background:#FFF6D6}",
+      ".mctk-estados.mctk-est-rojo>summary{color:#7F1D1D;border-color:#DC2626;background:#FCA5A5;font-weight:800}.mctk-estados.mctk-est-amarillo>summary{color:#7A5C12;border-color:#E8CF7A;background:#FFF6D6}",
       ".mctk-estados .mctk-pills{display:flex;flex-direction:column;align-items:stretch;gap:6px;position:absolute;right:0;top:calc(100% + 4px);z-index:40;min-width:200px;max-width:min(280px,90vw);padding:8px;border:1px solid var(--cream-d);border-radius:12px;background:var(--white,#fff);box-shadow:0 8px 24px rgba(0,0,0,.12)}.mctk-estados .mctk-pill{text-align:center}",
       ".mctk-det{border:1.5px solid var(--cream-d);border-radius:12px;padding:0;margin-top:12px;background:var(--white,#fff)}.mctk-det>summary{list-style:none;cursor:pointer;padding:10px 12px;font-weight:700;color:var(--navy-d);font-size:.88rem;display:flex;align-items:center;justify-content:space-between}.mctk-det>summary::-webkit-details-marker{display:none}.mctk-det>summary:after{content:'▾';color:var(--gray);font-weight:400}.mctk-det[open]>summary{border-bottom:1px solid var(--cream-d)}.mctk-det .mctk-grid{margin:0;padding:8px 12px 10px}.mctk-det .mctk-f{grid-template-columns:minmax(90px,34%) 1fr;gap:6px}",
       ".mctk-load{margin:0 0 8px;font-size:.76rem;color:var(--gray)}",
@@ -171,7 +171,7 @@
 
   // ---------- pintar ----------
   // ---------- detalle v2 (como la orden de MineCore) ----------
-  var CHIP = { abierto: "#3E7CB1", cerrado: "#56627A", porcobrar: "#C98A00", pagado: "#2E8B57", sinfactura: "#D2603A", facturado: "#2A8C8C", anulado: "#C0392B", ok: "#2E8B57", pend: "#8A93A6", info: "#7C6BB0", neutro: "#8A93A6" };
+  var CHIP = { abierto: "#3E7CB1", cerrado: "#56627A", porcobrar: "#C98A00", pagado: "#2E8B57", sinfactura: "#D2603A", faltafactura: "#B91C1C", facturado: "#2A8C8C", anulado: "#C0392B", ok: "#2E8B57", pend: "#8A93A6", info: "#7C6BB0", neutro: "#8A93A6" };
   function pill(c, t, tip) { var col = CHIP[c] || "#8A93A6"; return '<span class="mctk-pill" style="color:' + col + ";border-color:" + col + '"' + (tip ? ' title="' + e(tip) + '"' : "") + ">" + e(t) + "</span>"; }
   function val(k) { var d = K.d, v = K.datos && K.datos[k] != null ? K.datos[k] : (d.info || {})[k]; return v == null ? "" : String(v); }
   function staffLista() {
@@ -228,14 +228,19 @@
   }
   function estadoResumen() {
     var C = K.d.chips || [], F = K.d.flags || [], falta = K.d.faltan || [], c;
-    if ((F && F.length) || chipDe("flag") || chipDe("por corregir")) return { t: "Por corregir", tone: "rojo" };
+    if ((F && F.length) || chipDe("flag") || chipDe("por corregir")) {
+      if (chipDe("faltafactura") || chipDe("falta factura") || (K.d && K.d.falta_factura)) return { t: "Falta factura", tone: "rojo" };
+      return { t: "Por corregir", tone: "rojo" };
+    }
     c = chipDe("anulado") || chipDe("cancelado");
     if (c) return { t: c.t, tone: "rojo" };
+    c = chipDe("faltafactura") || chipDe("falta factura");
+    if (c || (K.d && K.d.falta_factura)) return { t: "Falta factura", tone: "rojo" };
     if (falta && falta.length) return { t: "Falta documento", tone: "amarillo" };
     c = chipDe("porcobrar") || chipDe("por cobrar");
     if (c) return { t: c.t, tone: "amarillo" };
     c = chipDe("sinfactura") || chipDe("sin factura");
-    if (c) return { t: c.t, tone: "amarillo" };
+    if (c) return { t: "Falta factura", tone: "rojo" };
     c = chipDe("estado") || C[0];
     return { t: c ? c.t : "", tone: "" };
   }
@@ -823,7 +828,7 @@
       (t.cancelado ? '<div class="mctk-canc"><b>🚫 Ticket cancelado</b>' + (t.cancelado.por ? " por " + e(t.cancelado.por) : "") + (t.cancelado.ts ? " · " + e(String(t.cancelado.ts).slice(0, 16).replace("T", " ")) : "") + (t.cancelado.motivo ? "<br>Motivo: " + e(t.cancelado.motivo) : "") + "<br><small>No suma en totales, comisiones ni dashboard. El stock de productos volvió a su bodega.</small></div>" : "") +
       flagsHtml() + faltaHtml() + voucherThumbsHtml() +
       (d.hidratando && !(K.L && K.L.length) ? '<p class="mctk-load" id="mctk-load">Cargando detalle…</p>' : "") +
-      '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">' + ((d.chips || []).some(function (c) { return c && c.k === "sincobro"; }) ? "No se factura (en $0)" : "Sin factura") + "</span>") + "</span>" + (facPdf ? ' <button type="button" class="btn ghost small" data-pv="' + e(facPdf.url) + '" data-pvn="' + e(facPdf.nombre || ("Factura " + fac)) + '">📄 Ver factura</button>' : "") + "</div></div>" + estadosHtml() + "</div>" +
+      '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">' + ((d.chips || []).some(function (c) { return c && c.k === "sincobro"; }) ? "No se factura (en $0)" : "Falta factura") + "</span>") + "</span>" + (facPdf ? ' <button type="button" class="btn ghost small" data-pv="' + e(facPdf.url) + '" data-pvn="' + e(facPdf.nombre || ("Factura " + fac)) + '">📄 Ver factura</button>' : "") + "</div></div>" + estadosHtml() + "</div>" +
       '<details class="mctk-det"' + (esMovilTk() ? "" : " open") + '><summary>Detalles</summary><div class="mctk-grid"><dl>' + campo("nombre", "Nombre") + campo("apellido", "Apellido") + campo("cedula", "CI") + ((d.campos || []).some(function (c) { return c[0] === "email"; }) ? campo("email", "Email") + campo("telefono", "Teléfono") : "") + campo("cosmetologa", "Atendió") + campo("notas", "Notas") + campo("recomendaciones", "Recomendaciones") + "</dl>" +
       "<dl>" + ro("Fecha", e(fecha(inf.fecha, inf.hora))) + campo("local", "Local") + campo("cabina", "Cabina") + ro("Orden", e(inf.orden != null ? "#" + inf.orden : "")) + campo("retorno", "Fecha de regreso", { fmt: function (v) { return v ? fecha(v) : ""; } }) + campo("retornoTrat", "Tratamiento recomendado") + ro("Reagendada", e(reag)) +
       (d.clienteKey ? ro("Ficha", '<a href="#" id="mctk-ficha" class="mctk-link">Ver clienta</a>') : "") + "</dl></div></details>" +
