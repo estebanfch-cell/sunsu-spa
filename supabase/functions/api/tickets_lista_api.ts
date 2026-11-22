@@ -12,7 +12,7 @@ import { colTicket, ecuadorParts, n, normCedula, normNombre, round2, s, ymdUtc, 
 import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { consultar, type Filtro } from "./query.ts";
-import { canjeFacial, estaPagado, faltaDe, faltaFacturaTicket, faseA, facturaCompleta, hayFactura, pagosFaltanFoto, sumaPagosBeta } from "./tickets_beta_api.ts";
+import { canjeFacial, esPagoDirecto, estaPagado, faltaDe, faltaFacturaTicket, faseA, facturaCompleta, hayFactura, pagosFaltanFoto, sumaPagosBeta } from "./tickets_beta_api.ts";
 import { esperandoFacturaLunes, exentoCuadre, fechaGye, formaDeTicket } from "./migo_cuadre.ts";
 import { metodosPago } from "./pagos_caja.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
@@ -27,7 +27,7 @@ import { pendientesPorClave } from "./propuesta_edicion.ts";
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 const addD = (ymd: string, d: number) => { const t = new Date(ymd + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + d); return t.toISOString().slice(0, 10); };
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
-const IDX = ["id", "sheet_row", "timestamp", "atendido_por", "estimado", "comp", "comprobante", "cob", "fac", "fac_7", "so_num", "beta_num", "nombre", "apellido", "id_3", "venta_gift", "paquete", "facial_hecho", "gift_card"];
+const IDX = ["id", "sheet_row", "timestamp", "atendido_por", "estimado", "comp", "comprobante", "cob", "fac", "fac_7", "so_num", "beta_num", "nombre", "apellido", "id_3", "venta_gift", "paquete", "facial_hecho", "gift_card", "notas_generales"];
 
 async function verTodos(ctx: Ctx, ses: Ses): Promise<boolean> {
   return esAdmin(ses.rol) || acceso(ses.rol, "tickets", await matrizDe(ctx.db)) === "todos";
@@ -95,6 +95,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   const map = await catMap(ctx);
   // TK207: el valor de la lista es el total de las líneas, nunca lo cobrado ni el estimado de la hoja.
   const valorDe = (r: Row) => {
+    if (esPagoDirecto(r, { datos: datosDe(r) })) return 0;
     const v = totalValorTicket(r, { cab: cabMap.get(claveDeR(r)), map, canje: canjeFacial(r) });
     return v > 0 ? v : n(r.estimado);
   };
@@ -105,11 +106,11 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
     const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
     return orig.anulado === true || esCancelado(r);
   };
-  const faltaFacDe = (r: Row) => faltaFacturaTicket({ anulado: origAnulado(r), facReal: facDe(r), total: totalDe(r), fecha: ymdUtc(r.timestamp) });
+  const faltaFacDe = (r: Row) => faltaFacturaTicket({ anulado: origAnulado(r), facReal: facDe(r), total: totalDe(r), fecha: ymdUtc(r.timestamp), pagoDirecto: esPagoDirecto(r, { datos: datosDe(r) }) });
   const cobDe = (r: Row) => estaPagado(r, { factura: datosDe(r).factura, linkFac: linkByTk.get(n(r.id))?.factura, pagadoBeta: pagadoBetaDe(r), total: totalDe(r) });
   const cerradoDe = (r: Row) => {
     const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
-    return orig.anulado === true || (cobDe(r) && (facDe(r) || (!faltaFacDe(r) && !!tipoSinCobro(r)) || r.fac === true || s(r.fac).toLowerCase() === "true"));
+    return orig.anulado === true || esPagoDirecto(r, { datos: datosDe(r) }) || (cobDe(r) && (facDe(r) || (!faltaFacDe(r) && !!tipoSinCobro(r)) || r.fac === true || s(r.fac).toLowerCase() === "true"));
   };
   if (est === "sinfactura") L = L.filter((r) => faltaFacDe(r));
   if (est === "pagado") L = L.filter((r) => cobDe(r));
@@ -221,6 +222,8 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
     it.factura = facReal ? (facturaCompleta(facTxt) || facTxt) : "";
     const sinCobro = tipoSinCobro(r);
     if (sinCobro) it.sin_cobro = sinCobro;
+    const pagoDir = esPagoDirecto(r, { datos: d });
+    if (pagoDir) it.pago_directo = true;
     // TK156 (Emilia t691u): resumen de pagos en el item → el detalle pinta «Pagos · saldo $0.00» al instante (sin flash falso).
     {
       const pagosT = (pagosPorClave.get(clave) || []) as Row[];
@@ -235,7 +238,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
         pagos: pagosT.map((x) => ({ id: s(x.id), fecha: s(x.fecha), metodo: s(x.metodo), monto: n(x.monto), ref: s(x.ref), registrado_por: s(x.registrado_por) })),
       };
     }
-    it.estado_doc = (it.anulado === true || (cobrado && (facReal || !!sinCobro || r.fac === true || s(r.fac).toLowerCase() === "true"))) ? "cerrado" : "abierto";
+    it.estado_doc = (it.anulado === true || pagoDir || (cobrado && (facReal || !!sinCobro || r.fac === true || s(r.fac).toLowerCase() === "true"))) ? "cerrado" : "abierto";
     it.led = {
       a: faseA(r) ? 1 : 0, p: cobrado ? 1 : 0, r: enviado(r, env) ? 1 : 0, g: g ? 1 : 0, ret,
       pr: !g && it.anulado !== true && YMD.test(ret) && ret <= addD(hoy, 7) && ret >= addD(hoy, -60) ? 1 : 0,
@@ -244,6 +247,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
       ...((formaDeTicket(r, d, formaMigo) || (cobrado ? "no_registrado" : "")) ? { forma: formaDeTicket(r, d, formaMigo) || "no_registrado" } : {}),
       ...(!cobrado && (d.pago_migo || Lnk) ? { pagoMigo: 1 } : {}),
       ...(faltaFacDe(r) ? { faltaFactura: 1 } : {}),
+      ...(pagoDir ? { pagoDirecto: 1 } : {}),
       ...(!facTxt && cob && !exentoCuadre(r) && esperandoFacturaLunes(fechaGye(r.timestamp), hoy) ? { pendienteLunes: 1 } : {}),
       ...((d.factura_pdf && typeof d.factura_pdf === "object" && (d.factura_pdf as Row).url) ? { facturaPdf: s((d.factura_pdf as Row).url) } : {}),
       // TK156 (Emilia t687u): factura Migo ligada sin forma de pago → aviso amarillo para recepción.
@@ -282,7 +286,8 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   await enriquecerItemsLista(ctx.db, filas, items, cabMap, { map, canje: canjeFacial });
   // TK207: si el enriquecido trajo líneas, su suma manda (más fiel que el sintético). Nunca lo cobrado.
   for (const it of items) {
-    const tot = n(it.total) > 0 || (Array.isArray(it.lineas) && (it.lineas as Row[]).length) ? n(it.total) : n(it.estimado);
+    let tot = n(it.total) > 0 || (Array.isArray(it.lineas) && (it.lineas as Row[]).length) ? n(it.total) : n(it.estimado);
+    if (it.pago_directo === true) tot = 0;
     it.total = tot;
     it.estimado = tot;
     const pr = it.pagos_resumen && typeof it.pagos_resumen === "object" ? it.pagos_resumen as Row : null;

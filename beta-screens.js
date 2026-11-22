@@ -5865,7 +5865,8 @@ function _buildTicketCard(t, showPrices){
 // ══════ HISTORIAL ══════
 function renderHistorial(c){
   var isAdmin=CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin');
-  window._histCosmFiltro='';
+  // TK209: no se resetean filtros/búsqueda al volver del detalle (se conservan en memoria + sessionStorage).
+  if(window._histCosmFiltro==null) window._histCosmFiltro='';
   window._tkServer=true;
   var q0={desde:'',hasta:'',cosm:'',q:(window._histBusqueda||'').trim()};
   var pintar=function(){ if(isAdmin) mostrarHistorialAdmin(c,'','',''); else mostrarHistorialStaff(c,'',''); };
@@ -5877,9 +5878,11 @@ function renderHistorial(c){
     _tkPedir(q0,false).then(function(ok){
       if(!ok||!document.body.contains(c)) return;
       if(_tkFirma(window._histData)===firma0) return;
+      if(window.SunsuListaPos) window.SunsuListaPos.save('tickets');
       var y=window.scrollY||0;
       pintar();
       try{ window.scrollTo(0,y); }catch(eS){}
+      if(window.SunsuListaPos) window.SunsuListaPos.restore('tickets',{inplace:true});
     });
     _histAutoRefresh();
     return;
@@ -6243,6 +6246,8 @@ function _histMontos(t){
   // TK207: el total de la tarjeta es el valor del ticket (líneas, t.total), nunca lo cobrado.
   var tot=parseFloat(t&&t.total);
   if(!isFinite(tot)) tot=parseFloat(t&&t.estimado)||0;
+  // TK209: pago directo vale $0 para Sunsu (descuento al 100%, no es «lo cobrado»).
+  if(t&&(t.pago_directo===true||(t.led&&t.led.pagoDirecto))) tot=0;
   var sub=Math.round(tot/1.15*100)/100;
   return {sub:sub, iva:Math.round((tot-sub)*100)/100, tot:tot};
 }
@@ -6305,7 +6310,7 @@ function _histCelda(t, c, showPrices, i){
   if(c.k==='iva') return '<td class="num">'+$(m.iva)+'</td>';
   if(c.k==='tot') return '<td class="num">'+$(m.tot)+'</td>';
   if(c.k==='pago') return '<td>'+_tkPagoPill(t)+'</td>';
-  if(c.k==='fac'){ var ff=_tkFacFull(t), pdf=_tkFacPdf(t); /* TK182c (Emilia t795u): si falta espacio, la factura muestra solo los últimos dígitos (completa en el title). */ var fc=String(ff||'').replace(/\D/g,'').slice(-6); return '<td>'+(ff?'<span class="tk-fac" title="'+_histEsc(ff)+'"><span class="tk-fac-full">'+_histEsc(ff)+'</span><span class="tk-fac-corta">…'+_histEsc(fc)+'</span></span>'+(pdf?' <span class="tk-facpdf" title="Factura PDF adjunta">📄</span>':''):(t.sin_cobro&&!_tkFaltaFactura(t)?_tkPill('gris','No aplica','Cortesía / consumo interno / canje de paquete en $0: no se factura'):_tkFaltaFactura(t)?_tkPill('faltafactura','Falta factura','Hay que facturar este ticket'):_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura')))+'</td>'; }
+  if(c.k==='fac'){ var ff=_tkFacFull(t), pdf=_tkFacPdf(t); /* TK182c (Emilia t795u): si falta espacio, la factura muestra solo los últimos dígitos (completa en el title). */ var fc=String(ff||'').replace(/\D/g,'').slice(-6); return '<td>'+(ff?'<span class="tk-fac" title="'+_histEsc(ff)+'"><span class="tk-fac-full">'+_histEsc(ff)+'</span><span class="tk-fac-corta">…'+_histEsc(fc)+'</span></span>'+(pdf?' <span class="tk-facpdf" title="Factura PDF adjunta">📄</span>':''):(t.sin_cobro&&!_tkFaltaFactura(t)?_tkPill('gris','No aplica','Cortesía / consumo interno / canje de paquete en $0: no se factura'):_tkPagoDirecto(t)?_tkPill('gris','Pago directo','Pago directo EGB: $0 para Sunsu, sin factura. El stock sí se descuenta.'):_tkFaltaFactura(t)?_tkPill('faltafactura','Falta factura','Hay que facturar este ticket'):_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura')))+'</td>'; }
   if(c.k==='reag'){ var Lr=_tkLedOf(t); if(!Lr) return '<td></td>'; return '<td>'+(Lr.g?_tkPill('pagado','Sí'):_tkPill(Lr.pr?'porcobrar':'gris','No'))+'</td>'; }
   if(c.k==='sal') return '<td class="num">'+$( _histSaldo(t)||0 )+'</td>';
   /* TK182 (Emilia t794u): en la computadora, cámara y WhatsApp de la tarjeta móvil, HORIZONTALES al final de la fila
@@ -6372,6 +6377,7 @@ function _histFacNum(t){
 function _histFacTag(t,facn,anul){
   if(facn) return '<span class="mob-fac"> - '+_histEsc(facn)+'</span>';
   if(anul||(t&&(t.borrador||t.por_completar))) return '';
+  if(_tkPagoDirecto(t)) return '<span class="mob-fac"> · Pago directo</span>';
   if(_tkFaltaFactura(t)) return '<span class="mob-fac mob-fac-falta"> · Falta factura</span>';
   var sc=false; try{ sc=_histSinCobro(t); }catch(_e){}
   return sc?'<span class="mob-fac"> · Canje · sin factura</span>':'<span class="mob-fac mob-fac-no"> · Sin factura</span>';
@@ -6571,8 +6577,19 @@ function _histCargarThumbs(root){
   lote(ids);
 }
 /* TK208 (Emilia): rojo si el ticket tiene valor de líneas > $0 y no hay factura Migo. Canjes/gift/$0 no. */
+function _tkPagoDirecto(t){
+  if(!t) return false;
+  var L=_tkLedOf(t)||{};
+  if(L.pagoDirecto===1||L.pagoDirecto===true||t.pago_directo===true) return true;
+  var orig=t.orig||{};
+  var just=String(orig.justificacion_descuento||t.justificacion_descuento||'');
+  if(/pago\s*directo/i.test(just)) return true;
+  var notas=String(t.notas||t.notas_generales||orig['NOTAS GENERALES']||'');
+  return /pago\s*directo(\s+egb)?/i.test(notas) || /descuento:\s*directo/i.test(notas);
+}
 function _tkFaltaFactura(t){
   if(!t) return false;
+  if(_tkPagoDirecto(t)) return false;
   var orig=t.orig||{};
   if(t.anulado===true||orig.anulado===true||t.cancelado===true) return false;
   if(t.borrador||t.por_completar) return false;
@@ -6733,7 +6750,7 @@ function _histCerrarTicket(){
   pane.innerHTML='<p class="note">Elige un ticket para ver el detalle.</p>';
   document.querySelectorAll('#tk-body .tk-row.on').forEach(function(tr){ tr.classList.remove('on'); });
 }
-function _histTrasPintar(){ if(window.SunsuInline) SunsuInline.aplicar(); _tkCargarLeds(); if(typeof _migoPintarBandeja==='function') _migoPintarBandeja(); if(typeof _histCargarThumbs==='function') _histCargarThumbs(document.getElementById('tk-cards')||document); }
+function _histTrasPintar(){ if(window.SunsuInline) SunsuInline.aplicar(); _tkCargarLeds(); if(typeof _migoPintarBandeja==='function') _migoPintarBandeja(); if(typeof _histCargarThumbs==='function') _histCargarThumbs(document.getElementById('tk-cards')||document); if(window.SunsuListaPos) window.SunsuListaPos.watch('tickets'); }
 // ── Lista de tickets v2 (Emilia 17/11): LED por fila, estados de colores, filas por corregir en rojo, Filtros ▾ ──
 var _TK_PILL={gris:'#8A93A6',abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',pagomigo:'#1A6B8A',pendlun:'#6B7B99',sinfactura:'#D2603A',faltafactura:'#B91C1C',anulado:'#C0392B',porcompletar:'#C98A00',pendaprobar:'#8A6D00',edicionpend:'#3E7CB1'};
 var _TK_FORMA={transferencia:'#3E7CB1',tarjeta:'#7B5EA7',efectivo:'#2E8B57',mixto:'#1F7A7A',canje:'#8A93A6',cortesia:'#C46B8A',no_registrado:'#8A93A6'};
@@ -6786,6 +6803,7 @@ function _tkFacPdf(t){
 function _tkEtqSinCobro(x){ return x==='interno'?'Consumo interno':x==='canje'?'Canje de paquete':'Cortesía'; }
 function _tkPagoPill(t){
   if(t&&t.anulado===true) return _tkPill('anulado','Cancelado');
+  if(t&&_tkPagoDirecto(t)) return _tkPill('gris','Pago directo');
   if(t&&t.sin_cobro) return _tkPill('gris',_tkEtqSinCobro(t.sin_cobro)); // TK98
   if(t&&t.cob) return _tkPill('pagado','Pagado');
   if(_tkPagoMigo(t)){
@@ -6807,6 +6825,7 @@ function _tkEstados(t){
   if(t.anulado===true||orig.anulado===true) return [{c:'anulado',t:'Cancelado'}];
   var out=[_histEstadoDoc(t)==='cerrado'?{c:'cerrado',t:'Cerrado'}:{c:'abierto',t:'Abierto'}];
   // TK98: cortesía / consumo interno en $0: estado gris, sin «Por cobrar» ni «Sin factura».
+  if(_tkPagoDirecto(t)){ out.push({c:'gris',t:'Pago directo'}); return out; }
   if(t.sin_cobro){ out.push({c:'gris',t:_tkEtqSinCobro(t.sin_cobro)}); return out; }
   out.push(t.cob||_tkPagoMigo(t)?{c:'pagado',t:'Pagado'}:{c:'porcobrar',t:'Por cobrar'});
   var Lx=_tkLedOf(t);
@@ -6911,9 +6930,11 @@ function _histActualizarRes(esStaff, yaPedido){
   var hoy=new Date(),pad=function(n){return String(n).padStart(2,'0');};
   var fh=hoy.getFullYear()+'-'+pad(hoy.getMonth()+1)+'-'+pad(hoy.getDate());
   var fd=f.desde||'', fha=f.hasta||'';
+  if(window.SunsuListaPos) window.SunsuListaPos.save('tickets');
   if(esStaff) res.innerHTML=_histResStaffHTML(_histFiltrarStaff(busq,fd,fha), busq);
   else res.innerHTML=_histResAdminHTML(_histFiltrarAdmin(busq,fd,fha,window._histCosmFiltro||''), window._histCosmFiltro||'', fd, fha, busq);
   _histTrasPintar();
+  if(window.SunsuListaPos) window.SunsuListaPos.restore('tickets',{inplace:true});
   return true;
 }
 function _histMatchBusq(t, busq){

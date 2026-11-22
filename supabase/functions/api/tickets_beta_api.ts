@@ -338,7 +338,8 @@ export async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
     linkFac = ln?.factura;
   } catch { linkFac = ""; }
   const facRealLed = hayFactura(r.fac_7, dFac, linkFac);
-  const faltaFacLed = faltaFacturaTicket({ anulado, facReal: facRealLed, total: calc.total, fecha: ymdUtc(r.timestamp) });
+  const pagoDirLed = esPagoDirecto(r);
+  const faltaFacLed = faltaFacturaTicket({ anulado, facReal: facRealLed, total: calc.total, fecha: ymdUtc(r.timestamp), pagoDirecto: pagoDirLed });
   return {
     ok: true, clave, admin, falta: (await hay(ctx)) ? "" : FALTA, nombresSku,
     ticket: {
@@ -346,12 +347,12 @@ export async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
       nombre: s(r.nombre), apellido: s(r.apellido), cedula: s(r.id_3), cosmetologa: s(r.atendido_por),
       cobradoSistema: round2(n(r.estimado)), factura: facturaTxt(r.fac_7) || facturaTxt(dFac) || facturaTxt(linkFac), comprobante: s(r.comp),
       notas: s(r.notas_generales), recomendaciones: s(r.recomendaciones), retorno: s(r.fecha_retorno).slice(0, 10), paquete: s(r.paquete),
-      estado: anulado ? "anulado" : estaCobrado(r, dFac, linkFac) && (facRealLed || fac) ? "cerrado" : "abierto",
+      estado: anulado ? "anulado" : (estaCobrado(r, dFac, linkFac) && (facRealLed || fac)) || pagoDirLed ? "cerrado" : "abierto",
       cancelado: anulado ? { motivo: s(orig.cancelado_motivo), por: s(orig.cancelado_por), ts: s(orig.cancelado_ts) } : null,
       leds: [
-        { k: "estado", t: anulado ? "Cancelado" : estaCobrado(r, dFac, linkFac) && (facRealLed || fac) ? "Cerrado" : "Abierto", c: anulado ? "x" : estaCobrado(r, dFac, linkFac) && (facRealLed || fac) ? "ok" : "c" },
-        { k: "fac", t: facRealLed ? "Facturado" + ((facturaTxt(r.fac_7) || facturaTxt(dFac) || facturaTxt(linkFac)) && !/sin/i.test(facturaTxt(r.fac_7) || facturaTxt(dFac) || facturaTxt(linkFac)) ? " " + (facturaTxt(r.fac_7) || facturaTxt(dFac) || facturaTxt(linkFac)) : "") : (faltaFacLed ? "Falta factura" : "Sin factura"), c: facRealLed ? "ok" : (faltaFacLed ? "faltafactura" : "off") },
-        { k: "cob", t: estaCobrado(r) ? "Cobrado" : "Por cobrar", c: estaCobrado(r) ? "ok" : "r" },
+        { k: "estado", t: anulado ? "Cancelado" : (estaCobrado(r, dFac, linkFac) && (facRealLed || fac)) || pagoDirLed ? "Cerrado" : "Abierto", c: anulado ? "x" : (estaCobrado(r, dFac, linkFac) && (facRealLed || fac)) || pagoDirLed ? "ok" : "c" },
+        { k: "fac", t: facRealLed ? "Facturado" + ((facturaTxt(r.fac_7) || facturaTxt(dFac) || facturaTxt(linkFac)) && !/sin/i.test(facturaTxt(r.fac_7) || facturaTxt(dFac) || facturaTxt(linkFac)) ? " " + (facturaTxt(r.fac_7) || facturaTxt(dFac) || facturaTxt(linkFac)) : "") : (pagoDirLed ? "Pago directo" : (faltaFacLed ? "Falta factura" : "Sin factura")), c: facRealLed ? "ok" : (pagoDirLed ? "neutro" : (faltaFacLed ? "faltafactura" : "off")) },
+        { k: "cob", t: pagoDirLed ? "Pago directo" : (estaCobrado(r) ? "Cobrado" : "Por cobrar"), c: pagoDirLed ? "neutro" : (estaCobrado(r) ? "ok" : "r") },
         ...(usoPaquete ? [{ k: "paq", t: "Paquete " + s(r.paquete).replace(/^\s*SI,?\s*/i, ""), c: "a" }] : []),
         ...(exclBeta || Object.values(exclSistema).some(Boolean) ? [{ k: "com", t: "Comisión excluida", c: "r" }] : []),
         ...(cab ? [{ k: "beta", t: "Editado", c: "a" }] : []),
@@ -781,7 +782,22 @@ export const FALTA_DESDE = "2026-11-01";
 /** TK208 (Emilia): ticket con valor de líneas > $0 y sin factura Migo vinculada.
  *  El total es el de las líneas (TK207), nunca lo cobrado. Canjes, gift y otros $0 no se marcan.
  *  Se avisa de inmediato (no se espera al import horario ni al martes). */
-export function faltaFacturaTicket(opts: { anulado?: boolean; facReal?: boolean; total?: number; fecha?: string }): boolean {
+/** TK209 (Emilia): pago directo EGB = venta en $0 para Sunsu, sin factura (el stock sí se descuenta). */
+export function esPagoDirecto(r?: Row, extra?: { notas?: unknown; justificacion?: unknown; datos?: Row }): boolean {
+  const row = (r && typeof r === "object") ? r : {} as Row;
+  const orig = row.orig && typeof row.orig === "object" ? row.orig as Row : {};
+  const d = extra?.datos && typeof extra.datos === "object" ? extra.datos : {} as Row;
+  const just = s(extra?.justificacion) || s(orig.justificacion_descuento) || s(row.justificacion_descuento) || s(d.justificacion_descuento);
+  if (/pago\s*directo/i.test(just)) return true;
+  const notas = s(extra?.notas) || s(row.notas_generales) || s(row.notas) || s(orig["NOTAS GENERALES"]) || s(orig.notas_generales);
+  if (/pago\s*directo(\s+egb)?/i.test(notas) || /descuento:\s*directo/i.test(notas)) return true;
+  const desc = row.descuento;
+  if (desc && typeof desc === "object" && /^directo$/i.test(s((desc as Row).tipo))) return true;
+  if (typeof desc === "string" && /^directo$/i.test(desc.trim())) return true;
+  return false;
+}
+export function faltaFacturaTicket(opts: { anulado?: boolean; facReal?: boolean; total?: number; fecha?: string; pagoDirecto?: boolean }): boolean {
+  if (opts.pagoDirecto) return false;
   if (opts.anulado) return false;
   if (opts.facReal) return false;
   if (!(n(opts.total) > 0.05)) return false;
@@ -983,15 +999,16 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
   } catch { linkFac = ""; }
   const anulado = orig.anulado === true, facReal = hayFactura(r.fac_7, d.factura, linkFac), cobrado = estaPagado(r, { factura: d.factura, linkFac, pagadoBeta, total });
   const sinCobro = tipoSinCobro(r);
-  const faltaFac = faltaFacturaTicket({ anulado, facReal, total, fecha: ymdUtc(r.timestamp) });
-  const fac = facReal || b(r.fac) || (!!sinCobro && !faltaFac);
+  const pagoDir = esPagoDirecto(r);
+  const faltaFac = faltaFacturaTicket({ anulado, facReal, total, fecha: ymdUtc(r.timestamp), pagoDirecto: pagoDir });
+  const fac = facReal || b(r.fac) || (!!sinCobro && !faltaFac) || (pagoDir && !facReal);
   const chips: Row[] = [
-    { k: "estado", t: anulado ? "Cancelado" : cobrado && fac ? "Cerrado" : "Abierto", c: anulado ? "anulado" : cobrado && fac ? "cerrado" : "abierto" },
-    // TK98: cortesía / consumo interno / canje en $0, en gris. TK208: si hay valor de líneas y no hay factura Migo, «Falta factura» (rojo).
-    ...(sinCobro && !faltaFac ? [{ k: "sincobro", t: ETQ_SIN_COBRO[sinCobro], c: "neutro" }] : [
+    { k: "estado", t: anulado ? "Cancelado" : (cobrado && fac) || pagoDir ? "Cerrado" : "Abierto", c: anulado ? "anulado" : (cobrado && fac) || pagoDir ? "cerrado" : "abierto" },
+    // TK98: cortesía / consumo interno / canje en $0, en gris. TK208: «Falta factura» (rojo). TK209: pago directo no se factura.
+    ...(pagoDir && !facReal ? [{ k: "pagodirecto", t: "Pago directo", c: "neutro" }] : (sinCobro && !faltaFac ? [{ k: "sincobro", t: ETQ_SIN_COBRO[sinCobro], c: "neutro" }] : [
       { k: "cobro", t: cobrado ? "Pagado" : "Por cobrar", c: cobrado ? "pagado" : "porcobrar" },
       { k: "fac", t: facReal ? "Facturado" : (faltaFac ? "Falta factura" : "Sin factura"), c: facReal ? "facturado" : (faltaFac ? "faltafactura" : "sinfactura") },
-    ]),
+    ])),
     ...(canjeFacial(r) ? [{ k: "canje", t: "Canje", c: "info" }] : []),
     { k: "rep", t: envios.length ? "Reporte enviado" : "Reporte no enviado", c: envios.length ? "ok" : "pend" },
     { k: "reag", t: reag.si ? "Reagendada" : "Sin reagendar", c: reag.si ? "ok" : "pend" },
@@ -999,7 +1016,7 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     ...(flags.length ? [{ k: "flag", t: "Por corregir", c: "anulado" }] : []),
     ...(await otroNombre(ctx, r) ? [{ k: "otronombre", t: "Facturado a otro nombre", c: "neutro" }] : []),
   ];
-  return { info, tiene_tel, falta_factura: faltaFac || undefined, campos: DATOS_TK.filter(([k]) => (k !== "telefono" || conTelefono(ses)) && (k !== "email" || conEmail(ses) || conTelefono(ses))), corregidos: Object.keys(d), pagos, pagosFaltan, giftcards, paquete, envios, flags, reagendada: reag, faseA: faseA(r), chips, clienteKey: claveCliente(r),
+  return { info, tiene_tel, falta_factura: faltaFac || undefined, pago_directo: pagoDir || undefined, campos: DATOS_TK.filter(([k]) => (k !== "telefono" || conTelefono(ses)) && (k !== "email" || conEmail(ses) || conTelefono(ses))), corregidos: Object.keys(d), pagos, pagosFaltan, giftcards, paquete, envios, flags, reagendada: reag, faseA: faseA(r), chips, clienteKey: claveCliente(r),
     costosVisibles: admin };
 }
 
