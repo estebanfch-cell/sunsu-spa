@@ -6305,7 +6305,7 @@ function _histCelda(t, c, showPrices, i){
   if(c.k==='iva') return '<td class="num">'+$(m.iva)+'</td>';
   if(c.k==='tot') return '<td class="num">'+$(m.tot)+'</td>';
   if(c.k==='pago') return '<td>'+_tkPagoPill(t)+'</td>';
-  if(c.k==='fac'){ var ff=_tkFacFull(t), pdf=_tkFacPdf(t); /* TK182c (Emilia t795u): si falta espacio, la factura muestra solo los últimos dígitos (completa en el title). */ var fc=String(ff||'').replace(/\D/g,'').slice(-6); return '<td>'+(ff?'<span class="tk-fac" title="'+_histEsc(ff)+'"><span class="tk-fac-full">'+_histEsc(ff)+'</span><span class="tk-fac-corta">…'+_histEsc(fc)+'</span></span>'+(pdf?' <span class="tk-facpdf" title="Factura PDF adjunta">📄</span>':''):(t.sin_cobro?_tkPill('gris','No aplica','Cortesía / consumo interno / canje de paquete en $0: no se factura'):_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura')))+'</td>'; }
+  if(c.k==='fac'){ var ff=_tkFacFull(t), pdf=_tkFacPdf(t); /* TK182c (Emilia t795u): si falta espacio, la factura muestra solo los últimos dígitos (completa en el title). */ var fc=String(ff||'').replace(/\D/g,'').slice(-6); return '<td>'+(ff?'<span class="tk-fac" title="'+_histEsc(ff)+'"><span class="tk-fac-full">'+_histEsc(ff)+'</span><span class="tk-fac-corta">…'+_histEsc(fc)+'</span></span>'+(pdf?' <span class="tk-facpdf" title="Factura PDF adjunta">📄</span>':''):(t.sin_cobro&&!_tkFaltaFactura(t)?_tkPill('gris','No aplica','Cortesía / consumo interno / canje de paquete en $0: no se factura'):_tkFaltaFactura(t)?_tkPill('faltafactura','Falta factura','Hay que facturar este ticket'):_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura')))+'</td>'; }
   if(c.k==='reag'){ var Lr=_tkLedOf(t); if(!Lr) return '<td></td>'; return '<td>'+(Lr.g?_tkPill('pagado','Sí'):_tkPill(Lr.pr?'porcobrar':'gris','No'))+'</td>'; }
   if(c.k==='sal') return '<td class="num">'+$( _histSaldo(t)||0 )+'</td>';
   /* TK182 (Emilia t794u): en la computadora, cámara y WhatsApp de la tarjeta móvil, HORIZONTALES al final de la fila
@@ -6325,8 +6325,8 @@ function _histMasterHTML(tickets, showPrices){
     : _HIST_COLS.filter(function(c){ return c.k!=='ced'&&c.k!=='sub'&&c.k!=='iva'&&c.k!=='reag'; }).concat([{k:'acc',t:'',acc:1}]);
   var rows=tickets.map(function(t,i){
     var on=_histClave(t)===sel?' on':'';
-    var Lf=_tkLedOf(t), fl=Lf&&Lf.flag, fa=!fl&&_tkFaltaVoucher(t)?['Foto del voucher o transferencia']:null;
-    var tip=fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'';
+    var Lf=_tkLedOf(t), faltaFac=_tkFaltaFactura(t), fl=(Lf&&Lf.flag)||(faltaFac?'Falta factura':''), fa=!fl&&_tkFaltaVoucher(t)?['Foto del voucher o transferencia']:null;
+    var tip=faltaFac?'Falta factura':(fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'');
     return '<tr class="tk-row'+on+(_tkSolPend(t)?' tk-solpend':fl?' tk-flagged':fa?' tk-falta':'')+(_tkWaPendiente(t)?' tk-wapend':'')+'"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'+cols.map(function(c){ return abierto?_histCelda(t,c,showPrices,i):_histCelda(t,c,showPrices,i).replace(/^<td/,'<td data-c="'+c.k+'"'); }).join('')+'</tr>';
   }).join('');
   var head=cols.map(function(c){
@@ -6372,6 +6372,7 @@ function _histFacNum(t){
 function _histFacTag(t,facn,anul){
   if(facn) return '<span class="mob-fac"> - '+_histEsc(facn)+'</span>';
   if(anul||(t&&(t.borrador||t.por_completar))) return '';
+  if(_tkFaltaFactura(t)) return '<span class="mob-fac mob-fac-falta"> · Falta factura</span>';
   var sc=false; try{ sc=_histSinCobro(t); }catch(_e){}
   return sc?'<span class="mob-fac"> · Canje · sin factura</span>':'<span class="mob-fac mob-fac-no"> · Sin factura</span>';
 }
@@ -6569,6 +6570,20 @@ function _histCargarThumbs(root){
   }
   lote(ids);
 }
+/* TK208 (Emilia): rojo si el ticket tiene valor de líneas > $0 y no hay factura Migo. Canjes/gift/$0 no. */
+function _tkFaltaFactura(t){
+  if(!t) return false;
+  var orig=t.orig||{};
+  if(t.anulado===true||orig.anulado===true||t.cancelado===true) return false;
+  if(t.borrador||t.por_completar) return false;
+  if(_tkFacFull(t)) return false;
+  var tot=0;
+  try{ tot=_histMontos(t).tot; }catch(_e){ tot=parseFloat(t.total||t.estimado)||0; }
+  if(!(tot>0.05)) return false;
+  var L=_tkLedOf(t)||{};
+  if(L.faltaFactura===0||L.faltaFactura===false) return false;
+  return true;
+}
 /* TK163 (Emilia t755u): amarillo SOLO si falta el voucher/transferencia; franja aparte si falta el WhatsApp. */
 function _tkFaltaVoucher(t){
   var L=_tkLedOf(t)||{};
@@ -6584,7 +6599,7 @@ function _tkWaPendiente(t){
   return !(L.r || t.envio_ok || (t.envios&&t.envios.length) || t.tiene_envio);
 }
 function _histCardHTML(t, i, showPrices){
-  var Lf=_tkLedOf(t), fl=Lf&&Lf.flag, fa=!fl&&_tkFaltaVoucher(t)?((Lf.falta&&Lf.falta.filter(function(x){return /comprobante|voucher|transferencia/i.test(String(x));}))||[]):null;
+  var Lf=_tkLedOf(t), faltaFac=_tkFaltaFactura(t), fl=(Lf&&Lf.flag)||(faltaFac?'Falta factura':''), fa=!fl&&_tkFaltaVoucher(t)?((Lf.falta&&Lf.falta.filter(function(x){return /comprobante|voucher|transferencia/i.test(String(x));}))||[]):null;
   if(fa&&!fa.length) fa=['Foto del voucher o transferencia'];
   var waP=_tkWaPendiente(t);
   var nombre=((t.nombre||'')+' '+(t.apellido||'')).trim()||'—';
@@ -6597,7 +6612,7 @@ function _histCardHTML(t, i, showPrices){
   var who=_histCreador(t);
   var colWho=_histColorQuien((t.orig&&t.orig.creado_por)||t.creado_por||t.atendido_por||t.cosmetologa||who);
   var res=_histResumenTxt(t);
-  var tip=fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'';
+  var tip=faltaFac?'Falta factura':(fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'');
   return '<div class="mob-card'+(_tkSolPend(t)?' tk-solpend':fl?' tk-flagged':fa?' tk-falta':'')+(waP?' tk-wapend':'')+'" role="button" tabindex="0"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'
     +'<div class="mob-l1"><span class="mob-num">'+_histEsc(l1)+_histFacTag(t,facn,anul)+'</span>'+est+'</div>'
     +'<div class="mob-l2"><span class="mob-cli">'+_histEsc(nombre)+'</span>'+(who?'<span class="mob-who" style="color:'+_histEsc(colWho)+'" title="Creado por '+_histEsc(who)+'">'+_histEsc(who)+'</span>':'')+'</div>'
@@ -6720,7 +6735,7 @@ function _histCerrarTicket(){
 }
 function _histTrasPintar(){ if(window.SunsuInline) SunsuInline.aplicar(); _tkCargarLeds(); if(typeof _migoPintarBandeja==='function') _migoPintarBandeja(); if(typeof _histCargarThumbs==='function') _histCargarThumbs(document.getElementById('tk-cards')||document); }
 // ── Lista de tickets v2 (Emilia 17/11): LED por fila, estados de colores, filas por corregir en rojo, Filtros ▾ ──
-var _TK_PILL={gris:'#8A93A6',abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',pagomigo:'#1A6B8A',pendlun:'#6B7B99',sinfactura:'#D2603A',anulado:'#C0392B',porcompletar:'#C98A00',pendaprobar:'#8A6D00',edicionpend:'#3E7CB1'};
+var _TK_PILL={gris:'#8A93A6',abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',pagomigo:'#1A6B8A',pendlun:'#6B7B99',sinfactura:'#D2603A',faltafactura:'#B91C1C',anulado:'#C0392B',porcompletar:'#C98A00',pendaprobar:'#8A6D00',edicionpend:'#3E7CB1'};
 var _TK_FORMA={transferencia:'#3E7CB1',tarjeta:'#7B5EA7',efectivo:'#2E8B57',mixto:'#1F7A7A',canje:'#8A93A6',cortesia:'#C46B8A',no_registrado:'#8A93A6'};
 var _TK_FORMA_TXT={transferencia:'Transferencia',tarjeta:'Tarjeta',efectivo:'Efectivo',mixto:'Mixto',canje:'Canje',cortesia:'Cortesía',no_registrado:'Método no registrado',corte:'Método no registrado'};
 function _tkFormaNorm(v){
@@ -6795,7 +6810,7 @@ function _tkEstados(t){
   if(t.sin_cobro){ out.push({c:'gris',t:_tkEtqSinCobro(t.sin_cobro)}); return out; }
   out.push(t.cob||_tkPagoMigo(t)?{c:'pagado',t:'Pagado'}:{c:'porcobrar',t:'Por cobrar'});
   var Lx=_tkLedOf(t);
-  if(!_tkFacFull(t)) out.push(_tkPendienteLunes(t)?{c:'pendlun',t:'Pendiente por lunes'}:{c:'sinfactura',t:'Sin factura'});
+  if(!_tkFacFull(t)) out.push(_tkFaltaFactura(t)?{c:'faltafactura',t:'Falta factura'}:_tkPendienteLunes(t)?{c:'pendlun',t:'Pendiente por lunes'}:{c:'sinfactura',t:'Sin factura'});
   return out;
 }
 var _TK_LEDS=[['p','Pagado','Por cobrar'],['r','Reporte enviado','Reporte no enviado'],['g','Reagendada: tiene próxima cita','Sin próxima cita en Acuity']];
@@ -6846,7 +6861,7 @@ function _tkFiltrar(tickets){
     if(!f.seg) return true;
     var L=_tkLedOf(t); if(!L) return false;
     if(f.seg==='faseA_no') return !L.a; if(f.seg==='pago_no') return !L.p; if(f.seg==='rep_no') return !L.r; if(f.seg==='reag_no') return !L.g;
-    if(f.seg==='porreag') return !!L.pr; if(f.seg==='corregir') return !!L.flag;
+    if(f.seg==='porreag') return !!L.pr; if(f.seg==='corregir') return !!(L.flag||L.faltaFactura||_tkFaltaFactura(t));
     return true;
   });
 }

@@ -163,10 +163,11 @@ describe("TK157 alertas del Dashboard", () => {
     });
     const r = await h("voucher_alertas", {});
     const items = r.items as Row[];
-    assert.equal(items.length, 1);
-    assert.equal(items[0].texto, "Descuadre voucher TK-SO-1927");
-    assert.equal(items[0].detalle, "Voucher $30.00 vs Ticket $15.00");
-    assert.equal(items[0].key, "voucher:TK-SO-1927:a1");
+    const des = items.find((x) => String(x.key).startsWith("voucher:"));
+    assert.ok(des, "debe seguir listando el descuadre de voucher");
+    assert.equal(des!.texto, "Descuadre voucher TK-SO-1927");
+    assert.equal(des!.detalle, "Voucher $30.00 vs Ticket $15.00");
+    assert.equal(des!.key, "voucher:TK-SO-1927:a1");
   });
   it("alertasDescuadre puro", () => {
     assert.equal(alertasDescuadre([{ clave: "X", datos: { comprobantes: [{ url: "archivo:z", cruce: { estado: "cuadra" } }] } }], new Set()).length, 0);
@@ -187,7 +188,7 @@ describe("TK157 alertas del Dashboard", () => {
     const caja = file("mc-caja.js"), tk = file("mc-tickets.js"), html = file("index.html"), sw = file("sw.js");
     assert.match(caja, /🔍 Leer voucher/); assert.match(caja, /⚠️ Descuadre voucher: leído/); assert.match(caja, /✓ Leído: /); assert.match(caja, /Leído del voucher/);
     assert.match(tk, /MCOcr\.chip/);
-    assert.match(html, /sunsu-2026-11-21-TK207/); assert.match(sw, /sunsu-2026-11-21-TK207/);
+    assert.match(html, /sunsu-2026-11-21-TK208/); assert.match(sw, /sunsu-2026-11-21-TK208/);
     assert.match(file("supabase/functions/api/sunsu_version.ts"), /TK157/);
   });
 });

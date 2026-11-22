@@ -331,18 +331,26 @@ export async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
   try { betaPagosAlerta = (await consultar(ctx.db, "beta_pagos", { filtros: [{ col: "ticket_clave", op: "eq", val: clave }] })).rows.filter((x) => x.anulado !== true); }
   catch { betaPagosAlerta = []; }
   const avisoCobro = alertaDescuadreCobrado(sumaPagosBeta(betaPagosAlerta), calc.total);
+  const dFac = cab && cab.datos && typeof cab.datos === "object" ? (cab.datos as Row).factura : "";
+  let linkFac: unknown = "";
+  try {
+    const ln = (await consultar(ctx.db, "beta_cuadre_link", { filtros: [{ col: "ticket_id", op: "eq", val: n(r.id) }], limite: 1 })).rows[0];
+    linkFac = ln?.factura;
+  } catch { linkFac = ""; }
+  const facRealLed = hayFactura(r.fac_7, dFac, linkFac);
+  const faltaFacLed = faltaFacturaTicket({ anulado, facReal: facRealLed, total: calc.total, fecha: ymdUtc(r.timestamp) });
   return {
     ok: true, clave, admin, falta: (await hay(ctx)) ? "" : FALTA, nombresSku,
     ticket: {
       clave, id: r.id ?? null, soNum: so, betaNum: s(r.beta_num), sheetRow: r.sheet_row ?? null, fecha: ymdUtc(r.timestamp), hora: hmUtc(r.timestamp),
       nombre: s(r.nombre), apellido: s(r.apellido), cedula: s(r.id_3), cosmetologa: s(r.atendido_por),
-      cobradoSistema: round2(n(r.estimado)), factura: facturaTxt(r.fac_7), comprobante: s(r.comp),
+      cobradoSistema: round2(n(r.estimado)), factura: facturaTxt(r.fac_7) || facturaTxt(dFac) || facturaTxt(linkFac), comprobante: s(r.comp),
       notas: s(r.notas_generales), recomendaciones: s(r.recomendaciones), retorno: s(r.fecha_retorno).slice(0, 10), paquete: s(r.paquete),
-      estado: anulado ? "anulado" : estaCobrado(r) && (hayFactura(r.fac_7) || fac) ? "cerrado" : "abierto",
+      estado: anulado ? "anulado" : estaCobrado(r, dFac, linkFac) && (facRealLed || fac) ? "cerrado" : "abierto",
       cancelado: anulado ? { motivo: s(orig.cancelado_motivo), por: s(orig.cancelado_por), ts: s(orig.cancelado_ts) } : null,
       leds: [
-        { k: "estado", t: anulado ? "Cancelado" : estaCobrado(r) && (hayFactura(r.fac_7) || fac) ? "Cerrado" : "Abierto", c: anulado ? "x" : estaCobrado(r) && (hayFactura(r.fac_7) || fac) ? "ok" : "c" },
-        { k: "fac", t: hayFactura(r.fac_7) ? "Facturado" + (facturaTxt(r.fac_7) && !/sin/i.test(facturaTxt(r.fac_7)) ? " " + facturaTxt(r.fac_7) : "") : "Sin factura", c: hayFactura(r.fac_7) ? "ok" : "off" },
+        { k: "estado", t: anulado ? "Cancelado" : estaCobrado(r, dFac, linkFac) && (facRealLed || fac) ? "Cerrado" : "Abierto", c: anulado ? "x" : estaCobrado(r, dFac, linkFac) && (facRealLed || fac) ? "ok" : "c" },
+        { k: "fac", t: facRealLed ? "Facturado" + ((facturaTxt(r.fac_7) || facturaTxt(dFac) || facturaTxt(linkFac)) && !/sin/i.test(facturaTxt(r.fac_7) || facturaTxt(dFac) || facturaTxt(linkFac)) ? " " + (facturaTxt(r.fac_7) || facturaTxt(dFac) || facturaTxt(linkFac)) : "") : (faltaFacLed ? "Falta factura" : "Sin factura"), c: facRealLed ? "ok" : (faltaFacLed ? "faltafactura" : "off") },
         { k: "cob", t: estaCobrado(r) ? "Cobrado" : "Por cobrar", c: estaCobrado(r) ? "ok" : "r" },
         ...(usoPaquete ? [{ k: "paq", t: "Paquete " + s(r.paquete).replace(/^\s*SI,?\s*/i, ""), c: "a" }] : []),
         ...(exclBeta || Object.values(exclSistema).some(Boolean) ? [{ k: "com", t: "Comisión excluida", c: "r" }] : []),
@@ -770,6 +778,17 @@ export function canjeFacial(r: Row): boolean {
 }
 /** Desde cuándo se marca en amarillo lo que falta (antes del corte de Migo no se revisó). */
 export const FALTA_DESDE = "2026-11-01";
+/** TK208 (Emilia): ticket con valor de líneas > $0 y sin factura Migo vinculada.
+ *  El total es el de las líneas (TK207), nunca lo cobrado. Canjes, gift y otros $0 no se marcan.
+ *  Se avisa de inmediato (no se espera al import horario ni al martes). */
+export function faltaFacturaTicket(opts: { anulado?: boolean; facReal?: boolean; total?: number; fecha?: string }): boolean {
+  if (opts.anulado) return false;
+  if (opts.facReal) return false;
+  if (!(n(opts.total) > 0.05)) return false;
+  const f = s(opts.fecha).slice(0, 10);
+  if (f && /^\d{4}-\d{2}-\d{2}$/.test(f) && f < FALTA_DESDE) return false;
+  return true;
+}
 /** Desde cuándo un ticket con tarjeta pide la foto del voucher (hora de pared, como el timestamp del ticket). */
 export const VOUCHER_FOTO_DESDE = "2026-11-18T10:30:00";
 const tieneUrl = (v: unknown) => /https?:|archivo:/.test(s(v));
@@ -957,15 +976,21 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     .map((f) => ({ id: s(f.id), motivo: s(f.motivo), detalle: admin ? s(f.detalle) : "", factura: s(f.factura), fuente: s(f.fuente) }));
   const reag = await reagendadaDe(ctx, r);
   const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
-  const anulado = orig.anulado === true, facReal = hayFactura(r.fac_7, d.factura), cobrado = estaPagado(r, { factura: d.factura, pagadoBeta, total });
+  let linkFac: unknown = "";
+  try {
+    const ln = (await consultar(ctx.db, "beta_cuadre_link", { filtros: [{ col: "ticket_id", op: "eq", val: n(r.id) }], limite: 1 })).rows[0];
+    linkFac = ln?.factura;
+  } catch { linkFac = ""; }
+  const anulado = orig.anulado === true, facReal = hayFactura(r.fac_7, d.factura, linkFac), cobrado = estaPagado(r, { factura: d.factura, linkFac, pagadoBeta, total });
   const sinCobro = tipoSinCobro(r);
-  const fac = facReal || b(r.fac) || !!sinCobro;
+  const faltaFac = faltaFacturaTicket({ anulado, facReal, total, fecha: ymdUtc(r.timestamp) });
+  const fac = facReal || b(r.fac) || (!!sinCobro && !faltaFac);
   const chips: Row[] = [
     { k: "estado", t: anulado ? "Cancelado" : cobrado && fac ? "Cerrado" : "Abierto", c: anulado ? "anulado" : cobrado && fac ? "cerrado" : "abierto" },
-    // TK98: cortesía / consumo interno en gris; ni «Por cobrar» ni «Sin factura».
-    ...(sinCobro ? [{ k: "sincobro", t: ETQ_SIN_COBRO[sinCobro], c: "neutro" }] : [
+    // TK98: cortesía / consumo interno / canje en $0, en gris. TK208: si hay valor de líneas y no hay factura Migo, «Falta factura» (rojo).
+    ...(sinCobro && !faltaFac ? [{ k: "sincobro", t: ETQ_SIN_COBRO[sinCobro], c: "neutro" }] : [
       { k: "cobro", t: cobrado ? "Pagado" : "Por cobrar", c: cobrado ? "pagado" : "porcobrar" },
-      { k: "fac", t: facReal ? "Facturado" : "Sin factura", c: facReal ? "facturado" : "sinfactura" },
+      { k: "fac", t: facReal ? "Facturado" : (faltaFac ? "Falta factura" : "Sin factura"), c: facReal ? "facturado" : (faltaFac ? "faltafactura" : "sinfactura") },
     ]),
     ...(canjeFacial(r) ? [{ k: "canje", t: "Canje", c: "info" }] : []),
     { k: "rep", t: envios.length ? "Reporte enviado" : "Reporte no enviado", c: envios.length ? "ok" : "pend" },
@@ -974,7 +999,7 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     ...(flags.length ? [{ k: "flag", t: "Por corregir", c: "anulado" }] : []),
     ...(await otroNombre(ctx, r) ? [{ k: "otronombre", t: "Facturado a otro nombre", c: "neutro" }] : []),
   ];
-  return { info, tiene_tel, campos: DATOS_TK.filter(([k]) => (k !== "telefono" || conTelefono(ses)) && (k !== "email" || conEmail(ses) || conTelefono(ses))), corregidos: Object.keys(d), pagos, pagosFaltan, giftcards, paquete, envios, flags, reagendada: reag, faseA: faseA(r), chips, clienteKey: claveCliente(r),
+  return { info, tiene_tel, falta_factura: faltaFac || undefined, campos: DATOS_TK.filter(([k]) => (k !== "telefono" || conTelefono(ses)) && (k !== "email" || conEmail(ses) || conTelefono(ses))), corregidos: Object.keys(d), pagos, pagosFaltan, giftcards, paquete, envios, flags, reagendada: reag, faseA: faseA(r), chips, clienteKey: claveCliente(r),
     costosVisibles: admin };
 }
 
