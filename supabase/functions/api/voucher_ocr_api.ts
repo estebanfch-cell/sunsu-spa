@@ -3,13 +3,14 @@ import { catMap, extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, logAccion } from "./lib.ts";
 import { esAdmin } from "./permisos.ts";
-import { n, round2, s, type Row } from "./domain.ts";
+import { esRecepcion } from "./borradores_asig.ts";
+import { n, round2, s, ymdUtc, type Row } from "./domain.ts";
 import { totalValorTicket } from "./ticket_lista_card.ts";
 import { consultar } from "./query.ts";
 import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { veTicket } from "./inline_api.ts";
-import { OCR_HOOK, archivoIdDe, compsVivos, ticketPorClave, canjeFacial } from "./tickets_beta_api.ts";
+import { OCR_HOOK, archivoIdDe, compsVivos, ticketPorClave, canjeFacial, FALTA_DESDE, hayFactura, faltaFacturaTicket } from "./tickets_beta_api.ts";
 import { MODELO_OCR, cruzarVoucherConTicket, leerVoucherConClaude, resumenOcr, type ContextoCruce, type OcrVoucher } from "./voucher_ocr.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
@@ -112,6 +113,58 @@ extend("tk_leer_voucher", "any", async (p, ctx, ses) => {
   return { ok: true, clave, items: out, ...(out[0] ? { ocr: out[0].ocr, cruce: out[0].cruce, url: out[0].url } : {}) };
 });
 
+/** TK208: tickets con total de líneas > $0 y sin factura Migo (desde FALTA_DESDE). */
+export async function alertasFaltaFactura(ctx: Ctx): Promise<Row[]> {
+  const map = await catMap(ctx);
+  const cabMap = new Map((await todas(ctx, "beta_tickets")).map((c) => [s(c.clave), c]));
+  const linkByTk = new Map((await todas(ctx, "beta_cuadre_link")).map((L) => [n(L.ticket_id), L]));
+  const canc = new Set((await todas(ctx, "beta_ticket_cancelados")).filter((c) => c.revertido !== true).map((c) => n(c.ticket_id)));
+  let rows: Row[] = [];
+  try {
+    rows = (await consultar(ctx.db, "tickets", {
+      cols: ["id", "so_num", "beta_num", "timestamp", "atendido_por", "estimado", "fac_7", "fac", "paquete", "gift_card", "venta_gift", "facial_hecho", "servicios_adicionales", "compra_pack_3", "compra_pack_6", "orig", "id_3"],
+      filtros: [{ col: "borrado_at", op: "is_null" }, { col: "timestamp", op: "gte", val: FALTA_DESDE + "T00:00:00" }],
+      orden: [{ col: "timestamp", desc: true }],
+    })).rows;
+  } catch {
+    rows = (await consultar(ctx.db, "tickets", {
+      cols: ["id", "so_num", "beta_num", "timestamp", "atendido_por", "estimado", "fac_7", "fac", "paquete", "gift_card", "facial_hecho", "servicios_adicionales"],
+      filtros: [{ col: "borrado_at", op: "is_null" }, { col: "timestamp", op: "gte", val: FALTA_DESDE + "T00:00:00" }],
+    })).rows;
+  }
+  const out: Row[] = [];
+  for (const r of rows) {
+    const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+    if (orig.anulado === true || r.borrado_at || canc.has(n(r.id))) continue;
+    const clave = claveDe(r, leerSerie(r, "so_num"));
+    const cab = cabMap.get(clave);
+    const d = ((cab?.datos || {}) as Row);
+    const tot = totalValorTicket(r, { cab, map, canje: canjeFacial(r) });
+    const total = tot > 0 ? tot : n(r.estimado);
+    const facReal = hayFactura(r.fac_7, d.factura, linkByTk.get(n(r.id))?.factura);
+    if (!faltaFacturaTicket({ anulado: false, facReal, total, fecha: ymdUtc(r.timestamp) })) continue;
+    const quien = s(r.atendido_por).trim().split(/\s+/)[0] || "";
+    const so = s(r.so_num) || clave;
+    out.push({
+      key: "falta-factura:" + so, tipo: "falta_factura", clave: so, quien, total: round2(total),
+      texto: "Falta factura " + so + (quien ? " · " + quien : ""),
+      detalle: "Total $" + round2(total).toFixed(2) + ". Hay que facturar este ticket.",
+      href: "#/m/tickets/t/" + encodeURIComponent(so), fecha: s(r.timestamp),
+    });
+  }
+  return out;
+}
+export function resumenFaltaFactura(items: Row[]): Row | null {
+  if (!items.length) return null;
+  const nro = items.length;
+  return {
+    key: "falta-factura", tipo: "falta_factura", n: nro,
+    texto: "Falta factura (" + nro + " ticket" + (nro === 1 ? "" : "s") + ")",
+    detalle: items.map((x) => s(x.clave) + (s(x.quien) ? " · " + s(x.quien) : "")).join(", "),
+    href: "#/m/tickets",
+  };
+}
+
 /** Descuadres de voucher en tickets activos (para «⚠️ Alertas» del Dashboard). Solo admin. */
 export function alertasDescuadre(cabs: Row[], anulados: Set<string>): Row[] {
   const out: Row[] = [];
@@ -129,15 +182,25 @@ export function alertasDescuadre(cabs: Row[], anulados: Set<string>): Row[] {
   return out.sort((a, b) => s(b.fecha).localeCompare(s(a.fecha))).slice(0, 25);
 }
 extend("voucher_alertas", "any", async (_p, ctx, ses) => {
-  if (!esAdmin(ses.rol)) return { ok: true, items: [] };
-  const cabs = (await todas(ctx, "beta_tickets")).filter((c) => compsVivos((c.datos || {}) as Row).some((x) => s((x.cruce as Row | undefined)?.estado) === "descuadre"));
-  if (!cabs.length) return { ok: true, items: [] };
-  const anulados = new Set<string>();
-  for (const c of cabs) {
-    const r = await ticketPorClave(ctx, s(c.clave));
-    if (!r || (r.orig && typeof r.orig === "object" && (r.orig as Row).anulado === true) || r.borrado_at) anulados.add(s(c.clave));
+  const admin = esAdmin(ses.rol), recep = esRecepcion(ses.rol);
+  if (!admin && !recep) return { ok: true, items: [], total_falta_factura: 0 };
+  const falta = await alertasFaltaFactura(ctx);
+  const items: Row[] = [];
+  const resumen = resumenFaltaFactura(falta);
+  if (resumen) items.push(resumen);
+  items.push(...falta.slice(0, 12));
+  if (admin) {
+    const cabs = (await todas(ctx, "beta_tickets")).filter((c) => compsVivos((c.datos || {}) as Row).some((x) => s((x.cruce as Row | undefined)?.estado) === "descuadre"));
+    if (cabs.length) {
+      const anulados = new Set<string>();
+      for (const c of cabs) {
+        const r = await ticketPorClave(ctx, s(c.clave));
+        if (!r || (r.orig && typeof r.orig === "object" && (r.orig as Row).anulado === true) || r.borrado_at) anulados.add(s(c.clave));
+      }
+      items.push(...alertasDescuadre(cabs, anulados));
+    }
   }
-  return { ok: true, items: alertasDescuadre(cabs, anulados) };
+  return { ok: true, items, total_falta_factura: falta.length };
 });
 
 export { resumenOcr };

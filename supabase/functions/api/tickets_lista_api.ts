@@ -12,7 +12,7 @@ import { colTicket, ecuadorParts, n, normCedula, normNombre, round2, s, ymdUtc, 
 import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { consultar, type Filtro } from "./query.ts";
-import { canjeFacial, estaPagado, faltaDe, faseA, facturaCompleta, hayFactura, pagosFaltanFoto, sumaPagosBeta } from "./tickets_beta_api.ts";
+import { canjeFacial, estaPagado, faltaDe, faltaFacturaTicket, faseA, facturaCompleta, hayFactura, pagosFaltanFoto, sumaPagosBeta } from "./tickets_beta_api.ts";
 import { esperandoFacturaLunes, exentoCuadre, fechaGye, formaDeTicket } from "./migo_cuadre.ts";
 import { metodosPago } from "./pagos_caja.ts";
 import { citaDeNombre, citasRango, fechaCita } from "./acuity.ts";
@@ -62,7 +62,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   if (seg === "reag_no") F.push({ col: "agendado", op: "not_true" });
   if (seg === "porreag") F.push({ col: "agendado", op: "not_true" }, { col: "fecha_retorno", op: "gte", val: addD(hoy, -60) }, { col: "fecha_retorno", op: "lte", val: addD(hoy, 7) + "T23:59:59" });
   const flags = (await todas(ctx, "beta_ticket_flags")).filter((f) => !f.resuelto);
-  if (seg === "corregir") F.push({ col: "id", op: "in", val: flags.length ? [...new Set(flags.map((f) => n(f.ticket_id)).filter(Boolean))] : [-1] });
+  // TK208: «No cuadra (rojo)» incluye falta de factura; se filtra después, cuando ya hay total de líneas + Migo.
   const extra = seg === "rep_no" ? ["id_3", "so_num", "beta_num"] : seg === "faseA_no" ? ["facial_hecho", "notas_generales", "recomendaciones", "fotos", "fotos_antes", "fotos_despues"] : [];
   // 1) índice
   const idx = await consultar(ctx.db, "tickets", { cols: [...IDX, ...extra], filtros: F, orden: [{ col: "timestamp", desc: true }, { col: "sheet_row", desc: true }] });
@@ -100,13 +100,18 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   };
   const totalDe = valorDe;
   // TK98: cortesía / consumo interno en $0 no se factura (no cuenta como «Sin factura»).
-  const facDe = (r: Row) => !!tipoSinCobro(r) || hayFactura(r.fac_7, datosDe(r).factura, linkByTk.get(n(r.id))?.factura);
+  const facDe = (r: Row) => hayFactura(r.fac_7, datosDe(r).factura, linkByTk.get(n(r.id))?.factura);
+  const origAnulado = (r: Row) => {
+    const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+    return orig.anulado === true || esCancelado(r);
+  };
+  const faltaFacDe = (r: Row) => faltaFacturaTicket({ anulado: origAnulado(r), facReal: facDe(r), total: totalDe(r), fecha: ymdUtc(r.timestamp) });
   const cobDe = (r: Row) => estaPagado(r, { factura: datosDe(r).factura, linkFac: linkByTk.get(n(r.id))?.factura, pagadoBeta: pagadoBetaDe(r), total: totalDe(r) });
   const cerradoDe = (r: Row) => {
     const orig = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
-    return orig.anulado === true || (cobDe(r) && (facDe(r) || r.fac === true || s(r.fac).toLowerCase() === "true"));
+    return orig.anulado === true || (cobDe(r) && (facDe(r) || (!faltaFacDe(r) && !!tipoSinCobro(r)) || r.fac === true || s(r.fac).toLowerCase() === "true"));
   };
-  if (est === "sinfactura") L = L.filter((r) => !facDe(r));
+  if (est === "sinfactura") L = L.filter((r) => faltaFacDe(r));
   if (est === "pagado") L = L.filter((r) => cobDe(r));
   if (est === "porcobrar") L = L.filter((r) => !cobDe(r));
   if (est === "cerrado") L = L.filter((r) => cerradoDe(r) && (r.orig && typeof r.orig === "object" ? (r.orig as Row).anulado !== true : true));
@@ -135,6 +140,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   }
   const faltaTodo = (r: Row, d: Row) => [...faltaDe(r, d), ...(canjeAlerta.get(n(r.id)) || [])];
   if (seg === "faltadoc") L = L.filter((r) => faltaTodo(r, datosDe(r)).length > 0);
+  if (seg === "corregir") L = L.filter((r) => faltaFacDe(r) || flags.some((x) => n(x.ticket_id) === n(r.id) || s(x.ticket_clave) === claveDeR(r)));
   let envB: Set<string> | null = null;
   const envClaves = async (filas: Row[]) => {
     envB ||= new Set((await todas(ctx, "beta_ticket_envios")).map((e) => s(e.ticket_clave)));
@@ -237,6 +243,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
       factura: facReal ? facturaCompleta(facTxt) : "",
       ...((formaDeTicket(r, d, formaMigo) || (cobrado ? "no_registrado" : "")) ? { forma: formaDeTicket(r, d, formaMigo) || "no_registrado" } : {}),
       ...(!cobrado && (d.pago_migo || Lnk) ? { pagoMigo: 1 } : {}),
+      ...(faltaFacDe(r) ? { faltaFactura: 1 } : {}),
       ...(!facTxt && cob && !exentoCuadre(r) && esperandoFacturaLunes(fechaGye(r.timestamp), hoy) ? { pendienteLunes: 1 } : {}),
       ...((d.factura_pdf && typeof d.factura_pdf === "object" && (d.factura_pdf as Row).url) ? { facturaPdf: s((d.factura_pdf as Row).url) } : {}),
       // TK156 (Emilia t687u): factura Migo ligada sin forma de pago → aviso amarillo para recepción.
