@@ -457,6 +457,9 @@ async function correrCuadre(ctx: Ctx, actor: string): Promise<Row> {
   const fl = await syncFlags(ctx, actor, flags);
   const cs = await registrarCambiosSku(ctx, actor, cambios);
   const br = await syncBorradores(ctx, actor, facturas, links);
+  // TK212: factura vinculada de un día anterior a la subida → «Subido tarde» (solo tickets desde el deploy de TK210).
+  let tarde: Row[] = [];
+  try { const { evaluarTardeAuto } = await import("./tarde_auto.ts"); tarde = await evaluarTardeAuto(ctx, actor); } catch { tarde = []; }
   const flagsNuevas = fl.nuevas || [];
   const porFacturar = flagsNuevas.filter((x) => s(x.kind) === "sinfac").map((x) => ({
     ticket: s(x.ticket), factura: x.factura || null, motivo: s(x.motivo) || "Sin factura en Migo",
@@ -464,7 +467,7 @@ async function correrCuadre(ctx: Ctx, actor: string): Promise<Row> {
   return {
     ok: true, hoy: hoyGye, importado: importadoGye || null, facturas: facturas.length, links: links.length,
     datos_migo: datosMigo, pagos_migo: pagosMigo, flags_abiertas: flags.length, flags_creadas: fl.creadas, flags_resueltas: fl.resueltas, lineas_corregidas: cs,
-    borradores_nuevos: br.nuevos, borradores_vinculados: br.vinculados,
+    borradores_nuevos: br.nuevos, borradores_vinculados: br.vinculados, ...(tarde.length ? { subidos_tarde: tarde } : {}),
     // Solo novedades de ESTA corrida (para el resumen del CLI). No cambia el cruce.
     resumen: { borradores: br.creados || [], flags: flagsNuevas, por_facturar: porFacturar },
   };
