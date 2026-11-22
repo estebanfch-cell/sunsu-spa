@@ -106,11 +106,14 @@ extend("tk_leer_voucher", "any", async (p, ctx, ses) => {
     out.push({ url: s(hit.url), pago_id: s(hit.pago_id) || null, ocr: hit.ocr, cruce: hit.cruce });
   }
   const actor = actorOf(ses);
+  let tardeAuto: Row | undefined;
   if (p.solo_leer !== true) {
     await ctx.db.write(actor, "beta_tickets", "update", { clave }, { datos, actualizado_por: actor, updated_at: ctx.now.toISOString() });
     try { await logAccion(ctx.db, actor, "VOUCHER LEER", clave + " · " + out.map((x) => s((x.cruce as Row | undefined)?.estado) || s(x.error)).join(", ")); } catch { /* ok */ }
+    // TK212: el voucher leído es de un día anterior a la subida → «Subido tarde» (solo tickets desde el deploy de TK210).
+    try { const { evaluarTardeAuto } = await import("./tarde_auto.ts"); tardeAuto = (await evaluarTardeAuto(ctx, actor, { ids: [n(r.id)] }))[0]; } catch { /* ok */ }
   }
-  return { ok: true, clave, items: out, ...(out[0] ? { ocr: out[0].ocr, cruce: out[0].cruce, url: out[0].url } : {}) };
+  return { ok: true, clave, items: out, ...(out[0] ? { ocr: out[0].ocr, cruce: out[0].cruce, url: out[0].url } : {}), ...(tardeAuto ? { subido_tarde: tardeAuto } : {}) };
 });
 
 /** TK208: tickets con total de líneas > $0 y sin factura Migo (desde FALTA_DESDE). */

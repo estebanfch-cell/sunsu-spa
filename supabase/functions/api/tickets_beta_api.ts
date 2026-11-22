@@ -436,7 +436,7 @@ extend("tk_subir_doc", "any", async (p, ctx, ses) => {
   if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso para ese ticket" };
   const x = await agregarComprobante(ctx, ses, r, p.imagen, s(p.clave), "subió comprobante", s(p.pago_id) || undefined, { total: n(p.total) });
   if (x.error) return x;
-  return { ok: true, url: x.url, faltan: faltaDe(r, x.datos as Row), ...(x.ocr ? { ocr: x.ocr, cruce: x.cruce } : {}) };
+  return { ok: true, url: x.url, faltan: faltaDe(r, x.datos as Row), ...(x.ocr ? { ocr: x.ocr, cruce: x.cruce } : {}), ...(x.subido_tarde ? { subido_tarde: x.subido_tarde } : {}) };
 });
 /** TK183 (Emilia t797u): «Agregar fotos (Antes / Después)» en un ticket ya hecho (también cerrado). Quien ve el ticket
  *  puede agregarlas; quedan en la columna del ticket, así salen en el ticket y en la ficha → Documentos → Fotos con la
@@ -499,7 +499,10 @@ export async function agregarComprobante(ctx: Ctx, ses: Ses, r: Row, imagen: unk
     try { await ctx.db.write(actor, "beta_pagos", "update", { id: pagoId }, { comprobante_id: id }); } catch { /* columna aún no aplicada */ }
   }
   try { await logAccion(ctx.db, actor, "COMPROBANTE SUBIR", clave + (pagoId ? " · pago " + pagoId : "") + " · archivo:" + id); } catch { /* el log no tumba la subida */ }
-  return { ok: true, url: "archivo:" + id, datos, archivo_id: id, ...(item.ocr ? { ocr: item.ocr, cruce: item.cruce } : {}) };
+  // TK212: voucher de un día anterior a la subida del ticket → «Subido tarde» (solo tickets desde el deploy de TK210).
+  let tarde: Row | undefined;
+  if (item.ocr && r.id != null) { try { const { evaluarTardeAuto } = await import("./tarde_auto.ts"); tarde = (await evaluarTardeAuto(ctx, actor, { ids: [n(r.id)] }))[0]; } catch { /* la foto ya quedó */ } }
+  return { ok: true, url: "archivo:" + id, datos, archivo_id: id, ...(item.ocr ? { ocr: item.ocr, cruce: item.cruce } : {}), ...(tarde ? { subido_tarde: tarde } : {}) };
 }
 /** Enlaza una foto del ticket (la indicada, o la última pendiente) a un pago de la beta. */
 export async function vincularComprobante(ctx: Ctx, ses: Ses, r: Row, pagoId: string, url?: string): Promise<Row> {
