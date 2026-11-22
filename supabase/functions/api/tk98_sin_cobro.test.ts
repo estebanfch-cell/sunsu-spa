@@ -63,7 +63,7 @@ describe("TK98 · detalle del ticket", () => {
     assert.match(String(L[0].nombre), /26-173 · PREMIUM · para Mónica Ribadeneira/);
     assert.ok(Number(L[0].valorNominal) > 0);
     const chips = (r.chips as Row[]).map((c) => c.t);
-    assert.ok(chips.includes("Cortesía")); assert.ok(!chips.includes("Por cobrar")); assert.ok(!chips.includes("Sin factura"));
+    assert.ok(chips.includes("Cortesía")); assert.ok(!chips.includes("Por cobrar")); assert.ok(!chips.includes("Sin factura")); assert.ok(!chips.includes("Falta factura"));
   });
   it("ya materializada en beta_ticket_lineas: no se duplica y conserva la pill", async () => {
     const { h } = semilla(true);
@@ -77,7 +77,7 @@ describe("TK98 · detalle del ticket", () => {
     assert.ok(L.length >= 1, JSON.stringify(r).slice(0, 400));
     assert.ok(L.every((l) => l.precio_unit === 0 && l.consumoInterno === true));
     const chips = (r.chips as Row[]).map((c) => c.t);
-    assert.ok(chips.includes("Consumo interno")); assert.ok(!chips.includes("Por cobrar")); assert.ok(!chips.includes("Sin factura"));
+    assert.ok(chips.includes("Consumo interno")); assert.ok(!chips.includes("Por cobrar")); assert.ok(!chips.includes("Sin factura")); assert.ok(!chips.includes("Falta factura"));
   });
 });
 

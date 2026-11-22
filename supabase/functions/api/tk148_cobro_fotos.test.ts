@@ -92,14 +92,14 @@ describe("TK148 miniaturas reales, tope 4 + N", () => {
 describe("TK148 colores más visibles en iPhone", () => {
   it("amarillo y rojo saturados con borde izquierdo claro", () => {
     assert.match(html, /\.mob-card\.tk-falta \{ background: #FDE68A; border-color: #EAB308; border-left: 4px solid #D97706; \}/);
-    assert.match(html, /\.mob-card\.tk-flagged \{ background: #FECACA; border-color: #F87171; border-left: 4px solid #DC2626; \}/);
+    assert.match(html, /\.mob-card\.tk-flagged \{ background: #FCA5A5; border-color: #DC2626; border-left: 6px solid #B91C1C;/);
     assert.match(html, /\.tk-row\.tk-falta td \{ background: #FDE68A;/);
-    assert.match(html, /\.tk-row\.tk-flagged td \{ background: #FECACA;/);
+    assert.match(html, /\.tk-row\.tk-flagged td \{ background: #FCA5A5;/);
     assert.doesNotMatch(html, /background: #fffcf0;/);
     assert.doesNotMatch(html, /background: #fff8f7;/);
   });
 
   it("cache TK148", () => {
-    assert.match(sw, /const CACHE = "sunsu-2026-11-21-TK207"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-21-TK208"/);
   });
 });
