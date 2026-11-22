@@ -349,17 +349,46 @@ export function facialDeConvPaquete(row: Row, catalogo: Row[] = [], paquetes: Ro
 }
 
 export type InfoSaldoGift = { saldo: number; origen: string; facial: string; sku: string };
+export type ExtraServicioGift = { facial?: unknown; servicio?: unknown };
+
+function blobServicioGift(row: Row, extra?: ExtraServicioGift): string {
+  const orig = row.orig && typeof row.orig === "object" ? row.orig as Row : {};
+  return [s(extra?.servicio), s(extra?.facial), s(orig.servicio), s(orig.facial), s(row.valor), s(row.notas), s(orig.NOTAS)].join(" ");
+}
+
+/** Facial específico de una gift (Peeling Marino, Geisha, etc.).
+ *  No cuenta «Facial Premium» / «Gift Card»: esas siguen siendo monetarias de $65. */
+export function servicioDesignadoGift(row: Row, extra: ExtraServicioGift | undefined, catalogo: Row[] = []): { precio: number; sku: string; etiqueta: string } | null {
+  const fac = facialDesdeTexto(blobServicioGift(row, extra), catalogo);
+  if (!fac || !(fac.precio > 0)) return null;
+  const etq = fac.etiqueta.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  if (/^(facial\s+)?premium$/.test(etq) || /^gift\s*card$/.test(etq)) return null;
+  return fac;
+}
+
+export function notasConServicio(prev: string, facial: string): string {
+  const t = s(prev).replace(/(?:^|\s*\|\s*)SALDO:[\d.]+/g, "").replace(/^\s*\|\s*/, "").trim();
+  const f = s(facial).trim();
+  if (!f) return t;
+  const blob = t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const key = f.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (key && blob.includes(key)) return t;
+  return t ? f + ". " + t : f;
+}
 
 /** Monto disponible de una gift card.
+ *  0) si nombra un facial específico (digital, ajustes, orig o notas), cubre ese servicio al precio de hoy
  *  1) saldo numérico (incl. 0) / tag SALDO:n / orig.saldo
  *  2) valor numérico (p. ej. «95» o «$95» sin letras)
  *  3) monto explícito en notas/valor (p. ej. «$95») o facial de catálogo nombrado en notas/valor
  *  4) recién entonces, precio del SKU de la fila (SUNSU-35 = $65). */
-export function infoSaldoGift(row: Row, catalogo: Row[] = [], paquetes: Row[] = []): InfoSaldoGift {
+export function infoSaldoGift(row: Row, catalogo: Row[] = [], paquetes: Row[] = [], extra?: ExtraServicioGift): InfoSaldoGift {
   const skuRow = s(row.sku);
   if (row.usado === true || row.usado === "true" || row.usado === "SI") {
     return { saldo: 0, origen: "usado", facial: "", sku: skuRow };
   }
+  const serv = servicioDesignadoGift(row, extra, catalogo);
+  if (serv) return { saldo: serv.precio, origen: "servicio", facial: serv.etiqueta, sku: serv.sku };
   const facHint = facialDesdeTexto(s(row.valor) + " " + s(row.notas), catalogo);
   const conFac = (saldo: number, origen: string): InfoSaldoGift => ({
     saldo, origen, facial: facHint?.etiqueta || "", sku: facHint?.sku || skuRow,
@@ -396,18 +425,18 @@ export function infoSaldoGift(row: Row, catalogo: Row[] = [], paquetes: Row[] = 
   return { saldo: cat, origen: cat > 0 ? "catalogo" : "ninguno", facial: "", sku: skuRow };
 }
 
-export function saldoGift(row: Row, catalogo: Row[] = [], paquetes: Row[] = []): number {
-  return infoSaldoGift(row, catalogo, paquetes).saldo;
+export function saldoGift(row: Row, catalogo: Row[] = [], paquetes: Row[] = [], extra?: ExtraServicioGift): number {
+  return infoSaldoGift(row, catalogo, paquetes, extra).saldo;
 }
 
-export function etiquetaGift(row: Row, catalogo: Row[] = [], paquetes: Row[] = []): string {
-  const info = infoSaldoGift(row, catalogo, paquetes);
+export function etiquetaGift(row: Row, catalogo: Row[] = [], paquetes: Row[] = [], extra?: ExtraServicioGift): string {
+  const info = infoSaldoGift(row, catalogo, paquetes, extra);
   const codigo = s(row.codigo_gc);
   const mon = "$" + info.saldo.toFixed(info.saldo % 1 ? 2 : 0);
   return (codigo ? codigo + " · " : "") + mon + (info.facial ? " (" + info.facial + ")" : "");
 }
 
-function notasConSaldo(prev: string, saldo: number): string {
+export function notasConSaldo(prev: string, saldo: number): string {
   const limpio = prev.replace(/(?:^|\s*\|\s*)SALDO:[\d.]+/g, "").replace(/^\s*\|\s*/, "").trim();
   const tag = "SALDO:" + saldo.toFixed(2);
   return limpio ? tag + " | " + limpio : tag;
@@ -415,6 +444,7 @@ function notasConSaldo(prev: string, saldo: number): string {
 
 export async function aplicarGiftCard(db: Db, actor: string, p: {
   codigo: string; aplica: number | null; ticket: string; usadoPor: string; facialPrecio: number; now?: Date;
+  facialSku?: string; facialNombre?: string;
 }): Promise<Row> {
   const codigo = s(p.codigo).trim();
   if (!codigo) return { error: "Falta el código de la gift card" };
@@ -432,17 +462,35 @@ export async function aplicarGiftCard(db: Db, actor: string, p: {
     const facialCobro = p.facialPrecio > 0 ? round2(Math.max(0, p.facialPrecio - aplicado)) : 0;
     return { ok: true, codigo, aplicado, saldo, facialCobro, ya: true };
   }
-  const saldo = saldoGift(row, cats, packs);
+  const digs = await db.all("gift_cards_digitales").catch(() => [] as Row[]);
+  const ajs = await db.all("beta_gift_ajustes").catch(() => [] as Row[]);
+  const dig = digs.find((d) => s(d.codigo).trim().toUpperCase() === codigo.toUpperCase());
+  const aj = ajs.find((a) => String(a.gift_id) === String(row.id) || s(a.codigo).trim().toUpperCase() === codigo.toUpperCase());
+  const extra = { facial: dig?.facial, servicio: aj?.servicio };
+  const info = infoSaldoGift(row, cats, packs, extra);
+  const saldo = info.saldo;
   if (!(saldo > 0)) return { error: "Esa gift card no tiene saldo" };
-  let aplicado = p.aplica == null ? saldo : round2(p.aplica);
-  if (p.facialPrecio > 0) aplicado = Math.min(aplicado, round2(p.facialPrecio));
-  aplicado = Math.min(aplicado, saldo);
-  if (!(aplicado > 0)) return { error: "Indica cuánto de la gift card se aplica" };
-  if (p.aplica != null && p.aplica - saldo > 0.009 && !(p.facialPrecio > 0 && p.aplica > p.facialPrecio)) {
-    return { error: "La gift card no alcanza. Saldo $" + saldo.toFixed(2) };
+  let aplicado: number;
+  let facialCobro: number;
+  if (info.origen === "servicio") {
+    const ticketFac = facialDesdeTexto(s(p.facialNombre) + " " + s(p.facialSku), cats);
+    const skuTicket = skuCode(ticketFac?.sku || p.facialSku);
+    const skuServ = skuCode(info.sku);
+    if (!skuTicket) return { error: "Esta gift card es para " + (info.facial || "un facial específico") };
+    if (skuTicket !== skuServ) return { error: "Esta gift card es para " + (info.facial || skuServ) + ". No cubre ese servicio." };
+    aplicado = p.facialPrecio > 0 ? round2(p.facialPrecio) : saldo;
+    facialCobro = 0;
+  } else {
+    aplicado = p.aplica == null ? saldo : round2(p.aplica);
+    if (p.facialPrecio > 0) aplicado = Math.min(aplicado, round2(p.facialPrecio));
+    aplicado = Math.min(aplicado, saldo);
+    if (!(aplicado > 0)) return { error: "Indica cuánto de la gift card se aplica" };
+    if (p.aplica != null && p.aplica - saldo > 0.009 && !(p.facialPrecio > 0 && p.aplica > p.facialPrecio)) {
+      return { error: "La gift card no alcanza. Saldo $" + saldo.toFixed(2) };
+    }
+    facialCobro = p.facialPrecio > 0 ? round2(Math.max(0, p.facialPrecio - aplicado)) : 0;
   }
-  const nuevo = round2(saldo - aplicado);
-  const facialCobro = p.facialPrecio > 0 ? round2(Math.max(0, p.facialPrecio - aplicado)) : 0;
+  const nuevo = info.origen === "servicio" ? 0 : round2(saldo - aplicado);
   const orig0 = row.orig && typeof row.orig === "object" ? { ...(row.orig as Row) } : {};
   const usos = Array.isArray(orig0.usos) ? [...(orig0.usos as Row[])] : [];
   const ec = ecuadorParts(p.now || new Date());
