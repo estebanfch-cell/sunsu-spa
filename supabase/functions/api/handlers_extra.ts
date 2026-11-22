@@ -10,7 +10,8 @@ import type { Ctx, Ses } from "./lib.ts";
 import {
   ADMIN, BETA_TABLES, addDays, b, calcularCiclo, cicloFin, cicloInicio, comisionProductos, comisionRecepcionDia,
   compraParaComision, ecuadorParts, esInterno, estadoTicket, facialSku, marcaDePersona, n, nombreEsAdmin, normCedula, normNombre, toCosmMark,
-  productQtys, rolCalcular, round2, s, skuCode, validarBitacora, ymdUtc, type Row, type TicketIn, esCancelado, personaEsRecepcionista } from "./domain.ts";
+  productQtys, rolCalcular, round2, s, skuCode, validarBitacora, ymdUtc, type Row, type TicketIn, esCancelado, personaEsRecepcionista, factorTk } from "./domain.ts";
+import { factorComisionTicket } from "./fecha_atencion.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
 type R = Record<string, unknown>;
 
@@ -233,6 +234,7 @@ function ticketIn(r: R, cats?: Map<string, R>): TicketIn {
     exclFacial: b(r.excluir_facial), exclPaquete: b(r.excluir_paquete), exclProducto: b(r.excluir_producto), exclExtras: b(r.excluir_extras),
     productos: productQtys(r),
     netoPack: neto(pack3), netoPack6: neto(pack6),
+    ...(factorComisionTicket(r) < 1 ? { factor: factorComisionTicket(r) } : {}),
   };
 }
 function subtotalCatalogo(row: R | undefined): number {
@@ -272,7 +274,7 @@ export async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: numb
   const propios = tks.filter((t) => t.fecha >= ciclo && t.fecha <= fin && normNombre(t.cosm).startsWith(key) && !esInterno(t.cosm, t.cedula) && !t.exclProducto);
   const items = propios.flatMap((t) => t.productos.map((pr) => {
     const row = cmap.get(skuCode(pr.sku));
-    return { venta: subtotalCatalogo(row), compra: compraParaComision(row), qty: pr.qty, excluido: false, sku: pr.sku };
+    return { venta: subtotalCatalogo(row), compra: compraParaComision(row), qty: pr.qty, excluido: false, sku: pr.sku, factor: factorTk(t) };
   }));
   let comRecepcion = 0;
   const esRecep = personaEsRecepcionista(nombreApp, users);

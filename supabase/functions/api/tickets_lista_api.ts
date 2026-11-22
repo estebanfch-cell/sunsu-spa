@@ -74,6 +74,11 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
     anulIds = new Set((await consultar(ctx.db, "tickets", { cols: ["id"], filtros: [{ col: "orig->>anulado", op: "eq", val: "true" }] })).rows.map((x) => n(x.id)));
   } catch { /* sin orig */ }
   const esCancelado = (r: Row) => anulIds.has(n(r.id)) || canc.has(n(r.id));
+  // TK210: «Subido tarde» (etiqueta neutra en la tarjeta).
+  let tardeIds = new Set<number>();
+  try {
+    tardeIds = new Set((await consultar(ctx.db, "tickets", { cols: ["id"], filtros: [{ col: "orig->>subido_tarde", op: "eq", val: "true" }] })).rows.map((x) => n(x.id)));
+  } catch { /* sin orig */ }
   if (verCanc) L = L.filter(esCancelado);
   else if (!qExacto) L = L.filter((r) => !esCancelado(r));
   if (seg === "faseA_no") L = L.filter((r) => !faseA(r));
@@ -205,6 +210,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   const items = filas.map((r) => {
     const it = itemHistorial(r, map, hoy, telOk, porCed);
     if (esCancelado(r)) { it.anulado = true; it.cancelado = true; it.estado_doc = "cerrado"; it.saldo = 0; }
+    if (tardeIds.has(n(r.id))) it.subido_tarde = true;
     const clave = claveDe(r, leerSerie(r, "so_num")), d = ((cabMap.get(clave)?.datos || {}) as Row);
     const sp = solPend.get(clave) || solPend.get(s(r.so_num));
     if (sp) { it.solicitud_pendiente = true; it.solicitud_edicion_pendiente = { id: sp.id, tipo: sp.tipo, solicitante: sp.solicitante, creado: sp.creado }; }

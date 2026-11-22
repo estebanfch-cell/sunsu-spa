@@ -90,12 +90,29 @@ async function ticketsParaCuadre(ctx: Ctx): Promise<Row[]> {
     a.push(l);
     lineasByClave.set(k, a);
   }
+  // TK210: correos de la ficha de la clienta (por cédula o clave) para el cruce con el correo del RIDE.
+  const emailsPor = new Map<string, Set<string>>();
+  const addMail = (k: string, e: unknown) => { const m = s(e).trim().toLowerCase(); if (!k || !m.includes("@")) return; const S = emailsPor.get(k) || new Set<string>(); S.add(m); emailsPor.set(k, S); };
+  for (const c of await todas(ctx, "beta_clientes")) {
+    const dc = (c.datos && typeof c.datos === "object" ? c.datos : {}) as Row;
+    const ced = normCedula(s(c.cedula) || s(dc.cedula) || (s(c.key).startsWith("c:") ? s(c.key).slice(2) : ""));
+    const mail = s(dc.email) || s(c.email);
+    addMail(s(c.key), mail); if (ced) addMail("c:" + ced, mail);
+  }
+  for (const c of await todas(ctx, "clientas_registro")) { const ced = normCedula(c.cedula); if (ced) addMail("c:" + ced, c.email); }
+  for (const f of await todas(ctx, "beta_migo_facturas_vivo")) { const ced = normCedula(f.cliente_ruc); if (ced) addMail("c:" + ced, f.cliente_email); }
   const out: Row[] = [];
   for (const r of tickets) {
     if (canc.has(n(r.id))) continue;
     const clave = claveDe(r, leerSerie(r, "so_num"));
     const cab = cabs.get(clave);
     const d = (cab?.datos || {}) as Row;
+    const o0 = (r.orig && typeof r.orig === "object" ? r.orig : {}) as Row;
+    const cedTk = normCedula(r.id_3);
+    const mails = new Set<string>([...(emailsPor.get("c:" + cedTk) || []), ...(emailsPor.get(s(o0.cliente_key)) || [])]);
+    const ocrV = (Array.isArray(d.comprobantes) ? d.comprobantes as Row[] : [])
+      .filter((x) => x && x.borrado !== true && x.ocr && typeof x.ocr === "object" && s((x.ocr as Row).estado) === "ok")
+      .map((x) => ({ fecha: s((x.ocr as Row).fecha), monto: n((x.ocr as Row).monto), referencia: s((x.ocr as Row).referencia) }));
     const dets = (lineasByClave.get(clave) || []).slice().sort((a, b0) => n(a.orden) - n(b0.orden)).map((l) => ({
       sku: s(l.sku), codigo: s(l.sku), producto: s(l.nombre), tipo: s(l.tipo), cantidad: n(l.cantidad) || 1,
       precio_unit: n(l.precio_unit), descuento: n(l.descuento_monto),
@@ -109,6 +126,7 @@ async function ticketsParaCuadre(ctx: Ctx): Promise<Row[]> {
       apellido: s(d.apellido) || s(r.apellido),
       extras: s(r.extras) || s((r.orig && typeof r.orig === "object" ? r.orig as Row : {})["Servicios Adicionales "]),
       lineasDetalle: dets,
+      emails_cliente: [...mails], ocr_vouchers: ocrV,
       // TK81: con líneas beta, el monto del ticket es el total actual (no el cobrado viejo de la hoja).
       ...(cab && cab.lineas_beta === true && dets.length && n(cab.total) > 0 ? { estimado: n(cab.total) } : {}),
     });
@@ -614,7 +632,8 @@ extend("migo_borradores_lista", "any", async (_p, ctx, ses) => {
   const vivos = new Map(facturasDeFilas(await todas(ctx, "beta_migo_facturas_vivo")).map((f) => [f.factura, f]));
   const catB = await catalogoBorradores(ctx);
   const conPub = (b0: Row, conCand = false) => {
-    const cands = conCand ? candidatosParaFactura({ fecha: s(b0.fecha), cliente: s(b0.cliente), total: n(b0.total), lineas: (Array.isArray(b0.lineas) ? b0.lineas as Row[] : []) }, tickets) : [];
+    const vb = vivos.get(s(b0.factura));
+    const cands = conCand ? candidatosParaFactura({ fecha: s(b0.fecha), cliente: s(b0.cliente), total: n(b0.total), lineas: (Array.isArray(b0.lineas) ? b0.lineas as Row[] : []), ruc: vb?.ruc, email: vb?.email }, tickets) : [];
     const tks = ticketsDeBorrador(b0, tickets, cands);
     const pub = pubBorrador(b0, vivos.get(s(b0.factura)) || null, tks, catB);
     if (conCand) pub.candidatos = cands;
@@ -643,10 +662,10 @@ extend("migo_borrador_get", "any", async (p, ctx, ses) => {
   if (!puedeVerBorrador(ses, b0, hoyB) && s(b0.estado) !== "pendiente") return { error: "No tienes permiso" };
   if (s(b0.estado) === "pendiente" && !s(b0.asignado_a) && !puedeGestionarBorradores(ses) && !sinAsignarDelDia(b0, hoyB)) return { error: "Esta factura está en la bandeja de admin o recepción" };
   const tickets = await ticketsParaCuadre(ctx);
-  const cands = (!s(b0.ticket_clave) && !n(b0.ticket_id))
-    ? candidatosParaFactura({ fecha: s(b0.fecha), cliente: s(b0.cliente), total: n(b0.total), lineas: (Array.isArray(b0.lineas) ? b0.lineas as Row[] : []) }, tickets)
-    : [];
   const vivo = facturasDeFilas(await todas(ctx, "beta_migo_facturas_vivo")).find((f) => f.factura === fac) || null;
+  const cands = (!s(b0.ticket_clave) && !n(b0.ticket_id))
+    ? candidatosParaFactura({ fecha: s(b0.fecha), cliente: s(b0.cliente), total: n(b0.total), lineas: (Array.isArray(b0.lineas) ? b0.lineas as Row[] : []), ruc: vivo?.ruc, email: vivo?.email }, tickets)
+    : [];
   const pub = pubBorrador(b0, vivo, ticketsDeBorrador(b0, tickets, cands), await catalogoBorradores(ctx));
   // TK98: en los que no cuadran, qué SKU/línea hace la diferencia.
   const facL = (vivo && Array.isArray(vivo.lineas) && vivo.lineas.length ? vivo.lineas : (Array.isArray(b0.lineas) ? b0.lineas : [])) as Row[];
@@ -950,3 +969,31 @@ export async function vincularBorradorATicket(ctx: Ctx, ses: Ses, factura: strin
 }
 
 export { KIND_ID, pubBorrador };
+
+/** TK210: dry-run de la ventana ±3 días sobre los últimos N días. Solo lectura: no escribe vínculos. */
+export async function dryRunVentana(ctx: Ctx, dias = 14): Promise<Row> {
+  const tickets = await ticketsParaCuadre(ctx);
+  const facturas = facturasDeFilas(await todas(ctx, "beta_migo_facturas_vivo"));
+  const hoy = ecuadorParts(ctx.now).ymd;
+  const desde = fechasDias(hoy, -dias);
+  let captura: Row | null = null;
+  const datos = await datosCuadre(ctx);
+  const actuales = cruzar(facturas, tickets, { ...datos, ventana: false });
+  cruzar(facturas, tickets, { ...datos, ventana: { desde: "" }, onVentana: (r) => { captura = r as unknown as Row; } });
+  const ya = new Set(actuales.map((L) => L.factura));
+  const yaTk = new Set(actuales.map((L) => L.ticket_id));
+  const pub = (c: Row) => ({
+    factura: s(c.factura), fecha_factura: s(c.fecha_factura), tickets: c.claves, ticket_ids: c.ticket_ids,
+    senales: c.senales, dias: c.dias, suma: c.suma, total_factura: c.total_factura, confianza: c.confianza, motivo: c.motivo,
+    ...(c.razon ? { razon: c.razon } : {}),
+  });
+  const cap = (captura || { links: [], sugerencias: [] }) as Row;
+  const enRango = (c: Row) => s(c.fecha_factura) >= desde && !ya.has(s(c.factura)) && !(c.ticket_ids as number[]).some((id) => yaTk.has(id));
+  return {
+    ok: true, dry_run: true, desde, hasta: hoy, facturas_revisadas: facturas.filter((f) => f.fecha >= desde).length,
+    vincularia: (cap.links as Row[]).filter(enRango).map(pub),
+    sugerencias: (cap.sugerencias as Row[]).filter(enRango).map(pub),
+  };
+}
+
+extend("migo_ventana_dryrun", ADMIN, async (p, ctx) => dryRunVentana(ctx, Math.min(60, Math.max(1, n(p.dias) || 14))));
