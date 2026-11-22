@@ -256,7 +256,9 @@
   function repintarLista(main) {
     var c = cuerpo();
     var head = main.querySelector("#mccl-head"), body = main.querySelector("#mccl-body"), cards = main.querySelector("#mccl-cards");
+    if (window.SunsuListaPos) window.SunsuListaPos.save("clientes");
     if (head) head.innerHTML = c.head; if (body) body.innerHTML = c.body; if (cards) cards.innerHTML = c.cards;
+    if (window.SunsuListaPos) window.SunsuListaPos.restore("clientes", { inplace: true });
     var nEl = main.querySelector("#mccl-n");
     if (nEl) nEl.textContent = c.n + " clienta" + (c.n === 1 ? "" : "s") + (c.n > K.max ? " · mostrando " + K.max : "");
     var m = main.querySelector("#mccl-mas"); if (m) m.hidden = c.n <= K.max;

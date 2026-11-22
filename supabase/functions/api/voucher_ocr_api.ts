@@ -10,7 +10,7 @@ import { consultar } from "./query.ts";
 import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { veTicket } from "./inline_api.ts";
-import { OCR_HOOK, archivoIdDe, compsVivos, ticketPorClave, canjeFacial, FALTA_DESDE, hayFactura, faltaFacturaTicket } from "./tickets_beta_api.ts";
+import { OCR_HOOK, archivoIdDe, compsVivos, ticketPorClave, canjeFacial, FALTA_DESDE, hayFactura, faltaFacturaTicket, esPagoDirecto } from "./tickets_beta_api.ts";
 import { MODELO_OCR, cruzarVoucherConTicket, leerVoucherConClaude, resumenOcr, type ContextoCruce, type OcrVoucher } from "./voucher_ocr.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
@@ -122,7 +122,7 @@ export async function alertasFaltaFactura(ctx: Ctx): Promise<Row[]> {
   let rows: Row[] = [];
   try {
     rows = (await consultar(ctx.db, "tickets", {
-      cols: ["id", "so_num", "beta_num", "timestamp", "atendido_por", "estimado", "fac_7", "fac", "paquete", "gift_card", "venta_gift", "facial_hecho", "servicios_adicionales", "compra_pack_3", "compra_pack_6", "orig", "id_3"],
+      cols: ["id", "so_num", "beta_num", "timestamp", "atendido_por", "estimado", "fac_7", "fac", "paquete", "gift_card", "venta_gift", "facial_hecho", "servicios_adicionales", "compra_pack_3", "compra_pack_6", "orig", "id_3", "notas_generales"],
       filtros: [{ col: "borrado_at", op: "is_null" }, { col: "timestamp", op: "gte", val: FALTA_DESDE + "T00:00:00" }],
       orden: [{ col: "timestamp", desc: true }],
     })).rows;
@@ -140,9 +140,10 @@ export async function alertasFaltaFactura(ctx: Ctx): Promise<Row[]> {
     const cab = cabMap.get(clave);
     const d = ((cab?.datos || {}) as Row);
     const tot = totalValorTicket(r, { cab, map, canje: canjeFacial(r) });
-    const total = tot > 0 ? tot : n(r.estimado);
+    const pagoDir = esPagoDirecto(r, { datos: d });
+    const total = pagoDir ? 0 : (tot > 0 ? tot : n(r.estimado));
     const facReal = hayFactura(r.fac_7, d.factura, linkByTk.get(n(r.id))?.factura);
-    if (!faltaFacturaTicket({ anulado: false, facReal, total, fecha: ymdUtc(r.timestamp) })) continue;
+    if (!faltaFacturaTicket({ anulado: false, facReal, total, fecha: ymdUtc(r.timestamp), pagoDirecto: pagoDir })) continue;
     const quien = s(r.atendido_por).trim().split(/\s+/)[0] || "";
     const so = s(r.so_num) || clave;
     out.push({

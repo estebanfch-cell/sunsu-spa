@@ -1132,6 +1132,27 @@
     .mob-card.tk-flagged:active { background: #EF4444; }
     .mob-fac-falta { color: #7F1D1D; }
   }
+
+  /* TK209: en rojo, el texto de la tarjeta tiene que leerse (iPhone lava el gris sobre rojo saturado). */
+  .tk-row.tk-flagged td, .tk-row.tk-flagged td a, .tk-row.tk-flagged .tk-muted, .tk-row.tk-flagged .tk-fac {
+    color: #1A0505;
+  }
+  .mob-card.tk-flagged, .mob-card.tk-flagged .mob-num, .mob-card.tk-flagged .mob-cli,
+  .mob-card.tk-flagged .mob-who, .mob-card.tk-flagged .mob-l2, .mob-card.tk-flagged .mob-l3,
+  .mob-card.tk-flagged .mob-l3t, .mob-card.tk-flagged .mob-fac, .mob-card.tk-flagged .tk-muted {
+    color: #1A0505;
+  }
+  .mob-card.tk-flagged .mob-fac-falta, .mob-card.tk-flagged .mob-fac-no { color: #450a0a; font-weight: 800; }
+  @supports (-webkit-touch-callout: none) {
+    .tk-row.tk-flagged td, .tk-row.tk-flagged td a, .tk-row.tk-flagged .tk-muted { color: #140202; }
+    .mob-card.tk-flagged, .mob-card.tk-flagged .mob-num, .mob-card.tk-flagged .mob-cli,
+    .mob-card.tk-flagged .mob-who, .mob-card.tk-flagged .mob-l2, .mob-card.tk-flagged .mob-l3,
+    .mob-card.tk-flagged .mob-l3t, .mob-card.tk-flagged .mob-fac, .mob-card.tk-flagged .tk-muted {
+      color: #140202;
+    }
+    .mob-card.tk-flagged .mob-fac-falta, .mob-card.tk-flagged .mob-fac-no { color: #3F0A0A; font-weight: 800; }
+  }
+
   .mob-l1 .tk-pill { flex: none; font-size: 0.62rem; padding: 1px 7px; margin: 0; }
   .mob-l2 { display: flex; align-items: baseline; gap: 8px; color: var(--navy); font-size: 0.86rem; margin-top: 2px; min-width: 0; }
   .mob-cli { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2703,7 +2724,156 @@ function bindDataGo(root) {
     };
   });
 }
+
+/* TK209 (Emilia): las listas no deben saltar al inicio al refrescar ni al volver del detalle.
+   Conserva scroll, filtros y búsqueda (Tickets, Clientes, Pagos recibidos, Inventario). */
+window.SunsuListaPos = (function () {
+  var KEY = "sunsu.lista.pos.v1.";
+  var prevHash = (typeof location !== "undefined" && location.hash) || "";
+  var restoring = false;
+  var watchers = {};
+  function isWin(el) { return !el || el === window || el === document || el === document.documentElement || el === document.body; }
+  function yOf(el) {
+    if (isWin(el)) return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    return el.scrollTop || 0;
+  }
+  function goY(el, y) {
+    y = Math.max(0, Number(y) || 0);
+    if (isWin(el)) {
+      try { window.scrollTo(0, y); } catch (e) {}
+      try { document.documentElement.scrollTop = y; } catch (e2) {}
+      try { document.body.scrollTop = y; } catch (e3) {}
+    } else { el.scrollTop = y; }
+  }
+  function scrollersNear(root) {
+    var out = [window], seen = { window: 1 };
+    function add(el) {
+      if (!el || seen[el === window ? "window" : (el.id || "") + ":" + (el.className || "")]) return;
+      seen[el === window ? "window" : (el.id || el.className || Math.random())] = 1;
+      out.push(el);
+    }
+    var starts = [];
+    if (root) starts.push(root);
+    ["hist-res", "content", "main", "inv-root", "mccj-root", "mccl-root", "app", "shell"].forEach(function (id) {
+      var el = document.getElementById(id); if (el) starts.push(el);
+    });
+    document.querySelectorAll(".sheet-scroll, .tk-list, .desk-list, .mob-cards, #ss-md-tickets-lb, #ss-md-clientes-lb").forEach(function (el) { starts.push(el); });
+    starts.forEach(function (el) {
+      var n = el;
+      var hops = 0;
+      while (n && n !== document.body && hops++ < 12) {
+        try {
+          var st = window.getComputedStyle(n);
+          if (st && (st.overflowY === "auto" || st.overflowY === "scroll" || st.webkitOverflowScrolling === "touch") && n.scrollHeight > n.clientHeight + 8) add(n);
+        } catch (e) {}
+        n = n.parentElement;
+      }
+    });
+    return out;
+  }
+  function keyFromHash(h) {
+    var p = String(h || location.hash || "").split("?")[0];
+    if (/^#\/m\/tickets(\/?$)/.test(p) || p === "#/s/historial") return "tickets";
+    if (/^#\/m\/clientes(\/?$)/.test(p)) return "clientes";
+    if (/^#\/m\/caja\/pagos/.test(p)) return "pagos";
+    if (/^#\/m\/inventario(\/?$)/.test(p) || p === "#/m/inventario/lista") return "inventario";
+    return "";
+  }
+  function snapshot(name) {
+    var ys = {};
+    scrollersNear(document.getElementById("hist-res") || document.getElementById("inv-root") || document.getElementById("mccj-root") || document.getElementById("main")).forEach(function (el, i) {
+      ys[isWin(el) ? "win" : ("e" + i)] = { y: yOf(el), win: isWin(el) };
+    });
+    var st = {
+      y: yOf(window),
+      ys: ys,
+      busq: window._histBusqueda || "",
+      filtro: window._histFiltroActual || {},
+      cosm: window._histCosmFiltro || "",
+      tkFiltro: window._tkFiltro || {},
+      invQ: window._invQ || "",
+      cliQ: (window.MCClientes && window.MCClientes.q) || window._cliQ || "",
+      pagDesde: window._pagDesde || "",
+      pagHasta: window._pagHasta || "",
+      ts: Date.now()
+    };
+    try { sessionStorage.setItem(KEY + name, JSON.stringify(st)); } catch (e) {}
+    window._listaPosMem = window._listaPosMem || {};
+    window._listaPosMem[name] = st;
+    return st;
+  }
+  function read(name) {
+    var mem = (window._listaPosMem || {})[name];
+    if (mem) return mem;
+    try { return JSON.parse(sessionStorage.getItem(KEY + name) || "null"); } catch (e) { return null; }
+  }
+  function applyFilters(name, st) {
+    if (!st || name !== "tickets") return;
+    if (st.busq != null && window._histBusqueda == null) window._histBusqueda = st.busq;
+    if (st.filtro && !window._histFiltroActual) window._histFiltroActual = st.filtro;
+    if (st.cosm && window._histCosmFiltro == null) window._histCosmFiltro = st.cosm;
+    if (st.tkFiltro && !window._tkFiltro) window._tkFiltro = st.tkFiltro;
+  }
+  function applyY(st) {
+    if (!st) return;
+    restoring = true;
+    goY(window, st.y);
+    var list = scrollersNear(document.getElementById("hist-res") || document.getElementById("inv-root") || document.getElementById("mccj-root") || document.getElementById("main"));
+    if (st.ys) {
+      list.forEach(function (el, i) {
+        if (isWin(el) && st.ys.win) goY(window, st.ys.win.y);
+        var hit = st.ys["e" + i];
+        if (hit && !hit.win) goY(el, hit.y);
+      });
+    }
+    setTimeout(function () { restoring = false; }, 400);
+  }
+  function save(name) {
+    name = name || keyFromHash(prevHash) || keyFromHash(location.hash);
+    if (!name) return null;
+    return snapshot(name);
+  }
+  function saveFromCurrent() {
+    var k = keyFromHash(prevHash);
+    if (k) snapshot(k);
+    prevHash = location.hash || prevHash;
+  }
+  function restore(name, opts) {
+    name = name || keyFromHash(location.hash);
+    if (!name) return;
+    var st = read(name);
+    if (!st) return;
+    applyFilters(name, st);
+    var run = function () { applyY(st); };
+    run();
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(function () {
+        run();
+        requestAnimationFrame(run);
+      });
+    }
+    setTimeout(run, 50);
+    setTimeout(run, 250);
+    if (!(opts && opts.inplace)) setTimeout(run, 500);
+  }
+  function watch(name) {
+    name = name || keyFromHash(location.hash);
+    if (!name || watchers[name]) return;
+    watchers[name] = true;
+    var on = function () {
+      if (restoring) return;
+      if (keyFromHash(location.hash) !== name && keyFromHash(prevHash) !== name) return;
+      snapshot(name);
+    };
+    window.addEventListener("scroll", on, { passive: true, capture: true });
+    document.addEventListener("scroll", on, { passive: true, capture: true });
+  }
+  function markHash(h) { if (h) prevHash = h; }
+  return { keyFromHash: keyFromHash, save: save, saveFromCurrent: saveFromCurrent, restore: restore, watch: watch, markHash: markHash, _prev: function () { return prevHash; } };
+})();
+
 function go(hash) {
+  if (window.SunsuListaPos) window.SunsuListaPos.saveFromCurrent();
   if (typeof window._ticketAntesDeIr === "function") window._ticketAntesDeIr(hash);
   if (location.hash === hash) draw();
   else location.hash = hash;
@@ -3581,6 +3751,10 @@ async function draw() {
     void pintarAviso();
     if (!window._avisoT) window._avisoT = setInterval(() => { if (state.user) void pintarAviso(); }, 60000);
     if (document.getElementById("citas-dash")) void cargarCitasDash();
+    if (window.SunsuListaPos) {
+      const k = window.SunsuListaPos.keyFromHash(location.hash);
+      if (k) { window.SunsuListaPos.watch(k); window.SunsuListaPos.restore(k); }
+    }
   };
   const gate = moduloDeRuta(route);
   const reporteOk = route.mod === "reportes" && (state.mega);
@@ -4229,6 +4403,7 @@ function pintarInventario() {
     if (av > bv) return 1 * dir;
     return 0;
   });
+  if (window.SunsuListaPos) window.SunsuListaPos.save("inventario");
   body.innerHTML = rows.map((p) => {
     const foto = String(p.foto_url || "");
     const img = /^https?:|^data:/.test(foto) ? `<img src="${esc(foto)}" alt="">` : `<span class="prod-ph" aria-hidden="true"></span>`;
@@ -4237,6 +4412,7 @@ function pintarInventario() {
   body.querySelectorAll("[data-inv]").forEach((tr) => {
     tr.onclick = () => go("#/m/inventario/prod/" + encodeURIComponent(tr.getAttribute("data-inv")));
   });
+  if (window.SunsuListaPos) window.SunsuListaPos.restore("inventario", { inplace: true });
 }
 function inventarioMiniFilas(selId, qRaw) {
   const q = normBusca(qRaw == null ? (window._invQ || "") : qRaw);
@@ -8709,11 +8885,16 @@ async function saveCnt(form) {
 }
 
 window.addEventListener("hashchange", () => {
+  if (window.SunsuListaPos) window.SunsuListaPos.saveFromCurrent();
   const ed = window.SunsuTeclado && window.SunsuTeclado.editable;
   if (!ed || !ed(document.activeElement)) document.body.classList.remove("kb-open");
   draw();
+  if (window.SunsuListaPos) {
+    const k = window.SunsuListaPos.keyFromHash(location.hash);
+    if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
+  }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-21-TK208"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-21-TK209"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
