@@ -325,6 +325,12 @@ export async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
   const exclBeta = cab?.excluir_cosmetologa === true || calc.lineas.some((l) => l.excluir_comision);
   const admin = esAdmin(ses.rol);
   const nombresSku = await nombresDeSku(ctx, calc.lineas as unknown as Row[]);
+  // TK207: el aviso compara la suma de TODOS los pagos no anulados con el total de las líneas
+  // (nunca el estimado de la hoja, que puede ser un solo cobro o un descuento mal aplicado).
+  let betaPagosAlerta: Row[] = [];
+  try { betaPagosAlerta = (await consultar(ctx.db, "beta_pagos", { filtros: [{ col: "ticket_clave", op: "eq", val: clave }] })).rows.filter((x) => x.anulado !== true); }
+  catch { betaPagosAlerta = []; }
+  const avisoCobro = alertaDescuadreCobrado(sumaPagosBeta(betaPagosAlerta), calc.total);
   return {
     ok: true, clave, admin, falta: (await hay(ctx)) ? "" : FALTA, nombresSku,
     ticket: {
@@ -347,7 +353,7 @@ export async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
     descuento: { tipo: s(cab?.descuento_tipo) || null, valor: n(cab?.descuento_valor) }, promo: promo ? promo.nombre : "",
     excluirCosmetologa: cab?.excluir_cosmetologa === true, excluirNota: s(cab?.excluir_nota), exclSistema,
     editado: !!cab, lineasBeta: cab?.lineas_beta === true, historial: Array.isArray(cab?.historial) ? cab!.historial : [],
-    documentos: [...docsDe(r), ...docsBeta(cab)], faltan: [...faltaDe(r, (cab?.datos || {}) as Row), ...(cab?.lineas_beta === true && ymdUtc(r.timestamp) >= FALTA_DESDE ? alertaCanje(r, calc.lineas as unknown as Row[], await paquetesDe(ctx.db, normCedula(s(r.id_3)), normNombre(s(r.nombre) + " " + s(r.apellido))).catch(() => []), !!parseGcCanje(r.gift_card) && !/^\s*SI\b/i.test(s(r.paquete))) : []), ...(alertaDescuadreCobrado(n(r.estimado), calc.sumaLineas) ? [alertaDescuadreCobrado(n(r.estimado), calc.sumaLineas)!] : [])], promos, puedeEditar: admin && !anulado, puedeCancelar: admin && !anulado, puedePedir: !admin,
+    documentos: [...docsDe(r), ...docsBeta(cab)], faltan: [...faltaDe(r, (cab?.datos || {}) as Row), ...(cab?.lineas_beta === true && ymdUtc(r.timestamp) >= FALTA_DESDE ? alertaCanje(r, calc.lineas as unknown as Row[], await paquetesDe(ctx.db, normCedula(s(r.id_3)), normNombre(s(r.nombre) + " " + s(r.apellido))).catch(() => []), !!parseGcCanje(r.gift_card) && !/^\s*SI\b/i.test(s(r.paquete))) : []), ...(avisoCobro ? [avisoCobro] : [])], promos, puedeEditar: admin && !anulado, puedeCancelar: admin && !anulado, puedePedir: !admin,
     productosSistema: productQtys(r).length,
     ...(await extrasTicket(ctx, ses, r, cab, calc.total)),
     ...(await cuadreVista(ctx, r, calc.lineas as unknown as Row[], cab)),

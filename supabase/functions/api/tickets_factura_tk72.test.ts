@@ -56,12 +56,17 @@ describe("TK72 · líneas desde la factura Migo, sin prorrateo", () => {
     assert.equal(db.tables.get("beta_ticket_lineas")!.length, 0, "solo se lee: no escribe nada");
   });
   it("sin factura: precio de catálogo, sin línea DIF, aviso en faltan si no cuadra", async () => {
-    const { h } = semilla();
+    const { db, h } = semilla();
+    if (!db.tables.has("beta_pagos")) db.tables.set("beta_pagos", []);
+    const g0 = await h("tk_get", { clave: "TK-SO-2" });
+    const L0 = g0.lineas as Row[];
+    assert.equal(L0.some((l) => l.tipo === "diferencia" || l.sku === "DIF"), false);
+    assert.deepEqual(L0.map((l) => [l.sku, l.precio_unit]).sort(), [["40", 46], ["ML-002", 23]].sort());
+    assert.equal((g0.totales as Row).sumaLineas, 69);
+    // TK207: sin pagos no se usa el estimado de la hoja como «lo cobrado».
+    assert.equal((g0.faltan as string[]).some((x) => /no cuadra con las líneas/.test(x)), false);
+    db.tables.get("beta_pagos")!.push({ ticket_clave: "TK-SO-2", ticket_id: 2, monto: 60, anulado: false });
     const g = await h("tk_get", { clave: "TK-SO-2" });
-    const L = g.lineas as Row[];
-    assert.equal(L.some((l) => l.tipo === "diferencia" || l.sku === "DIF"), false);
-    assert.deepEqual(L.map((l) => [l.sku, l.precio_unit]).sort(), [["40", 46], ["ML-002", 23]].sort());
-    assert.equal((g.totales as Row).sumaLineas, 69);
     assert.ok((g.faltan as string[]).some((x) => /no cuadra con las líneas/.test(x) && /no se añade una línea/.test(x)));
   });
 });

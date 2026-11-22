@@ -21,7 +21,7 @@ import { tipoSinCobro } from "./sin_cobro.ts";
 import { alertaCanje } from "./canje_linea.ts";
 import { FALTA_DESDE } from "./tickets_beta_api.ts";
 import { parseGcCanje } from "./ventas.ts";
-import { enriquecerItemsLista } from "./ticket_lista_card.ts";
+import { enriquecerItemsLista, totalValorTicket } from "./ticket_lista_card.ts";
 import { pendientesPorClave } from "./propuesta_edicion.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
@@ -92,7 +92,13 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
     pagosPorClaveAll.set(k, L0);
   }
   const pagadoBetaDe = (r: Row) => sumaPagosBeta(pagosPorClaveAll.get(claveDeR(r)));
-  const totalDe = (r: Row) => n(cabMap.get(claveDeR(r))?.total) || n(r.estimado);
+  const map = await catMap(ctx);
+  // TK207: el valor de la lista es el total de las líneas, nunca lo cobrado ni el estimado de la hoja.
+  const valorDe = (r: Row) => {
+    const v = totalValorTicket(r, { cab: cabMap.get(claveDeR(r)), map, canje: canjeFacial(r) });
+    return v > 0 ? v : n(r.estimado);
+  };
+  const totalDe = valorDe;
   // TK98: cortesía / consumo interno en $0 no se factura (no cuenta como «Sin factura»).
   const facDe = (r: Row) => !!tipoSinCobro(r) || hayFactura(r.fac_7, datosDe(r).factura, linkByTk.get(n(r.id))?.factura);
   const cobDe = (r: Row) => estaPagado(r, { factura: datosDe(r).factura, linkFac: linkByTk.get(n(r.id))?.factura, pagadoBeta: pagadoBetaDe(r), total: totalDe(r) });
@@ -150,7 +156,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   };
   if (seg === "rep_no") { const env = await envClaves(L); L = L.filter((r) => !enviado(r, env)); }
   // Cancelados no suman al total de la lista (ni con el filtro «Cancelados»).
-  const total = L.length, suma = round2(L.reduce((a, r) => a + (esCancelado(r) ? 0 : n(r.estimado)), 0));
+  const total = L.length, suma = round2(L.reduce((a, r) => a + (esCancelado(r) ? 0 : totalDe(r)), 0));
   const desde = Math.max(0, n(p.offset)), lim = Math.min(200, Math.max(1, n(p.limit) || 50));
   const pagIds = L.slice(desde, desde + lim).map((r) => n(r.id));
   // 2) página completa
@@ -161,8 +167,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   const telOk = conTelefono(ses);
   const ceds = [...new Set(filas.map((r) => normCedula(r.id_3)).filter(Boolean))];
   const cedCrudas = [...new Set(filas.map((r) => s(r.id_3)).filter(Boolean))];
-  const [map, regs, betaCli, env] = await Promise.all([
-    catMap(ctx),
+  const [regs, betaCli, env] = await Promise.all([
     ceds.length ? consultar(ctx.db, "clientas_registro", { cols: ["cedula", "telefono", "timestamp"], filtros: [{ col: "cedula", op: "in", val: cedCrudas }] }).then((x) => x.rows).catch(() => []) : Promise.resolve([] as Row[]),
     ceds.length ? consultar(ctx.db, "beta_clientes", { cols: ["cedula", "telefono", "datos"], limite: 4000 }).then((x) => x.rows).catch(() => []) : Promise.resolve([] as Row[]),
     envClaves(filas),
@@ -204,7 +209,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
     const inv = Lnk ? factByFac.get(s(Lnk.factura)) : undefined;
     const facTxt = s(d.factura) || (Number(s(r.fac_7)) > 0 ? s(r.fac_7) : "") || s(Lnk?.factura);
     const formaMigo = s(inv?.forma) || (d.pago_migo && typeof d.pago_migo === "object" ? s((d.pago_migo as Row).forma) : "");
-    const cobrado = estaPagado(r, { factura: d.factura, linkFac: Lnk?.factura, pagadoBeta: sumaPagosBeta(pagosPorClave.get(clave) || pagosPorClaveAll.get(clave)), total: n(cabMap.get(clave)?.total) || n(r.estimado) });
+    const cobrado = estaPagado(r, { factura: d.factura, linkFac: Lnk?.factura, pagadoBeta: sumaPagosBeta(pagosPorClave.get(clave) || pagosPorClaveAll.get(clave)), total: totalDe(r) });
     const facReal = hayFactura(r.fac_7, d.factura, Lnk?.factura);
     it.cob = cobrado;
     it.factura = facReal ? (facturaCompleta(facTxt) || facTxt) : "";
@@ -214,7 +219,7 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
     {
       const pagosT = (pagosPorClave.get(clave) || []) as Row[];
       const pagadoB = sumaPagosBeta(pagosT);
-      const totalT = n(cabMap.get(clave)?.total) || n(r.estimado);
+      const totalT = totalDe(r);
       const pmT = d.pago_migo && typeof d.pago_migo === "object" ? d.pago_migo as Row : null;
       const formaT = s(pmT?.forma) || s(d.forma_pago) || formaMigo;
       it.pagos_resumen = {
@@ -268,6 +273,21 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   if (est && est !== "abierto" && est !== "pagado") borr = [];
   // TK94 (Emilia 18/11): los borradores Migo NO van en Tickets; viven en Ventas › Facturas borrador.
   await enriquecerItemsLista(ctx.db, filas, items, cabMap, { map, canje: canjeFacial });
+  // TK207: si el enriquecido trajo líneas, su suma manda (más fiel que el sintético). Nunca lo cobrado.
+  for (const it of items) {
+    const tot = n(it.total) > 0 || (Array.isArray(it.lineas) && (it.lineas as Row[]).length) ? n(it.total) : n(it.estimado);
+    it.total = tot;
+    it.estimado = tot;
+    const pr = it.pagos_resumen && typeof it.pagos_resumen === "object" ? it.pagos_resumen as Row : null;
+    if (pr) {
+      const pagadoB = n(pr.pagadoBeta);
+      pr.total = tot;
+      pr.legado = it.cob ? round2(Math.max(0, tot - pagadoB)) : 0;
+      pr.saldo = it.cob || it.anulado === true ? 0 : round2(Math.max(0, tot - pagadoB));
+    }
+    if (it.anulado === true || it.estado_doc === "cerrado") it.saldo = 0;
+    else it.saldo = pr ? pr.saldo : tot;
+  }
   const itemsOut = items;
   return { ok: true, items: itemsOut, total, suma, offset: desde, limit: lim, hayMas: desde + items.length < total, ms: Date.now() - t0, borradores: borr.length };
 });

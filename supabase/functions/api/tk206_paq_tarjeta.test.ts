@@ -20,13 +20,13 @@ describe("TK206 · tarjeta de paquete lee usado/fecha y u/f", () => {
     assert.match(js, /paqHoy\|\|paqsCli\.filter/);
     assert.match(js, /function _cedClavePaq/);
   });
-  it("la caché de la página coincide con el service worker TK206", () => {
+  it("la caché de la página coincide con el service worker TK207", () => {
     const html = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     const enSw = (sw.match(/const CACHE = "([^"]+)"/) || [])[1];
     assert.equal(enHtml, enSw);
-    assert.equal(enSw, "sunsu-2026-11-21-TK206");
+    assert.equal(enSw, "sunsu-2026-11-21-TK207");
   });
 });
 
