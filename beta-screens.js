@@ -6240,7 +6240,10 @@ function _tkCargarEdiciones(){
 }
 
 function _histMontos(t){
-  var tot=parseFloat(t&&t.estimado)||0, sub=Math.round(tot/1.15*100)/100;
+  // TK207: el total de la tarjeta es el valor del ticket (líneas, t.total), nunca lo cobrado.
+  var tot=parseFloat(t&&t.total);
+  if(!isFinite(tot)) tot=parseFloat(t&&t.estimado)||0;
+  var sub=Math.round(tot/1.15*100)/100;
   return {sub:sub, iva:Math.round((tot-sub)*100)/100, tot:tot};
 }
 function _histEstadoDoc(t){
