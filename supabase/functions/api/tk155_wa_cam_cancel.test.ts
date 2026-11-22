@@ -47,7 +47,7 @@ function semilla(extra: Record<string, Row[]> = {}) {
     beta_cuadre_link: [{ ticket_id: 1938, factura: "001-001-000002978" }],
     gift_cards: [
       { id: 500, sheet_row: 500, codigo_gc: "26-500", dia: 19, mes: 11, ano: 2026, nombre_comprador: "María", usado: false, origin: "beta", orig: {} },
-      { id: 400, sheet_row: 400, codigo_gc: "26-400", dia: 1, mes: 11, ano: 2026, nombre_comprador: "Otra", usado: true, saldo: 0, fecha_uso: "2026-11-19", usado_por: "Andrea", origin: "sheet", orig: { saldo: 0, usos: [{ ticket: "TK-SO-1938", monto: 20, saldo: 0 }] } },
+      { id: 400, sheet_row: 400, codigo_gc: "26-400", dia: 1, mes: 11, ano: 2026, nombre_comprador: "Otra", usado: true, saldo: 0, fecha_uso: "2026-11-19", usado_por: "Andrea", origin: "sheet", notas: "SALDO:0.00 | resto", orig: { saldo: 0, usos: [{ ticket: "TK-SO-1938", monto: 20, saldo: 0 }] } },
       { id: 401, sheet_row: 401, codigo_gc: "26-401", dia: 1, mes: 11, ano: 2026, nombre_comprador: "Ajena", usado: true, saldo: 0, origin: "sheet", orig: { usos: [{ ticket: "TK-SO-1924", monto: 30 }] } },
     ],
     beta_gift_ajustes: [],
@@ -55,6 +55,7 @@ function semilla(extra: Record<string, Row[]> = {}) {
     erp_bodegas: [{ id: BODEGA_VENTA, nombre: "LOCAL", tipo: "venta", activo: true }],
     erp_stock: [{ producto_id: "p2", bodega_id: BODEGA_VENTA, cantidad: 4 }],
     erp_movimientos: [{ id: "m1", producto_id: "p2", bodega_id: BODEGA_VENTA, delta: -1, tipo: "venta", ticket_ref: "TK-20261119-9", legacy_ref: "x" }],
+    gift_card_movimientos: [{ id: 9, codigo: "26-400", ticket_ref: "TK-SO-1938", monto: 20, saldo: 0, actor: "Andrea", nota: "canje", fecha: "2026-11-19T22:55:00Z" }],
     paquetes: [
       { id: 7, sheet_row: 70, paquete: "Pack 3", cedula: CED, uso_1: true, fecha_1: "19/11/2026", completo: false, orig: { ticket: "TK-SO-1938" }, borrado_at: null },
       { id: 8, sheet_row: 80, paquete: "Pack 3 viejo", cedula: CED, uso_1: true, fecha_1: "01/11/2026", uso_2: true, fecha_2: "19/11/2026", completo: false, orig: { ticket: "TK-OTRO", marcas_ticket: ["TK-SO-1938"], marcas_slot: { "TK-SO-1938": [2] }, ultima_marca_ticket: "TK-SO-1938", ultima_marca_slot: 2 }, borrado_at: null },
@@ -200,6 +201,12 @@ describe("TK155 reversa completa al cancelar", () => {
     const g400 = gc.find((x) => x.id === 400)!;
     assert.equal(g400.usado, false); assert.equal(Number(g400.saldo), 20);
     assert.equal(((g400.orig as Row).usos as Row[]).length, 0);
+    assert.match(String(g400.notas), /SALDO:20\.00/);
+    assert.doesNotMatch(String(g400.notas), /SALDO:0\.00/);
+    const gcm = db.tables.get("gift_card_movimientos") || [];
+    const revMov = gcm.filter((m) => m.origin === "anulacion" && String(m.ticket_ref) === "TK-SO-1938");
+    assert.equal(revMov.length, 1);
+    assert.equal(Number(revMov[0].monto), -20);
     const g401 = gc.find((x) => x.id === 401)!;
     assert.equal(g401.usado, true);
     // e) pagos
@@ -234,8 +241,8 @@ describe("TK155 menú Acciones ancho en el celular (t683u)", () => {
 
 describe("TK155 versión", () => {
   it("caché y motor en TK155", () => {
-    assert.match(file("sw.js"), /const CACHE = "sunsu-2026-11-20-TK191"/);
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-20-TK191"/);
+    assert.match(file("sw.js"), /const CACHE = "sunsu-2026-11-22-TK213"/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-22-TK213"/);
     assert.match(file("supabase/functions/api/sunsu_version.ts"), /sunsu-engine-2026-11-19-TK157/);
   });
 });

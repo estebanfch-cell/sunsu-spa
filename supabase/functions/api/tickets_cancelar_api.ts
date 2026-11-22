@@ -13,6 +13,7 @@ import { BODEGA_VENTA, runErp } from "./erp.ts";
 import { ticketPorClave } from "./tickets_beta_api.ts";
 import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
+import { notasConSaldo } from "./ventas.ts";
 
 /** Referencias con las que el kardex pudo anotar las salidas de este ticket. */
 export function refsTicket(r: Row): string[] {
@@ -265,11 +266,29 @@ export async function revertirExtrasTicket(ctx: Ctx, actor: string, quien: strin
     if (mios.length) {
       const saldo = Math.round((n(go.saldo ?? g.saldo) + devuelto) * 100) / 100;
       o2.saldo = saldo; patch.saldo = saldo;
+      patch.notas = notasConSaldo(s(g.notas), saldo);
     }
     o2.restaurada_por_ticket = so; o2.restaurada_ts = ts;
     patch.orig = o2;
     await ctx.db.write(actor, "gift_cards", "update", match, patch);
     if (usoAj && aj) { try { await ctx.db.write(actor, "beta_gift_ajustes", "update", { gift_id: Number(g.id) }, { ticket_uso: null, updated_at: ts }); } catch { /* sin ajustes */ } }
+    try {
+      const movs = (await consultar(ctx.db, "gift_card_movimientos", { filtros: [{ col: "codigo", op: "eq", val: s(g.codigo_gc).trim() }] })).rows;
+      for (const mv of movs) {
+        if (!claves.has(s(mv.ticket_ref))) continue;
+        if (s(mv.origin) === "anulacion" || /anulacion ticket=/i.test(s(mv.nota))) continue;
+        await ctx.db.write(actor, "gift_card_movimientos", "insert", {}, {
+          codigo: s(g.codigo_gc).trim(),
+          ticket_ref: s(mv.ticket_ref),
+          monto: -n(mv.monto),
+          saldo: n(patch.saldo ?? o2.saldo),
+          actor,
+          nota: "anulacion ticket=" + so + " de mov=" + s(mv.id),
+          fecha: ts,
+          origin: "anulacion",
+        });
+      }
+    } catch { /* tabla ausente o sin movimientos */ }
     out.gifts_restauradas.push({ id: g.id, codigo: cod, monto: devuelto });
   }
   // b) Pagos de caja del ticket
