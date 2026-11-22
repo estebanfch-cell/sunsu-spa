@@ -165,7 +165,7 @@ describe("TK210 · fecha de atención y «Subido tarde · 50%»", () => {
   });
 });
 
-it("TK210 · frontend: aviso 15 días, prompt del 50% y cache TK210", async () => {
+it("TK210 · frontend: aviso 15 días, prompt del 50% y cache vigente", async () => {
   const { readFileSync } = await import("node:fs");
   const raiz = new URL("../../../", import.meta.url);
   const js = readFileSync(new URL("mc-aviso-tarde.js", raiz), "utf8");
@@ -175,8 +175,8 @@ it("TK210 · frontend: aviso 15 días, prompt del 50% y cache TK210", async () =
   assert.ok(js.includes(AVISO_TARDE_TEXTO));
   assert.ok(js.includes(PROMPT_TARDE_TEXTO));
   assert.ok(js.includes('"' + AVISO_TARDE_HASTA + '"'));
-  assert.match(sw, /const CACHE = "sunsu-2026-11-21-TK210"/);
-  assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-21-TK210"/);
+  assert.match(sw, /const CACHE = "sunsu-2026-11-22-TK212"/);
+  assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-22-TK212"/);
   assert.ok(sw.includes('"/mc-aviso-tarde.js"'));
   assert.ok(html.includes('<script src="mc-aviso-tarde.js'));
   assert.ok(bs.includes("payload.fecha_atencion=_fAt"));
