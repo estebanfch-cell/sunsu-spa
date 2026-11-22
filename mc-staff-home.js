@@ -182,7 +182,7 @@
     return L.find(function (c) { return String(c.id) === String(id); });
   }
   function crearTicket(c) {
-    try { sessionStorage.setItem("ag.tk", JSON.stringify({ id: c.id, nombre: c.nombre, apellido: c.apellido, cedula: c.cedula || "" })); } catch (er) {}
+    try { sessionStorage.setItem("ag.tk", JSON.stringify({ id: c.id, nombre: c.nombre, apellido: c.apellido, cedula: c.cedula || "", fecha: String(c.datetime || "").slice(0, 10) })); } catch (er) {}
     if (typeof go === "function") go("#/doc/ov");
     else location.hash = "#/doc/ov";
   }

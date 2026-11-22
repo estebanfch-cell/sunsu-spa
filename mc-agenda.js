@@ -283,7 +283,7 @@
   function dlg(inner) { var b = document.createElement("div"); b.className = "mcag-dlg"; b.innerHTML = '<div class="mcag-box">' + inner + "</div>"; document.body.appendChild(b); b.addEventListener("click", function (ev) { if (ev.target === b || ev.target.closest("[data-x]")) b.remove(); }); return b; }
   async function refrescar(main) { await cargar(); var r = main.querySelector("#mcag-root"); if (r) { r.outerHTML = html(); wire(main); } }
   function crearTicket(c, ficha) {
-    sessionStorage.setItem("ag.tk", JSON.stringify({ id: c.id, nombre: c.nombre, apellido: c.apellido, cedula: (ficha && ficha.cedula) || "" }));
+    sessionStorage.setItem("ag.tk", JSON.stringify({ id: c.id, nombre: c.nombre, apellido: c.apellido, cedula: (ficha && ficha.cedula) || "", fecha: String(c.datetime || "").slice(0, 10) }));
     go("#/doc/ov");
   }
   async function verCita(main, id) {
@@ -420,7 +420,7 @@
       var n = document.getElementById("inp-nom"), a = document.getElementById("inp-ape");
       if (!n || !a) { if (intentos++ < 50) setTimeout(poner, 150); return; }
       sessionStorage.removeItem("ag.tk");
-      try { T.nombre = x.nombre || ""; T.apellido = x.apellido || ""; } catch (er) {}
+      try { T.nombre = x.nombre || ""; T.apellido = x.apellido || ""; if (x.fecha) T._fechaSugerida = x.fecha; } catch (er) {}
       n.value = x.nombre || ""; a.value = x.apellido || "";
       var ced = document.getElementById("inp-ced"); if (ced && x.cedula) { ced.value = x.cedula; try { T.cedula = x.cedula; } catch (er) {} }
       window._cedAutofill = true;
