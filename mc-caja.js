@@ -516,7 +516,7 @@
           return '<tr class="' + (x.anulado ? "anul" : "") + '"><td>' + e(fh(x.fecha)) + '</td><td><a href="#/m/tickets/t/' + encodeURIComponent(x.clave) + '">' + e(x.clave) + "</a>" + (x.cliente ? '<br><span class="mccj-sub">' + e(x.cliente) + "</span>" : "") + "</td><td>" + e(E[x.metodo] || x.metodo) + (x.ref ? '<br><span class="mccj-sub">' + e(x.ref) + "</span>" : "") + '</td><td class="num">' + $m(x.monto) + "</td><td>" + e(x.por) + '</td><td class="mccj-keep"><span class="mccj-pill">' + (x.fuente === "beta" ? "app" : "sistema anterior") + "</span>" + (x.anulado ? ' <span class="mccj-pill">anulado</span>' : "") + "</td></tr>";
         }).join("") + "</tbody></table>" : '<p class="mccj-sub">Sin pagos en estas fechas.</p>') + "</div></div>";
   }
-  async function repPagos(main) { K.p = await api("pg_lista", { desde: K.desde, hasta: K.hasta }); var r = main.querySelector("#mccj-root"); if (r) { r.innerHTML = pagosHtml(); wireRango(main, repPagos); } }
+  async function repPagos(main) { if (window.SunsuListaPos) window.SunsuListaPos.save("pagos"); K.p = await api("pg_lista", { desde: K.desde, hasta: K.hasta }); var r = main.querySelector("#mccj-root"); if (r) { r.innerHTML = pagosHtml(); wireRango(main, repPagos); } if (window.SunsuListaPos) window.SunsuListaPos.restore("pagos", { inplace: true }); }
 
   MCPagos.limpiarCache = limpiarPagosCache;
   window.MCPagos = MCPagos;
