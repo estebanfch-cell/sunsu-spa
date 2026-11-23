@@ -128,7 +128,12 @@
 <div class="toast" id="toast"></div>
 
 <script>
-var APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbyLgY0TJOpjafCtRUgAlq2i1xvWifu7vLFD9dkLR2HX92dtAnMGK7FCBvkrFk7yDP6x/exec';
+/* TK214: escribe en Supabase (la misma base de la app). Ya no va al Apps Script / hoja. */
+var API='https://heuolwxyxoezkewyufrl.supabase.co/functions/v1/api';
+function apiRegistro(body){
+  return fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json();});
+}
 var OPCIONES={
   tipoPiel:['Grasa','Seca','Mixta','Normal'],
   estado:['Estable','Sensibilizada / inflamada','Deshidratada','Congestionada'],
@@ -178,8 +183,7 @@ function pantallaYaRegistrada(nom){
   var chequear=function(){
     var ced=inp.value.replace(/[^0-9]/g,'');
     if(ced.length<9) return;
-    fetch(APPS_SCRIPT_URL+'?action=existeCedula&ced='+ced+'&_t='+Date.now())
-      .then(function(r){return r.json();})
+    apiRegistro({accion:'existeCedula',ced:ced})
       .then(function(d){
         if(inp.value.replace(/[^0-9]/g,'')!==ced) return;
         if(d.existe){ pantallaYaRegistrada(d.nombre?d.nombre.split(' ')[0]:''); return; }
@@ -230,11 +234,10 @@ function enviar(){
   if(!SEL.autorizaFotos){toast('Por favor responde la autorización de fotografías');return;}
   if(!SEL.consentimiento){toast('Por favor acepta el consentimiento informado');return;}
   if(!v('rg-firma')){toast('Por favor escribe tu nombre completo como firma');return;}
-  var nac=v('rg-nac'); var p=nac.split('-'); if(p.length===3)nac=p[1]+'/'+p[2]+'/'+p[0];
+  var nac=v('rg-nac');
   var btn=document.getElementById('btn-enviar');
   btn.textContent='⏳ Enviando...'; btn.disabled=true;
-  fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
-    body:JSON.stringify({accion:'registrarCliente',
+  apiRegistro({accion:'registro_publico',
       cedula:v('rg-cedula'),tipo_identificacion:v('rg-tipo-doc')||'cedula',nombre:v('rg-nombre'),apellido:v('rg-apellido'),
       nacimiento:nac,sector:v('rg-sector'),telefono:v('rg-tel'),
       tipoPiel:SEL.tipoPiel||'',estado:SEL.estado||'',
@@ -242,8 +245,7 @@ function enviar(){
       reacciones:(SEL.reacciones||[]).join(', '),retinoides:(SEL.retinoides||[]).join(', '),
       ciclo:(SEL.ciclo||[]).join(', '),extracciones:SEL.extracciones||'',cortesia:SEL.cortesia||'',
       autorizaFotos:(SEL.autorizaFotos||'').indexOf('SI')===0?'SI':'NO',
-      consentimiento:'SI', firma:v('rg-firma')})})
-  .then(function(r){return r.json();})
+      consentimiento:'SI', firma:v('rg-firma')})
   .then(function(d){
     var nom=v('rg-nombre').split(' ')[0];
     if(d.existe){ pantallaYaRegistrada(nom); return; }
