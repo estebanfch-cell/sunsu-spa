@@ -264,7 +264,8 @@ export async function matrizDe(db: Db): Promise<Record<string, Partial<Record<st
 }
 
 export function gateAccion(action: string, ses: SesLite | null, matriz: Record<string, Partial<Record<string, Acceso>>>): { error: string } | null {
-  const pub = new Set(["", "version", "getVersion", "login", "login_pass", "logout", "getUsuarios", "usuarioBloqueado", "usuarioCambiarPin", "whoami", "reset_pedir", "reset_validar", "reset_aplicar"]);
+  // TK214: el enlace público de registro (registro.html) no lleva sesión de staff.
+  const pub = new Set(["", "version", "getVersion", "login", "login_pass", "logout", "getUsuarios", "usuarioBloqueado", "usuarioCambiarPin", "whoami", "reset_pedir", "reset_validar", "reset_aplicar", "existeCedula", "registro_publico"]);
   if (pub.has(action)) return null;
   if (!ses) return { error: "Inicia sesión" };
   // Consumos (unidades): lo ve admin y Super Admin. Los $ de costo los quita redactar si no es Super Admin.
