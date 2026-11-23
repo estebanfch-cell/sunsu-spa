@@ -3715,7 +3715,9 @@ describe("compras flujo", () => {
     assert.equal((ok.pedido as Row).numero, "OC-0001");
     const vista = await handle("compras_lista", { token: "t-andrea" }, c) as Row;
     const ocCos = (vista.items as Row[])[0];
-    assert.equal(ocCos.proveedor, undefined);
+    assert.equal(ocCos.proveedor, "HT");
+    assert.equal(ocCos.familia, "HT");
+    assert.doesNotMatch(JSON.stringify(ocCos), /Hebetronic/);
     assert.equal(ocCos.numero_prov, undefined);
     assert.equal(ocCos.facturas, undefined);
     assert.equal((ocCos.lineas as Row[])[0].precio, undefined);
@@ -3727,7 +3729,8 @@ describe("compras flujo", () => {
     }, c) as Row;
     assert.equal(rec.ok, true);
     assert.equal(rec.flujo, "Recibida");
-    assert.equal(rec.proveedor, undefined);
+    assert.equal(rec.proveedor, "HT");
+    assert.doesNotMatch(JSON.stringify(rec), /Hebetronic/);
     const despues = (await db.all("erp_stock")).find((r) => r.producto_id === SEED_IDS.venta && r.bodega_id === BODEGA_VENTA)?.cantidad;
     assert.equal(Number(despues), Number(antes) + 1);
     const pago = await handle("compras_pago", {

@@ -1,7 +1,7 @@
 import { bloqueada, ESPERA_MIN, hashPass, igualSeguro, ITER, MAX_INTENTOS, normUsuario } from "./credenciales.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { cargarOverride, conPermisosUsuario, gateNivel, redactarFlags } from "./usuario_permisos.ts";
-import { acceso, clampPersonal, esAdmin, esPropio, flagsDeRol, gateAccion, lecturaEnVista, matrizDe, modulosVisibles, normalizarRol, redactar } from "./permisos.ts";
+import { acceso, clampPersonal, esAdmin, esPropio, flagsDeRol, gateAccion, lecturaEnVista, matrizDe, modulosVisibles, normalizarRol, redactar, type ProvCodigo } from "./permisos.ts";
 import { actorOf, asignarTicketBeta, conTelefono, ensureUsers, espejo, expSesion, guardarArchivo, kvGet, kvSet, loadSes, loadUsuario, logAccion, nextSheet, publico, rowBySheet } from "./lib.ts";
 import {
   ADMIN, ALL_ROLES, APP_VERSION, BETA_TABLES, IVA, LEGACY_APPS_SCRIPT_URL,
@@ -14,10 +14,10 @@ import { ETIQUETA_TARDE, factorComisionTicket } from "./fecha_atencion.ts";
 import { patchSlotsGC } from "./paquete_venta.ts";
 import { backfillSO, backfillSQ, filasSerie, leerSerie, tomarNumero } from "./series.ts";
 import { BODEGA_CABINA, BODEGA_CABINA_2, BODEGA_CABINA_3, BODEGA_CASA, BODEGA_VENTA } from "./erp.ts";
-import { descontarVentaTicket } from "./compras_flujo.ts";
+import { descontarVentaTicket, hojaProveedores } from "./compras_flujo.ts";
 import { ticketRecienCreado } from "./ticket_idempotencia.ts";
 import { CORTE_MIN, CORTE_VENTA, aperturaVenta, aplicarTrasCorte, despuesDeTicket, type MovCorte } from "./stock_corte.ts";
-import { datosGiftConvPaquete, etiquetaGift, familiaDe, infoSaldoGift, montoGcAplicado, notasConServicio, notasConvPaqueteGC, saldoGift, servicioDesignadoGift } from "./ventas.ts";
+import { datosGiftConvPaquete, etiquetaGift, familiaDe, familiaDeFila, infoSaldoGift, montoGcAplicado, notasConServicio, notasConvPaqueteGC, saldoGift, servicioDesignadoGift } from "./ventas.ts";
 import { cfgAplicada, reemplazarTramos } from "./comision_cfg.ts";
 import { activarPrueba, ocultarPrueba, purgarPrueba } from "./prueba.ts";
 import { enPrueba, type Db } from "./db.ts";
@@ -1260,6 +1260,28 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
   return fn(p, ctx, ses);
 }
 
+
+/** Códigos de familia vigentes (hoja proveedores.familia + erp_proveedores). No escribe nada. */
+export async function mapaCodigosProveedor(db: Db): Promise<ProvCodigo[]> {
+  let erp: Row[] = [], hoja: Row[] = [];
+  try { erp = await db.all("erp_proveedores"); } catch { erp = []; }
+  try { hoja = await hojaProveedores(db); } catch { hoja = []; }
+  const out: ProvCodigo[] = [];
+  const seen = new Set<string>();
+  const push = (nombre: string, familia: string, extra: { id?: string; ruc?: string } = {}) => {
+    const nom = s(nombre).trim();
+    const fam = s(familia).toUpperCase().trim();
+    if (!nom || !fam) return;
+    const k = nom.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push({ nombre: nom, familia: fam, ...extra });
+  };
+  for (const r of erp) push(s(r.nombre), familiaDeFila(r, hoja), { id: s(r.id), ruc: s(r.ruc) });
+  for (const r of hoja) push(s(r.nombre), familiaDeFila(r, hoja), { ruc: s(r.ruc) });
+  return out;
+}
+
 export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
   // TK163: app de clientas y proveedores. Sus acciones van aparte y con su propia sesión (nunca la del equipo).
   if (action.startsWith("portal_")) {
@@ -1345,7 +1367,11 @@ export async function handle(action: string, p: R, ctx: Ctx): Promise<unknown> {
   }
   try {
     const out = await dispatch(action, clampPersonal(action, p, ses0, matriz), { ...ctx, db, ses: ses0 });
-    const red = redactar(action, out, ses0, matriz);
+    let provs: ProvCodigo[] = [];
+    if (ses0 && !esAdmin(ses0.rol)) {
+      try { provs = await mapaCodigosProveedor(db); } catch { provs = []; }
+    }
+    const red = redactar(action, out, ses0, matriz, provs);
     return ses0 ? redactarFlags(red, ses0.rol, ovUsuario) : red;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

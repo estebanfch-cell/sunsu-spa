@@ -368,23 +368,29 @@ export async function vistaOc(
   const map = new Map(prods.map((r) => [String(r.id), r]));
   const costos = new Map(prods.map((r) => [skuCode(r.sku), n(r.costo_promedio)]));
   let lineas = (bag?.lineas || await db.all("erp_oc_lineas")).filter((r) => r.oc_id === o.id).sort((a, b) => n(a.orden) - n(b.orden));
-  const provs = bag?.provs || (admin ? await db.all("erp_proveedores") : []);
+  const provs = bag?.provs || await db.all("erp_proveedores");
   const prov = provs.find((r) => r.id === o.proveedor_id) || null;
-  const hoja = bag?.hoja || (admin ? await hojaProveedores(db) : []);
+  const hoja = bag?.hoja || await hojaProveedores(db);
   const legadas = bag?.legadas || (admin ? await ordenesLegadas(db) : new Map<string, Row>());
   const snap = snapDe(o);
   const dinero = admin ? dineroOc(o, lineas, legadas.get(s(o.numero)) || null, costos) : null;
   if (admin && dinero?.lineas && !lineas.length) {
     lineas = dinero.lineas.map((ln, i) => ({ ...ln, id: "legacy-" + i, orden: i }));
   }
+  const familia = familiaDeFila(prov, hoja);
   const out: Row = {
     id: o.id, numero: s(o.numero) || "Borrador", flujo: s(o.flujo) || s(o.estado),
     fecha: s(o.fecha), estado: s(o.estado),
     lineas: lineas.map((ln) => vistaLinea(ln, map.get(String(ln.producto_id)), admin)),
   };
+  if (!admin) {
+    out.proveedor_id = o.proveedor_id;
+    out.familia = familia;
+    out.proveedor = familia || s(prov?.nombre);
+    return out;
+  }
   if (admin && dinero) {
     const ps = pagos.filter((p) => p.oc_id === o.id);
-    const familia = familiaDeFila(prov, hoja);
     out.proveedor = s(prov?.nombre);
     out.proveedor_id = o.proveedor_id;
     out.familia = familia;
@@ -412,8 +418,8 @@ export async function comprasLista(db: Db, admin: boolean): Promise<Row> {
   const pagos = admin ? await db.all("erp_oc_pagos") : [];
   const bag = {
     prods: await productos(db),
-    provs: admin ? await db.all("erp_proveedores") : [],
-    hoja: admin ? await hojaProveedores(db) : [],
+    provs: await db.all("erp_proveedores"),
+    hoja: await hojaProveedores(db),
     legadas: admin ? await ordenesLegadas(db) : new Map<string, Row>(),
     lineas: await db.all("erp_oc_lineas"),
   };

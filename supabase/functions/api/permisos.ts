@@ -336,7 +336,120 @@ function quitarCostos(v: unknown, puede: boolean, action = ""): unknown {
   return o;
 }
 
-export function redactar(action: string, data: unknown, ses: SesLite | null, matriz: Record<string, Partial<Record<string, Acceso>>> = DEFAULT_MATRIZ): unknown {
+
+/** Código de familia (HT, AS, ML…) de un proveedor, para ocultar la razón social al personal. */
+export type ProvCodigo = { id?: string; nombre: string; familia: string; ruc?: string };
+
+const PROV_NOM_KEYS = new Set(["proveedor", "proveedor_nombre", "nombre_proveedor", "razon_social", "razon"]);
+const PROV_PRIV_KEYS = new Set(["ruc", "direccion", "contacto", "plazo_dias"]);
+
+function claveProv(nombre: string): string {
+  return String(nombre || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\b(s\s*\.?\s*a\s*\.?\s*s\s*\.?|s\s*\.?\s*a\s*\.?|cia\.?|ltda\.?|company|compania|corp\.?|inc\.?)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function codigoCorto(v: unknown): string {
+  const up = String(v || "").toUpperCase().trim();
+  const m = up.match(/^([A-Z]{2,5})-?$/);
+  return m ? m[1] : "";
+}
+
+function indiceProv(provs: ProvCodigo[]) {
+  const exact = new Map<string, string>();
+  const clave = new Map<string, string>();
+  const ids = new Set<string>();
+  for (const p of provs) {
+    const fam = String(p.familia || "").toUpperCase().trim();
+    if (!fam) continue;
+    if (p.nombre) {
+      const nom = String(p.nombre).trim();
+      exact.set(nom, fam);
+      exact.set(nom.toLowerCase(), fam);
+      const k = claveProv(nom);
+      if (k && k !== "sunsu") clave.set(k, fam);
+    }
+    if (p.id) ids.add(String(p.id));
+  }
+  return { exact, clave, ids };
+}
+
+function codigoDeNombre(val: string, idx: ReturnType<typeof indiceProv>, aceptarCorto = false): string {
+  const t = val.trim();
+  if (!t) return "";
+  if (aceptarCorto) {
+    const corto = codigoCorto(t);
+    if (corto) return corto;
+  }
+  return idx.exact.get(t) || idx.exact.get(t.toLowerCase()) || idx.clave.get(claveProv(t)) || "";
+}
+
+function pareceObjetoProv(o: Row, idx: ReturnType<typeof indiceProv>): boolean {
+  if ("familia" in o && ("ruc" in o || "proveedor_id" in o || "contacto" in o || "plazo_dias" in o)) return true;
+  const nom = typeof o.nombre === "string" ? codigoDeNombre(o.nombre, idx) : "";
+  if (nom && ("familia" in o || "ruc" in o || "contacto" in o)) return true;
+  if (o.id && idx.ids.has(String(o.id)) && o.nombre) return true;
+  return false;
+}
+
+function reemplazarNombresEnTexto(txt: string, idx: ReturnType<typeof indiceProv>): string {
+  let out = txt;
+  const vistos = new Set<string>();
+  for (const [nombre, fam] of idx.exact) {
+    if (vistos.has(nombre) || nombre.length < 6) continue;
+    if (claveProv(nombre) === "sunsu") continue;
+    vistos.add(nombre);
+    if (out.includes(nombre)) out = out.split(nombre).join(fam);
+  }
+  return out;
+}
+
+/** Sustituye la razón social del proveedor por su código de familia (HT, AS, ML…). No toca SUNSU como marca. */
+export function enmascararProveedores(data: unknown, provs: ProvCodigo[]): unknown {
+  const idx = indiceProv(provs);
+  const walk = (v: unknown, forzarProv: boolean): unknown => {
+    if (Array.isArray(v)) {
+      return v.map((x) => {
+        if (typeof x === "string") return codigoDeNombre(x, idx) || reemplazarNombresEnTexto(x, idx);
+        return walk(x, false);
+      });
+    }
+    if (!v || typeof v !== "object") return v;
+    const o = v as Row;
+    const isProv = forzarProv || pareceObjetoProv(o, idx);
+    const famHint = codigoCorto(o.familia)
+      || (typeof o.nombre === "string" ? codigoDeNombre(o.nombre, idx) : "")
+      || (typeof o.proveedor === "string" ? codigoDeNombre(String(o.proveedor), idx) : "");
+    const out: Row = {};
+    for (const [k, val] of Object.entries(o)) {
+      const kn = k.toLowerCase();
+      if (isProv && PROV_PRIV_KEYS.has(kn)) continue;
+      if (typeof val === "string") {
+        if (PROV_NOM_KEYS.has(kn) || (kn === "nombre" && isProv)) {
+          out[k] = famHint || codigoDeNombre(val, idx, true) || val;
+          continue;
+        }
+        const cambiado = reemplazarNombresEnTexto(val, idx);
+        if (cambiado !== val) { out[k] = cambiado; continue; }
+      }
+      if ((kn === "prov" || kn === "proveedor") && val && typeof val === "object" && !Array.isArray(val)) {
+        out[k] = walk(val, true);
+        continue;
+      }
+      out[k] = walk(val, false);
+    }
+    if (isProv && famHint && out.familia == null) out.familia = famHint;
+    return out;
+  };
+  return walk(data, false);
+}
+
+export function redactar(action: string, data: unknown, ses: SesLite | null, matriz: Record<string, Partial<Record<string, Acceso>>> = DEFAULT_MATRIZ, provs: ProvCodigo[] = []): unknown {
   const puedeCostos = !!(ses && esSuperAdmin(ses.rol));
   if (!ses) return quitarCostos(structuredClone(data), false, action);
   if (!esAdmin(ses.rol) && action === "getRolIndividual" && data && typeof data === "object") {
@@ -345,6 +458,7 @@ export function redactar(action: string, data: unknown, ses: SesLite | null, mat
   }
   let out = quitarCostos(structuredClone(data), puedeCostos, action);
   if (esAdmin(ses.rol)) return out;
+  out = enmascararProveedores(out, provs);
   // TK147: el correo del propio acceso (whoami / Mi acceso / reseteo) no es el email de una clienta.
   const emailPropio = action === "whoami" || action.startsWith("cred_") || action.startsWith("reset_");
   if (!emailPropio) out = quitarContacto(out, puedePriv(ses.rol, "telefonos", matriz), puedePriv(ses.rol, "emails", matriz));

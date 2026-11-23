@@ -6,8 +6,9 @@ import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, logAccion } from "./lib.ts";
 import { esAdmin } from "./permisos.ts";
 import { n, round2, s, type Row } from "./domain.ts";
+import { familiaDeFila } from "./ventas.ts";
 import { runErp } from "./erp.ts";
-import { flujoTrasRecibir } from "./compras_flujo.ts";
+import { flujoTrasRecibir, hojaProveedores } from "./compras_flujo.ts";
 import { estadoOc } from "./compras_beta.ts";
 import { agrupar, estadoTrasRecibir, repartir, UNDO_MS } from "./recepciones.ts";
 import { crearActa } from "./actas_api.ts";
@@ -36,7 +37,7 @@ function recibible(o: Row): boolean {
 }
 
 extend("rcp_lista", "any", async (_p, ctx) => {
-  const [ocs, lineas, provs] = await Promise.all([todas(ctx, "erp_oc"), todas(ctx, "erp_oc_lineas"), todas(ctx, "erp_proveedores")]);
+  const [ocs, lineas, provs, hoja] = await Promise.all([todas(ctx, "erp_oc"), todas(ctx, "erp_oc_lineas"), todas(ctx, "erp_proveedores"), hojaProveedores(ctx.db)]);
   const items: Row[] = [];
   for (const o of ocs) {
     if (!recibible(o)) continue;
@@ -46,7 +47,9 @@ extend("rcp_lista", "any", async (_p, ctx) => {
     const pend = L.reduce((a, l) => a + Math.max(0, n(l.cantidad) - n(l.recibido) - n(l.no_recibido)), 0);
     const reciente = L.some((l) => s(l.beta_no_recibido_at) && ctx.now.getTime() - new Date(s(l.beta_no_recibido_at)).getTime() < UNDO_MS);
     if (pend <= 0 && !reciente) continue;
-    items.push({ id: s(o.id), numero: s(o.numero), fecha: s(o.fecha), fecha_esperada: s(o.fecha_esperada), tipo: s(o.tipo) || "compra", estado: est, proveedor: s(provs.find((p) => p.id === o.proveedor_id)?.nombre), productos: new Set(L.map((l) => s(l.producto_id))).size, pendiente: round2(pend) });
+    const pv = provs.find((p) => p.id === o.proveedor_id);
+    const familia = familiaDeFila(pv, hoja);
+    items.push({ id: s(o.id), numero: s(o.numero), fecha: s(o.fecha), fecha_esperada: s(o.fecha_esperada), tipo: s(o.tipo) || "compra", estado: est, proveedor: s(pv?.nombre), familia, productos: new Set(L.map((l) => s(l.producto_id))).size, pendiente: round2(pend) });
   }
   for (const r of await restocksAbiertos(ctx)) items.push(r);
   items.sort((a, b) => s(a.fecha).localeCompare(s(b.fecha)));
@@ -57,12 +60,13 @@ extend("rcp_get", "any", async (p, ctx, ses) => {
   if (/^rst:/.test(s(p.id))) { const r = await restockParaRecibir(ctx, s(p.id).slice(4)); return r || { error: "Pedido no encontrado" }; }
   const o = (await todas(ctx, "erp_oc")).find((r) => r.id === s(p.id) || s(r.numero) === s(p.id));
   if (!o) return { error: "OC no encontrada" };
-  const [lineas, prods, provs, bods, recs] = await Promise.all([todas(ctx, "erp_oc_lineas"), todas(ctx, "erp_productos"), todas(ctx, "erp_proveedores"), todas(ctx, "erp_bodegas"), todas(ctx, "erp_recepciones")]);
+  const [lineas, prods, provs, bods, recs, hoja] = await Promise.all([todas(ctx, "erp_oc_lineas"), todas(ctx, "erp_productos"), todas(ctx, "erp_proveedores"), todas(ctx, "erp_bodegas"), todas(ctx, "erp_recepciones"), hojaProveedores(ctx.db)]);
   const L = lineas.filter((l) => l.oc_id === o.id).sort((a, b) => n(a.orden) - n(b.orden));
   const porId = new Map(prods.map((x) => [s(x.id), x]));
+  const pv = provs.find((x) => x.id === o.proveedor_id);
   return {
     ok: true, admin: esAdmin(ses.rol),
-    oc: { id: s(o.id), numero: s(o.numero), fecha: s(o.fecha), fecha_esperada: s(o.fecha_esperada), tipo: s(o.tipo) || "compra", estado: estadoOc(o, L), proveedor: s(provs.find((x) => x.id === o.proveedor_id)?.nombre), recibible: recibible(o) },
+    oc: { id: s(o.id), numero: s(o.numero), fecha: s(o.fecha), fecha_esperada: s(o.fecha_esperada), tipo: s(o.tipo) || "compra", estado: estadoOc(o, L), proveedor: s(pv?.nombre), familia: familiaDeFila(pv, hoja), recibible: recibible(o) },
     grupos: conBodega(agrupar(L, porId, ctx.now, await famsConsig(ctx)), bods),
     bodegas: bods.filter((b) => BODEGAS_OK.includes(s(b.codigo))).map((b) => ({ id: s(b.id), codigo: s(b.codigo), nombre: s(b.nombre), tipo: s(b.tipo) })),
     recepciones: recs.filter((r) => r.oc_id === o.id).map((r) => ({ id: s(r.id), numero: s(r.numero), fecha: s(r.fecha), por: s(r.recibido_por), anulada: r.anulada === true })),
