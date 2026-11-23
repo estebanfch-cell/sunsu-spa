@@ -120,8 +120,10 @@ export function familiaDe(nombre: string, familia?: string): string {
   if (n.includes("allskin") || n.includes("eyenlip")) return "AS";
   if (n.includes("atencio") || n.includes("esthe")) return "ML";
   if (n.includes("aphlora")) return "PH";
-  if (n.includes("rire") || n.includes("holika")) return "JN";
+  if (n.includes("rire") || n.includes("holika") || n.includes("ayala")) return "JN";
   if (n.includes("vassari")) return "BV";
+  if (n.includes("maira") || n.includes("moya rojas") || n.includes("valkir")) return "VK";
+  if (n === "sunsu" || n === "sunsu spa") return "SU";
   return "";
 }
 

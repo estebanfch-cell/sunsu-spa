@@ -24,6 +24,11 @@ function provVista(p: Row | undefined, hoja: Row[]): Row {
   if (!p) return {};
   return { id: s(p.id), nombre: s(p.nombre), ruc: s(p.ruc), email: s(p.email), telefono: s(p.telefono), contacto: s(p.contacto), familia: familiaDeFila(p, hoja) };
 }
+function provVistaStaff(p: Row | undefined, hoja: Row[]): Row {
+  if (!p) return {};
+  const familia = familiaDeFila(p, hoja);
+  return { id: s(p.id), familia, nombre: familia };
+}
 async function bolsa(ctx: Ctx) {
   const [prods, provs, hoja, legadas, lineas, pagos] = await Promise.all([todas(ctx, "erp_productos"), todas(ctx, "erp_proveedores"), hojaProveedores(ctx.db), ordenesLegadas(ctx.db), todas(ctx, "erp_oc_lineas"), todas(ctx, "erp_oc_pagos")]);
   return { prods, provs, hoja, legadas, lineas, pagos };
@@ -54,7 +59,7 @@ extend("cmpb_lista", "any", async (_p, ctx, ses) => {
   for (const o of ocs) {
     const reales = b.lineas.filter((l) => l.oc_id === o.id);
     const v = await vistaOc(ctx.db, o, admin, b.pagos, b);
-    const it = enriquecer(v, o, admin ? provVista(provs.get(s(o.proveedor_id)), b.hoja) : {}, !reales.length);
+    const it = enriquecer(v, o, admin ? provVista(provs.get(s(o.proveedor_id)), b.hoja) : provVistaStaff(provs.get(s(o.proveedor_id)), b.hoja), !reales.length);
     delete it.lineas; it.nLineas = ((v.lineas || []) as Row[]).length;
     items.push(it);
   }
@@ -84,7 +89,7 @@ extend("cmpb_get", "any", async (p, ctx, ses) => {
   const b = await bolsa(ctx);
   const reales = b.lineas.filter((l) => l.oc_id === o.id);
   const v = await vistaOc(ctx.db, o, admin, b.pagos, b);
-  const prov = admin ? provVista(b.provs.find((x) => x.id === o.proveedor_id), b.hoja) : {};
+  const prov = admin ? provVista(b.provs.find((x) => x.id === o.proveedor_id), b.hoja) : provVistaStaff(b.provs.find((x) => x.id === o.proveedor_id), b.hoja);
   const out = enriquecer(v, o, prov, !reales.length);
   const porId = new Map(b.prods.map((x) => [s(x.id), x]));
   out.lineas = ((v.lineas || []) as Row[]).map((l) => { const r = reales.find((x) => x.id === l.id); const pr = r ? porId.get(s(r.producto_id)) : undefined; return { ...l, nombre: s(l.nombre) || s(pr?.nombre) || s(l.sku), producto_id: s(r?.producto_id) }; });

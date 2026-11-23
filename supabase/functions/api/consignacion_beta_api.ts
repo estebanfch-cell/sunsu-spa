@@ -196,18 +196,19 @@ extend("cns_restock_anular", "any", async (p, ctx, ses) => {
 
 /** Pedidos de restock abiertos para 📥 Recepciones (TK27: se reciben a la bodega CONSIGNACION). */
 export async function restocksAbiertos(ctx: Ctx): Promise<Row[]> {
-  const [rs, provs] = await Promise.all([todas(ctx, "beta_consig_restock"), todas(ctx, "erp_proveedores")]);
+  const [rs, provs, hoja] = await Promise.all([todas(ctx, "beta_consig_restock"), todas(ctx, "erp_proveedores"), hojaProveedores(ctx.db)]);
   return rs.filter((x) => s(x.estado) === "abierta").map((x) => {
     const L = Array.isArray(x.lineas) ? x.lineas as Row[] : [];
     const recibido = L.some((l) => n(l.recibido) > 0 || n(l.no_recibido) > 0);
-    return { id: "rst:" + s(x.id), numero: s(x.numero), fecha: s(x.created_at).slice(0, 10), fecha_esperada: "", tipo: "restock", estado: recibido ? "Recibida parcial" : "Por recibir", proveedor: s(provs.find((p) => p.id === x.proveedor_id)?.nombre), productos: L.length, pendiente: round2(L.reduce((a, l) => a + pendienteRst(l), 0)) };
+    const pv = provs.find((p) => p.id === x.proveedor_id);
+    return { id: "rst:" + s(x.id), numero: s(x.numero), fecha: s(x.created_at).slice(0, 10), fecha_esperada: "", tipo: "restock", estado: recibido ? "Recibida parcial" : "Por recibir", proveedor: s(pv?.nombre), familia: familiaDeFila(pv, hoja), productos: L.length, pendiente: round2(L.reduce((a, l) => a + pendienteRst(l), 0)) };
   });
 }
 const pendienteRst = (l: Row) => Math.max(0, round2(n(l.cantidad) - n(l.recibido) - n(l.no_recibido)));
 export async function restockParaRecibir(ctx: Ctx, id: string): Promise<Row | null> {
   const x = (await todas(ctx, "beta_consig_restock")).find((r) => s(r.id) === id);
   if (!x) return null;
-  const [provs, bods, actas] = await Promise.all([todas(ctx, "erp_proveedores"), todas(ctx, "erp_bodegas"), todas(ctx, "beta_actas")]);
+  const [provs, bods, actas, hoja] = await Promise.all([todas(ctx, "erp_proveedores"), todas(ctx, "erp_bodegas"), todas(ctx, "beta_actas"), hojaProveedores(ctx.db)]);
   const prov = provs.find((p) => p.id === x.proveedor_id);
   const L = Array.isArray(x.lineas) ? x.lineas as Row[] : [];
   const cons = bods.find((b) => s(b.id) === BODEGA_CONSIGNACION);
@@ -215,7 +216,7 @@ export async function restockParaRecibir(ctx: Ctx, id: string): Promise<Row | nu
   const estado = s(x.estado) === "abierta" ? (recibido ? "Recibida parcial" : "Por recibir") : s(x.estado) === "recibida" ? "Recibida" : "Anulada";
   return {
     ok: true, admin: false,
-    oc: { id: "rst:" + s(x.id), numero: s(x.numero), fecha: s(x.created_at).slice(0, 10), tipo: "restock", estado, proveedor: s(prov?.nombre), recibible: s(x.estado) === "abierta" && !!cons },
+    oc: { id: "rst:" + s(x.id), numero: s(x.numero), fecha: s(x.created_at).slice(0, 10), tipo: "restock", estado, proveedor: s(prov?.nombre), familia: familiaDeFila(prov, hoja), recibible: s(x.estado) === "abierta" && !!cons },
     bloqueado: !cons ? "Falta la bodega CONSIGNACION (20261117_beta_bodega_consignacion.sql)." : s(x.estado) === "anulada" ? "Este pedido de restock está anulado." : "",
     grupos: L.map((l) => ({ producto_id: s(l.producto_id), sku: s(l.sku), nombre: s(l.nombre), pedido: n(l.cantidad), recibido: n(l.recibido), no_recibido: n(l.no_recibido), pendiente: pendienteRst(l), lineas: [s(l.producto_id)], uso: "vendible", origen: "consignacion", deshacer: 0, bodega_id: BODEGA_CONSIGNACION })),
     bodegas: cons ? [{ id: s(cons.id), codigo: s(cons.codigo), nombre: s(cons.nombre), tipo: s(cons.tipo) }] : [],
