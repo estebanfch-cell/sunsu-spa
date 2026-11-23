@@ -1240,9 +1240,11 @@ async function dispatch(action: string, p: R, ctx: Ctx): Promise<unknown> {
   const sessionActions = new Set(["version", "getVersion", "login", "login_pass", "logout", "usuarioCambiarPin", "getUsuarios", "usuarioBloqueado", "reset_pedir", "reset_validar", "reset_aplicar"]);
   if (!sessionActions.has(action)) {
     const openReads = new Set(["getCatalogo", "getPromos", "getCodigoGC", "getCodigosGC", "getProdColMap", "getMensajes", "getPlantillaGC", "existeCedula", "getRegistro"]);
-    if (!ses && !openReads.has(action)) return { error: "Inicia sesión" };
+    const openWrites = new Set(["registro_publico"]);
+    if (!ses && !openReads.has(action) && !openWrites.has(action)) return { error: "Inicia sesión" };
   }
 
+  if (action === "registro_publico") return registroPublico(p, ctx);
   if (action === "registrarCliente") return registrarCliente(p, ctx, ses!);
   if (action === "saveRegistroCliente") {
     const d = need(ADMIN); if (d) return d;
@@ -1419,13 +1421,63 @@ function camposRegistro(p: R): R {
     nombre: "nombre", apellido: "apellido", telefono: "telefono", sector: "sector_donde_vive",
     tipoPiel: "tipo_de_piel", estado: "estado_actual", alergias: "alergias", medicacion: "medicacion",
     condiciones: "condiciones_medicas_o_dermatologicas_que_debamos_saber",
-    fechaNacimiento: "fecha_de_nacimiento", autorizaFotos: "autoriza_fotos",
+    fechaNacimiento: "fecha_de_nacimiento", nacimiento: "fecha_de_nacimiento", fecha_de_nacimiento: "fecha_de_nacimiento",
+    autorizaFotos: "autoriza_fotos",
+    reacciones: "reacciones_previas_a_tratamientos", retinoides: "uso_de_exfoliantes_retintines",
+    ciclo: "ciclo_mestrual_si_aplica", extracciones: "deseas_extracciones_de_comedones_o_espinillas_si_es_nec",
+    cortesia: "cortesia_complementaria", firma: "firma",
   };
-  for (const [k, col] of Object.entries(map)) if (c[k] != null) out[col] = s(c[k]);
+  for (const [k, col] of Object.entries(map)) if (c[k] != null && c[k] !== "") out[col] = s(c[k]);
   if (p.nombre && !out.nombre) out.nombre = s(p.nombre);
   if (p.apellido && !out.apellido) out.apellido = s(p.apellido);
   if (p.telefono && !out.telefono) out.telefono = s(p.telefono);
+  if (out.fecha_de_nacimiento) out.fecha_de_nacimiento = fechaNacimientoDe({ nacimiento: out.fecha_de_nacimiento });
+  if (out.autoriza_fotos) out.autoriza_fotos = /si/i.test(s(out.autoriza_fotos)) ? "SI" : (s(out.autoriza_fotos) ? "NO" : s(out.autoriza_fotos));
   return out;
+}
+/** ISO YYYY-MM-DD; también acepta mm/dd/aaaa que mandaba el formulario al Apps Script. */
+function fechaNacimientoDe(p: R): string {
+  const raw = s(p.nacimiento || p.fechaNacimiento || p.fecha_de_nacimiento).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const mdy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mdy) return mdy[3] + "-" + mdy[1].padStart(2, "0") + "-" + mdy[2].padStart(2, "0");
+  return raw;
+}
+/** TK214: tarjeta pública (registro.html) → clientas_registro, sin sesión de staff y sin devolver teléfono. */
+async function registroPublico(p: R, ctx: Ctx): Promise<R> {
+  const det = detectarIdentificacion(p.cedula, p.tipo_identificacion || p.tipoIdentificacion || "cedula");
+  if (det.error) return { error: det.error, ...(det.sugerencia ? { sugerencia: det.sugerencia } : {}) };
+  const ced = normCedula(det.valor) || s(det.valor);
+  const nombre = s(p.nombre).trim();
+  const apellido = s(p.apellido).trim();
+  if (!ced || !nombre || !apellido) return { error: "Por favor completa identificación, nombre y apellido" };
+  if (!s(p.telefono).trim()) return { error: "Por favor escribe tu teléfono" };
+  const nac = fechaNacimientoDe(p);
+  if (!nac || !s(p.sector).trim()) return { error: "Por favor completa tu fecha de nacimiento y sector" };
+  const aut = s(p.autorizaFotos || p.autoriza_fotos);
+  if (!aut) return { error: "Por favor responde la autorización de fotografías" };
+  const cons = s(p.consentimiento || p.apruebo_consentimiento_individual);
+  if (!cons || /^(no|false|0)$/i.test(cons)) return { error: "Por favor acepta el consentimiento informado" };
+  if (!s(p.firma).trim()) return { error: "Por favor escribe tu nombre completo como firma" };
+  p = { ...p, cedula: det.valor, tipo_identificacion: det.tipo, tipo_identificacion_sri: det.sri, nacimiento: nac, autorizaFotos: /si/i.test(aut) ? "SI" : "NO" };
+  const rows = await ctx.db.all("clientas_registro");
+  const ex = rows.find((r) => !r.borrado_at && (normCedula(r.cedula) === ced || s(r.cedula) === ced));
+  const campos = camposRegistro(p);
+  const actor = "registro-web";
+  const ec = ecuadorParts(ctx.now);
+  const consentimientoTxt = "SI — " + pad(ec.d) + "/" + pad(ec.m) + "/" + ec.y + " " + ec.hm;
+  if (ex && ex.timestamp) return { existe: true, nombre: s(ex.nombre) || nombre };
+  if (ex && !ex.timestamp) {
+    await ctx.db.write(actor, "clientas_registro", "update", { sheet_row: ex.sheet_row }, { ...campos, timestamp: ec.isoWall, cedula: ced, apruebo_consentimiento_individual: consentimientoTxt });
+    return { ok: true, fila: ex.sheet_row, actualizada: true };
+  }
+  const sheet_row = await nextSheet(ctx.db, "clientas_registro");
+  const savedCli = await ctx.db.write(actor, "clientas_registro", "insert", {}, {
+    sheet_row, timestamp: ec.isoWall, cedula: ced, ...campos,
+    apruebo_consentimiento_individual: consentimientoTxt,
+    orig: { cedula: ced, nombre, fuente: "registro.html", tipo_identificacion: s(p.tipo_identificacion), tipo_identificacion_sri: s(p.tipo_identificacion_sri) },
+  });
+  return { ok: true, fila: savedCli?.sheet_row ?? sheet_row };
 }
 async function saveRegistro(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   const row = await rowBySheet(ctx.db, "clientas_registro", n(p.row));
