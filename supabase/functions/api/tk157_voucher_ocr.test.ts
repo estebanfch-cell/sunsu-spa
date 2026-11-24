@@ -188,7 +188,7 @@ describe("TK157 alertas del Dashboard", () => {
     const caja = file("mc-caja.js"), tk = file("mc-tickets.js"), html = file("index.html"), sw = file("sw.js");
     assert.match(caja, /🔍 Leer voucher/); assert.match(caja, /⚠️ Descuadre voucher: leído/); assert.match(caja, /✓ Leído: /); assert.match(caja, /Leído del voucher/);
     assert.match(tk, /MCOcr\.chip/);
-    assert.match(html, /sunsu-2026-11-24-TK217/); assert.match(sw, /sunsu-2026-11-24-TK217/);
+    assert.match(html, /sunsu-2026-11-24-TK218/); assert.match(sw, /sunsu-2026-11-24-TK218/);
     assert.match(file("supabase/functions/api/sunsu_version.ts"), /TK157/);
   });
 });
