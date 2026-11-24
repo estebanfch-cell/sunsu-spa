@@ -6,7 +6,7 @@ import { normNombre, type Row } from "./domain.ts";
 import type { Db } from "./db.ts";
 
 export const ROLES = [
-  "cosmetologa", "asistente_cosmetologia", "recepcion", "gerente", "admin", "super_admin",
+  "cosmetologa", "asistente_cosmetologia", "recepcion", "gerente", "visor", "admin", "super_admin",
 ] as const;
 export type Rol = (typeof ROLES)[number];
 export type Acceso = "no" | "propio" | "todos";
@@ -32,6 +32,7 @@ export type PrivFlag = (typeof PRIV_FLAGS)[number]["id"];
 
 export function puedePriv(rol: string, id: PrivFlag, matriz?: Record<string, Partial<Record<string, Acceso>>>): boolean {
   if (id === "costos") return esSuperAdmin(rol);
+  if (esVisor(rol)) return false;
   if (esAdmin(rol)) return true;
   const f = PRIV_FLAGS.find((x) => x.id === id);
   if (!f) return false;
@@ -74,6 +75,10 @@ export const DEFAULT_MATRIZ: Record<string, Partial<Record<Modulo, Acceso>>> = {
     clientes: T, inventario: T, transferencias: T, conteos: T, kardex: T,
     cotizaciones_cliente: T, paquetes: T, gift_cards: T, caja: T, bitacora: T, cabina: T, agenda: T,
     recepciones: T,
+  },
+  // TK216: computadora de skin analysis. Solo lectura de clientas (cédula) y citas.
+  visor: {
+    clientes: T, agenda: T,
   },
 };
 
@@ -214,6 +219,20 @@ export function esAdmin(rol: string): boolean {
   return r === "admin" || r === "super_admin";
 }
 
+/** Cuenta de solo lectura (skin analysis): clientas + citas, sin contacto ni escrituras. */
+export function esVisor(rol: string): boolean {
+  return normalizarRol(rol) === "visor";
+}
+
+/** Lecturas permitidas al visor. Todo lo demás (incluidas acciones no mapeadas) se rechaza. */
+export const VISOR_ACCIONES = new Set([
+  "whoami", "version", "getVersion", "ping", "bootstrap",
+  "cred_mia_get", "cred_mia_guardar",
+  "cl_list", "cl_get", "cl_buscar", "buscarCliente",
+  "ag_meta", "ag_citas", "ag_cita",
+  "colores_list",
+]);
+
 /** Solo Super Admin ve costos, utilidad, margen y precios de compra. admin no. */
 export function esSuperAdmin(rol: string): boolean {
   return normalizarRol(rol) === "super_admin";
@@ -221,6 +240,7 @@ export function esSuperAdmin(rol: string): boolean {
 
 export function acceso(rol: string, modulo: string, matriz: Record<string, Partial<Record<string, Acceso>>> = DEFAULT_MATRIZ): Acceso {
   if (modulo === "permisos" || modulo === "ver_costos") return esSuperAdmin(rol) ? "todos" : "no";
+  if (esVisor(rol)) return modulo === "clientes" || modulo === "agenda" ? "todos" : "no";
   if (esAdmin(rol)) return "todos";
   const r = normalizarRol(rol);
   const v = matriz[r]?.[modulo as Modulo] ?? DEFAULT_MATRIZ[r]?.[modulo as Modulo];
@@ -268,6 +288,9 @@ export function gateAccion(action: string, ses: SesLite | null, matriz: Record<s
   const pub = new Set(["", "version", "getVersion", "login", "login_pass", "logout", "getUsuarios", "usuarioBloqueado", "usuarioCambiarPin", "whoami", "reset_pedir", "reset_validar", "reset_aplicar", "existeCedula", "registro_publico"]);
   if (pub.has(action)) return null;
   if (!ses) return { error: "Inicia sesión" };
+  if (esVisor(ses.rol)) {
+    return VISOR_ACCIONES.has(action) ? null : { error: "Esta cuenta solo puede consultar clientas y citas" };
+  }
   // Consumos (unidades): lo ve admin y Super Admin. Los $ de costo los quita redactar si no es Super Admin.
   if (action === "reporte_consumos") return esAdmin(ses.rol) ? null : { error: "No tienes permiso" };
   const mod = ACCION_MODULO[action];
@@ -317,8 +340,8 @@ function quitarContacto(v: unknown, tel: boolean, mail: boolean): unknown {
   const o: Row = {};
   for (const [k, val] of Object.entries(v as Row)) {
     const n = k.toLowerCase();
-    if (!tel && CONTACTO_TEL.has(n)) continue;
-    if (!mail && CONTACTO_MAIL.has(n)) continue;
+    if (!tel && CONTACTO_TEL.has(n) && typeof val !== "boolean") continue;
+    if (!mail && CONTACTO_MAIL.has(n) && typeof val !== "boolean") continue;
     o[k] = quitarContacto(val, tel, mail);
   }
   return o;
@@ -336,6 +359,24 @@ function quitarCostos(v: unknown, puede: boolean, action = ""): unknown {
   return o;
 }
 
+const CONTACTO_VISOR = new Set(["telefono", "tel", "celular", "whatsapp", "phone", "email", "correo", "sector", "direccion", "dirección", "sector_donde", "sector_donde_vive", "address", "digitos"]);
+function esLabelContacto(v: unknown): boolean {
+  return /tel[eé]fono|celular|whatsapp|correo|e-?mail|phone|direcci[oó]n|sector|address/i.test(String(v || ""));
+}
+function quitarContactoVisor(v: unknown): unknown {
+  if (Array.isArray(v)) {
+    return v.filter((x) => !(x && typeof x === "object" && esLabelContacto((x as Row).campo || (x as Row).name || (x as Row).title))).map(quitarContactoVisor);
+  }
+  if (!v || typeof v !== "object") return v;
+  const o: Row = {};
+  for (const [k, val] of Object.entries(v as Row)) {
+    const n = k.toLowerCase().replace(/[\s-]+/g, "_");
+    if ((CONTACTO_VISOR.has(n) || CONTACTO_TEL.has(n) || CONTACTO_MAIL.has(n)) && typeof val !== "boolean") continue;
+    o[k] = quitarContactoVisor(val);
+  }
+  return o;
+}
+
 export function redactar(action: string, data: unknown, ses: SesLite | null, matriz: Record<string, Partial<Record<string, Acceso>>> = DEFAULT_MATRIZ): unknown {
   const puedeCostos = !!(ses && esSuperAdmin(ses.rol));
   if (!ses) return quitarCostos(structuredClone(data), false, action);
@@ -345,6 +386,8 @@ export function redactar(action: string, data: unknown, ses: SesLite | null, mat
   }
   let out = quitarCostos(structuredClone(data), puedeCostos, action);
   if (esAdmin(ses.rol)) return out;
+  // TK216: el visor nunca ve contacto, aunque alguien le suelte el permiso en la matriz.
+  if (esVisor(ses.rol) && action !== "whoami" && !action.startsWith("cred_")) out = quitarContactoVisor(out);
   // TK147: el correo del propio acceso (whoami / Mi acceso / reseteo) no es el email de una clienta.
   const emailPropio = action === "whoami" || action.startsWith("cred_") || action.startsWith("reset_");
   if (!emailPropio) out = quitarContacto(out, puedePriv(ses.rol, "telefonos", matriz), puedePriv(ses.rol, "emails", matriz));

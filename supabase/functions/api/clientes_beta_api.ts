@@ -4,7 +4,7 @@
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, logAccion } from "./lib.ts";
-import { acceso, esAdmin, matrizDe, puedePriv, type PrivFlag } from "./permisos.ts";
+import { acceso, esAdmin, esVisor, matrizDe, puedePriv, type PrivFlag } from "./permisos.ts";
 import { cedulaVer, detectarIdentificacion, n, normCedula, telefonoEc, normNombre, round2, s, ymdUtc, type Row } from "./domain.ts";
 import { leerSerie } from "./series.ts";
 import { consultar, type Filtro } from "./query.ts";
@@ -208,7 +208,9 @@ extend("cl_list", "any", async (_p, ctx, ses) => {
     clientes.push(item);
   }
   const uniq = (k: string) => [...new Set(clientes.map((c) => s(c[k])).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const payload = { ok: true, admin, puedeDescargar: puedeDescargarDe(ses, matriz), clientes, cosmetologas: admin ? uniq("cosmetologa") : [], sectores: veSec ? uniq("sector") : [], puedeEditar: admin, puedePedir: !admin };
+  const visor = esVisor(ses.rol);
+  if (visor) for (const c of clientes) { delete c.telefono; delete c.email; delete c.sector; delete c.paquetesActivos; delete c.giftSaldo; }
+  const payload = { ok: true, admin, puedeDescargar: visor ? false : puedeDescargarDe(ses, matriz), clientes, cosmetologas: admin ? uniq("cosmetologa") : [], sectores: veSec && !visor ? uniq("sector") : [], puedeEditar: admin, puedePedir: !admin && !visor, soloLectura: visor };
   if (!limpioStaff(payload, ses, matriz)) return { error: "Respuesta de cl_list con datos que el personal no debe ver" };
   return payload;
 });
@@ -302,13 +304,21 @@ export async function ficha(ctx: Ctx, ses: Ses, key0: string): Promise<Row> {
   if (admin) { resumen.total = round2(total); resumen.promedio = historial.length ? round2(total / historial.length) : 0; }
   const paquetes = ((det.paquetes || []) as Row[]);
   resumen.sesionesPendientes = paquetes.reduce((a, p) => a + n(p.pendientes), 0);
+  const visor = esVisor(ses.rol);
   const payload = {
     ok: true, admin, key, unidas: ov?._filas || undefined, codigo, datos: sinPrivados(datos, ses, matriz), campos: CAMPOS_CLIENTE.filter(([k]) => verPrivados(ses, matriz, k) || !PRIVADOS.has(k)), lectura: CAMPOS_LECTURA,
-    corregidos: Object.keys(corr).filter((k) => verPrivados(ses, matriz, k) || !PRIVADOS.has(k)), resumen, historial, paquetes, giftcards: gifts, documentos: documentos.sort((a, b) => s(b.fecha).localeCompare(s(a.fecha))), grupos: agruparDocumentos(documentos),
-    bitacora: admin ? ((ov?.historial || []) as Row[]) : redactarBitacora((ov?.historial || []) as Row[], ses, matriz), borrado: ov?.borrado === true, borradoMotivo: s(ov?.borrado_motivo),
-    puedeEditar: admin, puedePedir: !admin, puedeDescargar: puedeDescargarDe(ses, matriz),
+    corregidos: Object.keys(corr).filter((k) => verPrivados(ses, matriz, k) || !PRIVADOS.has(k)),
+    resumen: visor ? { registros: resumen.registros } : resumen,
+    historial: visor ? [] : historial,
+    paquetes: visor ? [] : paquetes,
+    giftcards: visor ? [] : gifts,
+    documentos: visor ? [] : documentos.sort((a, b) => s(b.fecha).localeCompare(s(a.fecha))),
+    grupos: visor ? {} : agruparDocumentos(documentos),
+    bitacora: visor ? [] : (admin ? ((ov?.historial || []) as Row[]) : redactarBitacora((ov?.historial || []) as Row[], ses, matriz)),
+    borrado: ov?.borrado === true, borradoMotivo: s(ov?.borrado_motivo),
+    puedeEditar: admin, puedePedir: !admin && !visor, puedeDescargar: visor ? false : puedeDescargarDe(ses, matriz), soloLectura: visor,
     // TK183: qué guarda directo el personal y qué va por solicitud (el admin guarda todo directo).
-    directos: admin ? CAMPOS_CLIENTE.map(([k]) => k) : CAMPOS_DIRECTOS_STAFF, conSolicitud: admin ? [] : [...CAMPOS_CON_SOLICITUD].filter((k) => verPrivados(ses, matriz, k) || !PRIVADOS.has(k)),
+    directos: visor ? [] : (admin ? CAMPOS_CLIENTE.map(([k]) => k) : CAMPOS_DIRECTOS_STAFF), conSolicitud: admin ? [] : visor ? [] : [...CAMPOS_CON_SOLICITUD].filter((k) => verPrivados(ses, matriz, k) || !PRIVADOS.has(k)),
   };
   if (!limpioStaff(payload, ses, matriz)) return { error: "Respuesta de cl_get con datos que el personal no debe ver" };
   return payload;
