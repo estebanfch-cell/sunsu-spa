@@ -229,6 +229,7 @@ export const VISOR_ACCIONES = new Set([
   "whoami", "version", "getVersion", "ping", "bootstrap",
   "cred_mia_get", "cred_mia_guardar",
   "cl_list", "cl_get", "cl_buscar", "buscarCliente",
+  "clientes_resumen", "cliente_detalle",
   "ag_meta", "ag_citas", "ag_cita",
   "colores_list",
 ]);

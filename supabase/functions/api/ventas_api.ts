@@ -37,7 +37,11 @@ extend("cliente_detalle", "any", async (p, ctx, ses) => {
   const key = s(p.key || p.cedula || p.id);
   if (!key) return { error: "Falta la clienta" };
   const k = key.startsWith("c:") || key.startsWith("n:") || key.startsWith("t:") ? key : "c:" + key.replace(/\D/g, "").replace(/^0+/, "");
-  const det = await clienteDetalle(ctx.db, { rol: ses.rol, name: ses.name, short: ses.short, uid: ses.uid }, esAdmin(ses.rol), k);
+  // TK218: verTodos igual que clientes_resumen / cl_get. Antes quedaba en admin y el personal
+  // (recepción, visor, etc.) veía «No hay visitas de esa clienta en tus tickets» al abrir un registro nuevo.
+  const matriz = await matrizDe(ctx.db);
+  const verTodos = esAdmin(ses.rol) || acceso(ses.rol, "clientes", matriz) === "todos";
+  const det = await clienteDetalle(ctx.db, { rol: ses.rol, name: ses.name, short: ses.short, uid: ses.uid }, esAdmin(ses.rol), k, verTodos);
   // TK183: «Autoriza fotos» corregido en la ficha manda sobre el formulario de registro.
   try {
     const cli = det && (det as Row).cliente as Row | undefined;

@@ -227,7 +227,7 @@
     var menu = (K.admin ? '<select id="mccl-cosm">' + o("", "Todas las cosmetólogas", F.cosm) + (K.cosms || []).map(function (x) { return o(x, x, F.cosm); }).join("") + "</select>" +
       '<select id="mccl-sec">' + o("", "Todos los sectores", F.sector) + (K.secs || []).map(function (x) { return o(x, x, F.sector); }).join("") + "</select>" : "") + extra;
     var filtros = K.soloLectura ? "" : ('<div class="ss-filt mccl-filt"><button type="button" class="ss-filt-btn mccl-filt-btn' + (nF ? " on" : "") + '" id="mccl-filt-btn" aria-haspopup="true" aria-expanded="false">Filtros' + (nF ? '<span class="ss-badge" id="mccl-filt-n">' + nF + "</span>" : '<span class="ss-badge" id="mccl-filt-n" hidden></span>') + " ▾</button>" +
-      '<div class="ss-filt-menu mccl-filt-menu" id="mccl-filt-menu">' + menu + "</div></div>');
+      '<div class="ss-filt-menu mccl-filt-menu" id="mccl-filt-menu">' + menu + "</div></div>");
     var micro = '<div class="ss-micro"><p class="mccf-sub" id="mccl-n">' + c.n + " clienta" + (c.n === 1 ? "" : "s") + (c.n > K.max ? " · mostrando " + K.max : "") + "</p>" +
       (K.admin ? '<button class="btn ghost small" type="button" data-go="#/m/clientes/docs">Docs sin asignar</button> <button class="btn ghost small" type="button" data-go="#/m/clientes/duplicados">Duplicados</button>' : "") + "</div>";
     return '<div id="mccl-root"><div class="ss-bar mccf-bar"><input type="search" id="mccl-q" placeholder="' + qph + '" value="' + e(K.q) + '" autocomplete="off">' + filtros + "</div>" +
@@ -620,6 +620,16 @@
     var v = d.campos.filter(function (c) { return d.datos[c[0]]; });
     return v.length ? '<div class="mccl-reg">' + v.map(function (c) { return "<div><b>" + e(lblE(c[1])) + ":</b> " + e(c[0] === "nacimiento" ? f(d.datos[c[0]]) : (c[0]==="tipoIdentificacion"&&window.SunsuIdent?window.SunsuIdent.etq(d.datos[c[0]]):d.datos[c[0]])) + (d.corregidos.indexOf(c[0]) >= 0 ? ' <span class="mccl-pend" title="Corregido">corregido</span>' : "") + "</div>"; }).join("") + "</div>" : '<p class="mccf-sub">Sin datos de registro.</p>';
   }
+  function badgeReg(d) {
+    var ok = d.registroEstado === "completo" || !!(d.datos && d.datos.registrada) || (d.resumen && d.resumen.registros > 0);
+    var fecha = d.fechaRegistro || (d.datos && d.datos.registrada) || "";
+    var etq = ok ? "Registro completo" : "Falta registro";
+    return '<div class="card-title" style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">Datos de registro'
+      + ' <span class="mccl-regestado" style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:.68rem;font-weight:800;letter-spacing:.02em;'
+      + (ok ? "background:#e8f6ee;color:#0b6b38" : "background:#fde8e8;color:#a11") + '">' + e(etq) + "</span>"
+      + (fecha ? '<span class="mccf-sub">Fecha de registro: ' + e(f(fecha)) + "</span>" : "")
+      + "</div>";
+  }
   function htmlFicha() {
     var d = K.d, r = d.resumen || {}, nombre = ((d.datos.nombres || "") + " " + (d.datos.apellido || "")).trim() || "Sin nombre";
     var solo = !!(d.soloLectura || (!d.puedeEditar && !d.puedePedir));
@@ -634,7 +644,7 @@
         '<button class="btn ghost small mccl-del" type="button" id="mccl-del">' + (d.puedeEditar ? "Eliminar clienta" : "Solicitar eliminación") + "</button>") + "</div>") + "</div>" +
       (solo ? "" : '<div class="mccl-kpis">' + (d.admin ? '<div class="mccl-kpi"><span>Total gastado</span><b>' + e($m(r.total)) + '</b></div><div class="mccl-kpi"><span>Ticket promedio</span><b>' + e($m(r.promedio)) + "</b></div>" : "") +
       '<div class="mccl-kpi"><span>Tickets</span><b>' + e(r.tickets) + '</b></div><div class="mccl-kpi"><span>Última visita</span><b>' + e(f(r.ultima)) + '</b></div><div class="mccl-kpi"><span>Primera visita</span><b>' + e(f(r.primera)) + '</b></div><div class="mccl-kpi"><span>Sesiones por usar</span><b>' + e(r.sesionesPendientes) + "</b></div></div>") +
-      '<div class="card-title" style="margin-top:4px">Datos de registro</div><div id="mccl-regbox">' + regHtml() + "</div></div>" +
+      badgeReg(d) + '<div id="mccl-regbox">' + regHtml() + "</div></div>" +
       (tabs.length ? '<div class="card"><div class="mccl-tabs">' + tabs.map(function (t) { return '<button type="button" data-tab="' + t[0] + '" class="' + (K.tab === t[0] ? "on" : "") + '">' + e(t[1]) + "</button>"; }).join("") + '</div><div id="mccl-tab">' + tabHtml() + "</div></div>" : "") + "</div>";
   }
   async function renderFicha(key) {

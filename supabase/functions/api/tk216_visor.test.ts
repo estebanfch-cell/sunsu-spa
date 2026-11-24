@@ -88,7 +88,7 @@ describe("TK216 rol visor (solo lectura, sin contacto)", () => {
   it("gateAccion: lecturas permitidas, el resto se rechaza; admin no se ve afectado", () => {
     const vis = { rol: "visor", name: "Skin Analysis", short: "Visor", uid: "visor" };
     const adm = { rol: "admin", name: "Emilia", short: "Emilia", uid: "admin" };
-    for (const a of ["cl_list", "cl_get", "cl_buscar", "buscarCliente", "ag_meta", "ag_citas", "ag_cita", "whoami", "bootstrap"]) {
+    for (const a of ["cl_list", "cl_get", "cl_buscar", "buscarCliente", "clientes_resumen", "cliente_detalle", "ag_meta", "ag_citas", "ag_cita", "whoami", "bootstrap"]) {
       assert.equal(gateAccion(a, vis, {}), null, a);
     }
     for (const a of ["cl_guardar", "cl_borrar", "cl_restaurar", "cl_doc_url", "cl_rellenar_contactos", "ag_crear", "ag_reagendar", "ag_cancelar", "ag_wa", "ag_etiqueta", "ag_vincular", "ag_ingresado", "ag_calendario_guardar", "ag_disponibilidad", "crearTicket", "ov_list", "ov_save", "getDashboardHoy", "inv_list", "compras_list", "caja_list", "permisos_get", "cfg_priv_guardar"]) {
@@ -241,8 +241,8 @@ describe("TK216 rol visor (solo lectura, sin contacto)", () => {
     assert.match(html, /function esVisorRol\(\)/);
     assert.match(html, /destinoInicio\(\)/);
     assert.match(html, /#\/m\/clientes/);
-    assert.match(html, /SUNSU_CACHE = "sunsu-2026-11-24-TK217"/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-24-TK217"/);
+    assert.match(html, /SUNSU_CACHE = "sunsu-2026-11-24-TK218"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-24-TK218"/);
     const cli = fs.readFileSync(new URL("../../../mc-clientes.js", import.meta.url), "utf8");
     assert.match(cli, /soloLectura/);
     assert.match(cli, /Buscar por nombre o cédula/);
