@@ -15,7 +15,7 @@ import { patchSlotsGC } from "./paquete_venta.ts";
 import { backfillSO, backfillSQ, filasSerie, leerSerie, tomarNumero } from "./series.ts";
 import { BODEGA_CABINA, BODEGA_CABINA_2, BODEGA_CABINA_3, BODEGA_CASA, BODEGA_VENTA } from "./erp.ts";
 import { descontarVentaTicket } from "./compras_flujo.ts";
-import { ticketRecienCreado } from "./ticket_idempotencia.ts";
+import { mensajeTicketParecido, ticketParecido, ticketRecienCreado } from "./ticket_idempotencia.ts";
 import { CORTE_MIN, CORTE_VENTA, aperturaVenta, aplicarTrasCorte, despuesDeTicket, type MovCorte } from "./stock_corte.ts";
 import { datosGiftConvPaquete, etiquetaGift, familiaDe, infoSaldoGift, montoGcAplicado, notasConServicio, notasConvPaqueteGC, saldoGift, servicioDesignadoGift } from "./ventas.ts";
 import { cfgAplicada, reemplazarTramos } from "./comision_cfg.ts";
@@ -876,7 +876,7 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     try {
       const cedVars = cedVariantes([p.cedula]);
       const rec = cedVars.length
-        ? (await consultar(ctx.db, "tickets", { filtros: [{ col: "id_3", op: "in", val: cedVars.slice(0, 20) }], limite: 30, orden: [{ col: "id", dir: "desc" }] })).rows
+        ? (await consultar(ctx.db, "tickets", { filtros: [{ col: "id_3", op: "in", val: cedVars.slice(0, 20) }], limite: 80, orden: [{ col: "id", dir: "desc" }] })).rows
         : [];
       const dup = ticketRecienCreado(rec, p, ctx.now);
       if (dup) {
@@ -885,6 +885,18 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
           ok: true, duplicado: true, ticket: num, so_num: s(dup.so_num), beta_num: s(dup.beta_num),
           mensaje: "Este ticket ya se envió hace un momento (" + num + "). No se creó otro.",
         };
+      }
+      if (!p.confirmar_duplicado) {
+        const par = ticketParecido(rec, p, ctx.now);
+        if (par) {
+          const num = s(par.ticket.so_num) || s(par.ticket.beta_num);
+          return {
+            ok: false, requiere: "confirmar_duplicado",
+            ticket: num, so_num: s(par.ticket.so_num), beta_num: s(par.ticket.beta_num),
+            hace_min: par.haceMin,
+            mensaje: mensajeTicketParecido(num, par.haceMin),
+          };
+        }
       }
     } catch { /* si falla la búsqueda, se sigue el alta normal */ }
   }
