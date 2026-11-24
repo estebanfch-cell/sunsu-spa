@@ -4304,6 +4304,34 @@ function _waURL(tel, encTxt){
   return _esMovil_() ? 'https://wa.me/'+tel+'?text='+encTxt
                      : 'https://web.whatsapp.com/send?phone='+tel+'&text='+encTxt;
 }
+/* TK217: WhatsApp en pestaña nueva. Nunca location.href (sacaría al staff de la app).
+   Si la URL se arma después de un await, pasar la ventana reservada en el click. */
+function _abrirWaPestana(u, vent){
+  if(window.SunsuWa&&typeof SunsuWa.abrirEnlace==='function') return SunsuWa.abrirEnlace(u, vent);
+  if(!u){ if(vent){ try{ vent.close(); }catch(e0){} } return false; }
+  if(vent){
+    try{ vent.opener=null; }catch(e1){}
+    try{ vent.location=u; }catch(e2){ try{ vent.location.href=u; }catch(e3){ try{ vent.close(); }catch(e4){} return false; } }
+    if(/^https:\/\/wa\.me\//.test(u)) setTimeout(function(){ try{ vent.close(); }catch(e5){} }, 2800);
+    return true;
+  }
+  var v=null;
+  try{ v=window.open(u,'_blank'); }catch(e6){ v=null; }
+  if(v){
+    try{ v.opener=null; }catch(e7){}
+    if(/^https:\/\/wa\.me\//.test(u)) setTimeout(function(){ try{ v.close(); }catch(e8){} }, 2800);
+    return true;
+  }
+  try{
+    var a=document.createElement('a'); a.href=u; a.target='_blank'; a.rel='noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+    return true;
+  }catch(e9){ return false; }
+}
+function _reservarWaPestana(){
+  if(window.SunsuWa&&typeof SunsuWa.reservarVentana==='function') return SunsuWa.reservarVentana();
+  try{ return window.open('about:blank','_blank'); }catch(eR){ return null; }
+}
 function _esMovil_(){
   // Celular o tablet (incluye iPad en modo escritorio, que se identifica como Mac pero tiene touch)
   return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
@@ -5053,9 +5081,7 @@ function _paqWaEnviar(iGlobal){
   if(!tel){ toast('⚠️ Sin teléfono','#B86B6B'); return; }
   var msgP=encodeURIComponent(_msg(x.pend>0?'MENSAJE PAQUETE DIGITAL PENDIENTE':'MENSAJE PAQUETE DIGITAL COMPLETO',{nombre:(x.p.nombre||'').split(' ')[0],usados:x.usados,total:x.total}));
   var _u=_waURL(tel,msgP);
-  var v=window.open(_u,'_blank');
-  if(!v) window.location.href=_u;
-  if(v){ setTimeout(function(){ try{ v.close(); }catch(eC){} }, 2800); }
+  _abrirWaPestana(_u);
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
     body:JSON.stringify({accion:'segPaqWaEnviado', clave:x.claveWa, usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
@@ -5323,9 +5349,7 @@ function _segWaEnviar(tkRow, tel, waMsg, cedula, nombre, apellido){
     return;
   }
   var _uWa=_waURL(tel,waMsg);
-  var v=window.open(_uWa,'_blank');
-  if(!v) window.location.href=_uWa;
-  if(v){ setTimeout(function(){ try{ v.close(); }catch(eC){} }, 2800); } // pestana puente fuera
+  _abrirWaPestana(_uWa);
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
     body:JSON.stringify({accion:'seguimientoWaEnviado', tkRow:tkRow, cedula:cedula, nombre:nombre, apellido:apellido, usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
@@ -5342,9 +5366,7 @@ function _segWaEnviar(tkRow, tel, waMsg, cedula, nombre, apellido){
 // Abre WhatsApp de cumpleanos y anota el envio (uno por clienta por ano).
 function _cumWaEnviar(tel, waMsg, clave){
   var _u=_waURL(tel,waMsg);
-  var v=window.open(_u,'_blank');
-  if(!v) window.location.href=_u;
-  if(v){ setTimeout(function(){ try{ v.close(); }catch(eC){} }, 2800); }
+  _abrirWaPestana(_u);
   fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},
     body:JSON.stringify({accion:'cumpleWaEnviado', clave:clave, usuario:CU?CU.name:'—'})})
   .then(function(r){return r.json();})
@@ -11604,11 +11626,7 @@ function _waConfirmarCita(aptId, diaNom, btn){
   var bloqueReg=esNueva?_msg('MENSAJE REGISTRO PRIMERA VISITA',{link:_msg('LINK REGISTRO',{})}):'';
   var msg=_msg('MENSAJE CONFIRMACION CITA',{nombre:nom, dia:dia, hora:hora, registro:bloqueReg});
   var url=_waURL(tel,encodeURIComponent(msg));
-  var v=window.open(url,'_blank');
-  if(!v) window.location.href=url;
-  // La pestaña puente queda en blanco cuando iOS salta a WhatsApp → cerrarla sola,
-  // igual que en el flujo de tarjetas: al volver al app no hay nada que cerrar.
-  if(v){ setTimeout(function(){ try{ v.close(); }catch(eC){} }, 2800); }
+  _abrirWaPestana(url);
   _marcarEtqCita(aptId,'ESPERANDO',diaNom,btn);
 }
 function _renderCitasList(bd, data, diaNom){
@@ -13097,6 +13115,7 @@ function _pintarTarjetasPend(){
 function enviarAmbasTarjetas(tkRow, ced, telAmb){
   var x=(window._tarjPaqRef||{})['c'+ced];
   if(!x){toast('❌ No encontré el paquete','#B86B6B');return;}
+  var ventWa=telAmb?_reservarWaPestana():null;
   toast('⏳ Generando los 2 PDFs...','var(--blue)');
   var p1=new Promise(function(res){ tarjetaTicket(tkRow, function(doc,nom){res({doc:doc,nom:nom});}); });
   var p2=new Promise(function(res){
@@ -13111,15 +13130,14 @@ function enviarAmbasTarjetas(tkRow, ced, telAmb){
     rr.forEach(function(r){ try{ r.doc.save(r.nom); }catch(eS){} });
     if(telAmb){
       var msgAmb=encodeURIComponent(_msg('MENSAJE TARJETA AMBAS',{}));
-      // window.open puede ser bloqueado tras trabajo asíncrono → respaldo con location
       var wURL=_waURL(telAmb,msgAmb);
-      var vent=window.open(wURL,'_blank');
-      if(!vent) window.location.href=wURL;
+      _abrirWaPestana(wURL, ventWa);
       toast('📄 2 PDFs descargados — adjúntalos en el chat (📎 → Documento → Descargas)','var(--blue)');
     } else {
+      if(ventWa) try{ ventWa.close(); }catch(eV){}
       toast('📄 2 PDFs descargados — la clienta no tiene teléfono registrado','#C9A227');
     }
-  }).catch(function(e){toast('❌ '+e.message,'#B86B6B');});
+  }).catch(function(e){ if(ventWa) try{ ventWa.close(); }catch(eV2){} toast('❌ '+e.message,'#B86B6B'); });
 }
 // Descarga escalonada (900ms) — los navegadores bloquean la 2ª descarga seguida
 function _descargarDocsEscalonado(docs){
@@ -13157,11 +13175,7 @@ function flujoWhatsApp(tkRow, ced, tel, conPaq, msg, msgPaq, msgHola){
       ? (msgHola||msg)
       : (msgHola||'') + '%0A%0A' + (msg||'') + (conPaq && msgPaq ? '%0A%0A' + msgPaq : '');
     var wURL=_waURL(tel,txtT1);
-    var vent=window.open(wURL,'_blank');
-    if(!vent) window.location.href=wURL;
-    // La pestaña puente queda en blanco cuando iOS salta a WhatsApp → cerrarla sola,
-    // así al volver al app no hay que cerrar nada y el 📎 está listo de una.
-    if(vent){ setTimeout(function(){ try{ vent.close(); }catch(eC){} }, 2800); }
+    _abrirWaPestana(wURL);
     if(btn){btn.textContent='⏳ Preparando PDF'+(conPaq?'s':'')+'...';btn.disabled=true;}
     // Pre-generar en segundo plano mientras la chica manda el saludo
     var gens=[ new Promise(function(res){ tarjetaTicket(tkRow, function(doc,nom){res({doc:doc,nom:nom});}); }) ];

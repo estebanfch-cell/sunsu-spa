@@ -45,8 +45,9 @@ describe("TK187 WhatsApp en escritorio: nunca en silencio, nunca saca a la app d
   const wa = file("mc-wa.js");
   it("si el navegador bloquea la ventana (PDFs tardan >5 s) ya no hace location.href = WhatsApp", () => {
     assert.doesNotMatch(wa, /window\.location\.href\s*=\s*u/);
-    assert.match(wa, /function abrirUrl\(prep\)[\s\S]*?if \(!vent\) return false;/);
-    assert.match(wa, /var abierto = abrirUrl\(prep\);[\s\S]*?if \(!abierto\) \{[\s\S]*?aviso\(/);
+    assert.match(wa, /function abrirUrl\(prep, vent\)/);
+    assert.match(wa, /function reservarVentana\(\)/);
+    assert.match(wa, /var abierto = abrirUrl\(prep, vent\);[\s\S]*?if \(!abierto\) \{[\s\S]*?aviso\(/);
   });
   it("el envío se registra solo si el chat se abrió; el aviso ofrece «Abrir WhatsApp» y «Marcar como enviado (manual)»", () => {
     assert.match(wa, /Abrir WhatsApp/);
