@@ -6485,15 +6485,16 @@ function _histLigarHTML(t,i){
   if(t&&(t.anulado===true||orig.anulado===true)) return '';
   if(typeof _tkPagoDirecto==='function'&&_tkPagoDirecto(t)) return '';
   if(t&&t.sin_cobro&&typeof _tkFaltaFactura==='function'&&!_tkFaltaFactura(t)) return '';
-  var lab=(typeof _tkFaltaFactura==='function'&&_tkFaltaFactura(t))||!(typeof _tkFacFull==='function'&&_tkFacFull(t))?'Ligar':'Cambiar';
-  return '<button type="button" class="btn ghost small" onclick="event.stopPropagation();_histLigarFac('+i+')" title="Ligar / cambiar factura">'+lab+'</button>';
+  var asociar=(typeof _tkFaltaFactura==='function'&&_tkFaltaFactura(t))||!(typeof _tkFacFull==='function'&&_tkFacFull(t));
+  var lab=asociar?'Asociar factura':'Cambiar factura';
+  return '<button type="button" class="btn ghost small" onclick="event.stopPropagation();_histLigarFac('+i+')" title="'+lab+'">'+lab+'</button>';
 }
 function _histLigarFac(i){
   if(event&&event.stopPropagation) event.stopPropagation();
   var list=window._histVisibles||[], t=list[i];
   if(!t) return;
   var clave=(window.MCTickets&&typeof window.MCTickets.claveDe==='function')?window.MCTickets.claveDe(t):(t.so_num||t.clave||'');
-  if(typeof window.SunsuLigarFactura!=='function'){ if(typeof toast==='function') toast('No se pudo abrir el vínculo de factura','#B86B6B'); return; }
+  if(typeof window.SunsuLigarFactura!=='function'){ if(typeof toast==='function') toast('No se pudo abrir Asociar factura','#B86B6B'); return; }
   window.SunsuLigarFactura(clave, function(){
     window._tkKey='';
     if(typeof _histActualizarRes==='function') _histActualizarRes(!!window._histEsStaff);
