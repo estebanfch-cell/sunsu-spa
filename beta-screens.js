@@ -6327,7 +6327,7 @@ function _histCelda(t, c, showPrices, i){
   var m=_histMontos(t);
   var nombre=((t.nombre||'')+' '+(t.apellido||'')).trim();
   var $=function(v){return showPrices?('$'+Number(v||0).toFixed(2)):'—';};
-  if(c.k==='num'){ var extra=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?' '+(t.listo?_tkPill('pendaprobar','Pendiente de aprobar'):_tkPill('porcompletar','Por completar')):''; var ed=_tkPillEdicion(t); return '<td class="tk-num">'+_histEsc(_histNum(t)||'—')+extra+(ed?' '+ed:'')+'</td>'; }
+  if(c.k==='num'){ var extra=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?' '+(t.listo?_tkPill('pendaprobar','Pendiente de aprobar'):_tkPill('porcompletar','Por completar')):''; var ed=_tkPillEdicion(t); var dup=_tkDupHTML(t,i); return '<td class="tk-num">'+_histEsc(_histNum(t)||'—')+extra+(ed?' '+ed:'')+(dup?' '+dup:'')+'</td>'; }
   if(c.k==='cli') return '<td title="'+_histEsc(nombre)+'">'+_histEsc(nombre)+'</td>';
   if(c.k==='ced') return '<td>'+_histEsc(t.cedula||'')+'</td>';
   if(c.k==='fecha') return '<td>'+_histEsc(_histFechaFmt(t.fecha))+'</td>';
@@ -6476,6 +6476,58 @@ function _histWaHTML(t,i){
   var ico=(typeof WA_ICON_SVG!=='undefined'&&WA_ICON_SVG)?WA_ICON_SVG:'WA';
   var lab=ok?'Reporte enviado por WhatsApp':'Enviar reporte por WhatsApp';
   return '<button type="button" class="mob-wa'+(ok?' ok':'')+'" title="'+_histEsc(lab)+'" aria-label="'+_histEsc(lab)+'" onclick="event.stopPropagation();_histWaEnviar('+i+')">' + ico + '</button>';
+}
+function _histEsAdmin(){
+  return !!(typeof CU!=='undefined'&&CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'));
+}
+function _histEsVisor(){
+  return !!(typeof CU!=='undefined'&&CU&&CU.role==='visor');
+}
+function _tkDupDe(t){ return t&&t.posible_duplicado&&typeof t.posible_duplicado==='object'?t.posible_duplicado:null; }
+function _tkDupHTML(t,i){
+  var d=_tkDupDe(t); if(!d) return '';
+  var con=String(d.con||d.clave||'');
+  var min=d.hace_min;
+  var tip='Otro ticket parecido de esta clienta'+(min?(' hace '+min+' min'):'')+(con?(' · '+con):'');
+  var h='<span class="tk-dup" onclick="event.stopPropagation()">'+_tkPill('dup','Posible duplicado',tip);
+  if(con) h+=' <a class="tk-dup-link" href="#/m/tickets/t/'+encodeURIComponent(con)+'">'+_histEsc(con)+'</a>';
+  if(_histEsAdmin()&&!_histEsVisor()&&t&&t.anulado!==true){
+    h+=' <button type="button" class="btn ghost small" onclick="_histDupCancelar('+i+')" title="Cancelar este ticket (reversa completa)">Cancelar este</button>';
+    h+=' <button type="button" class="btn ghost small" onclick="_histDupDescartar('+i+')">Descartar aviso</button>';
+  }
+  return h+'</span>';
+}
+function _histDupCancelar(i){
+  if(event&&event.stopPropagation) event.stopPropagation();
+  if(_histEsVisor()||!_histEsAdmin()) return;
+  var list=window._histVisibles||[], t=list[i];
+  if(!t) return;
+  var d=_tkDupDe(t)||{};
+  var clave=(window.MCTickets&&typeof window.MCTickets.claveDe==='function')?window.MCTickets.claveDe(t):(t.so_num||t.clave||'');
+  var con=d.con||d.clave||'';
+  var motivo='Ticket duplicado de '+(con||'otro ticket');
+  if(!confirm('¿Cancelar '+(_histNum(t)||clave)+' como duplicado de '+(con||'otro ticket')+'?\n\nSe revierte stock, comisiones y pagos. Esta acción no se puede deshacer desde la app.')) return;
+  Promise.resolve(api('tk_cancelar',{clave:clave,motivo:motivo})).then(function(r){
+    if(!r||r.error){ if(typeof toast==='function') toast('❌ '+(r&&r.error||'No se pudo cancelar'),'#B86B6B'); return; }
+    if(typeof toast==='function') toast('Ticket cancelado','var(--green)');
+    if(typeof _histActualizarRes==='function') _histActualizarRes(!!window._histEsStaff);
+  }).catch(function(){ if(typeof toast==='function') toast('❌ Sin conexión','#B86B6B'); });
+}
+function _histDupDescartar(i){
+  if(event&&event.stopPropagation) event.stopPropagation();
+  if(_histEsVisor()||!_histEsAdmin()) return;
+  var list=window._histVisibles||[], t=list[i];
+  if(!t) return;
+  var d=_tkDupDe(t)||{};
+  var clave=(window.MCTickets&&typeof window.MCTickets.claveDe==='function')?window.MCTickets.claveDe(t):(t.so_num||t.clave||'');
+  var con=d.con||d.clave||'';
+  if(!con){ if(typeof toast==='function') toast('No pude identificar el otro ticket','#B86B6B'); return; }
+  if(!confirm('¿Quitar el aviso de posible duplicado con '+con+'? El ticket no se cancela.')) return;
+  Promise.resolve(api('tk_dup_descartar',{clave:clave,con:con})).then(function(r){
+    if(!r||r.error){ if(typeof toast==='function') toast('❌ '+(r&&r.error||'No se pudo descartar'),'#B86B6B'); return; }
+    if(typeof toast==='function') toast('Aviso descartado','var(--green)');
+    if(typeof _histActualizarRes==='function') _histActualizarRes(!!window._histEsStaff);
+  }).catch(function(){ if(typeof toast==='function') toast('❌ Sin conexión','#B86B6B'); });
 }
 function _histActsHTML(t,i){
   return '<span class="mob-acts">' + _histCamHTML(t,i) + _histWaHTML(t,i) + _histLigarHTML(t,i) + '</span>';
@@ -6669,7 +6721,7 @@ function _histCardHTML(t, i, showPrices){
   var waP=_tkWaPendiente(t);
   var nombre=((t.nombre||'')+' '+(t.apellido||'')).trim()||'—';
   var orig=t.orig||{}, anul=t.anulado===true||orig.anulado===true;
-  var est=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?(t.listo?_tkPill('pendaprobar','Pend. aprobar'):_tkPill('porcompletar','Por completar')):(anul?_tkPill('anulado','Cancelado'):_histEstadoDoc(t)==='cerrado'?_tkPill('cerrado','Cerrado'):_tkPill('abierto','Abierto'))+(_tkPillEdicion(t)?' '+_tkPillEdicion(t):'');
+  var est=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?(t.listo?_tkPill('pendaprobar','Pend. aprobar'):_tkPill('porcompletar','Por completar')):(anul?_tkPill('anulado','Cancelado'):_histEstadoDoc(t)==='cerrado'?_tkPill('cerrado','Cerrado'):_tkPill('abierto','Abierto'))+(_tkPillEdicion(t)?' '+_tkPillEdicion(t):'')+(_tkDupHTML(t,i)?' '+_tkDupHTML(t,i):'');
   var facn=_histFacNum(t);
   var l1=(_histNum(t)||'—');
   var l3=[_histFechaFmt(t.fecha)];
@@ -6800,7 +6852,7 @@ function _histCerrarTicket(){
 }
 function _histTrasPintar(){ if(window.SunsuInline) SunsuInline.aplicar(); _tkCargarLeds(); if(typeof _migoPintarBandeja==='function') _migoPintarBandeja(); if(typeof _histCargarThumbs==='function') _histCargarThumbs(document.getElementById('tk-cards')||document); if(window.SunsuListaPos) window.SunsuListaPos.watch('tickets'); }
 // ── Lista de tickets v2 (Emilia 17/11): LED por fila, estados de colores, filas por corregir en rojo, Filtros ▾ ──
-var _TK_PILL={gris:'#8A93A6',abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',pagomigo:'#1A6B8A',pendlun:'#6B7B99',sinfactura:'#D2603A',faltafactura:'#B91C1C',anulado:'#C0392B',porcompletar:'#C98A00',pendaprobar:'#8A6D00',edicionpend:'#3E7CB1'};
+var _TK_PILL={gris:'#8A93A6',dup:'#8A5A16',abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',pagomigo:'#1A6B8A',pendlun:'#6B7B99',sinfactura:'#D2603A',faltafactura:'#B91C1C',anulado:'#C0392B',porcompletar:'#C98A00',pendaprobar:'#8A6D00',edicionpend:'#3E7CB1'};
 var _TK_FORMA={transferencia:'#3E7CB1',tarjeta:'#7B5EA7',efectivo:'#2E8B57',mixto:'#1F7A7A',canje:'#8A93A6',cortesia:'#C46B8A',no_registrado:'#8A93A6'};
 var _TK_FORMA_TXT={transferencia:'Transferencia',tarjeta:'Tarjeta',efectivo:'Efectivo',mixto:'Mixto',canje:'Canje',cortesia:'Cortesía',no_registrado:'Método no registrado',corte:'Método no registrado'};
 function _tkFormaNorm(v){

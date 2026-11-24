@@ -49,6 +49,7 @@ import "./promos_beta_api.ts";
 import "./proveedores_beta_api.ts";
 import "./migo_cuadre_api.ts";
 import "./tk_ligar_factura_api.ts";
+import "./tk_dup_api.ts";
 import "./cliente_factura.ts";
 import "./legacy_solicitudes_api.ts";
 import "./aprobaciones_api.ts";
