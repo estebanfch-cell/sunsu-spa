@@ -129,7 +129,7 @@ export type FacturaVivo = {
   ruc?: string; email?: string;
 };
 export type LinkCuadre = {
-  ticket_id: number; factura: string; tipo: "numero" | "nombre_fecha_monto" | "sku_fecha" | "sku_fecha_suma" | "facturas_suma" | "ventana_3d"; confianza: "alta" | "media";
+  ticket_id: number; factura: string; tipo: "numero" | "nombre_fecha_monto" | "sku_fecha" | "sku_fecha_suma" | "facturas_suma" | "ventana_3d" | "manual"; confianza: "alta" | "media";
   diferencia_monto: number; diferencia_fecha: number; estado: "cuadra" | "redondeo" | "diferencia";
   motivo: string; cliente_migo: string; total_factura: number; total_tickets: number;
   /** TK135: todas las facturas cuando un ticket cuadra con varias del mismo día. */
