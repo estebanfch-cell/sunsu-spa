@@ -12,7 +12,7 @@ async function safeAll(ctx: Ctx, t: string): Promise<Row[]> {
 
 const ROL_LABEL: Record<string, string> = {
   cosmetologa: "Cosmetóloga", asistente_cosmetologia: "Asistente de cosmetología", recepcion: "Recepción",
-  gerente: "Gerencia", admin: "Admin", super_admin: "Super admin",
+  gerente: "Gerencia", visor: "Visor (solo lectura)", admin: "Admin", super_admin: "Super admin",
 };
 
 export async function personas(ctx: Ctx): Promise<Row[]> {

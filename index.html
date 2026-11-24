@@ -2901,7 +2901,7 @@ window.sunsuEntrarEquipo = function (data) {
   localStorage.setItem("sunsu.beta.token", data.token);
   applySession(data);
   if (data.debe_cambiar) { paintCambiarClave(); return; }
-  go("#/m/inicio");
+  go(destinoInicio());
 };
 function paintLoginEquipo(msg) {
   try { if (window._tkCacheLimpiar) window._tkCacheLimpiar(); } catch (eC) {}
@@ -2959,7 +2959,7 @@ function paintLoginEquipo(msg) {
     localStorage.setItem("sunsu.beta.token", data.token);
     applySession(data);
     if (data.debe_cambiar) { paintCambiarClave(); return; }
-    go("#/m/inicio");
+    go(destinoInicio());
   });
 }
 
@@ -2994,7 +2994,7 @@ function paintCambiarClave(msg) {
     if (!data.ok) { err.textContent = data.error || "No se pudo guardar"; return; }
     state.passOk = true; state.debe_cambiar = false;
     if (typeof sunsuTrasCrearUsuario === "function") sunsuTrasCrearUsuario();
-    go("#/m/inicio");
+    go(destinoInicio());
   });
 }
 
@@ -3216,6 +3216,8 @@ function htmlReloj() {
 }
 function rolActual() { return (state.user && state.user.role) || ""; }
 function esAdminRol() { const r = rolActual(); return r === "admin" || r === "super_admin"; }
+function esVisorRol() { return rolActual() === "visor"; }
+function destinoInicio() { return esVisorRol() ? "#/m/clientes" : "#/m/inicio"; }
 function etiquetaMia(label) {
   if (!esAdminRol()) return label;
   const limpio = String(label || "").replace(/^Mis\s+/i, "").replace(/^Mi\s+/i, "");
@@ -3788,7 +3790,7 @@ async function draw() {
     return;
   }
   const cachedMod = (route.kind === "mod" && route.mod === "inicio" && !state.admin) ? (typeof sunsuSwrGet === "function" ? sunsuSwrGet("staff_home", { periodo: "hoy" }) : null) : null;
-  if (cachedMod && cachedMod.d && cachedMod.d.ok && window.MCStaffHome) {
+  if (cachedMod && cachedMod.d && cachedMod.d.ok && window.MCStaffHome && !esVisorRol()) {
     main.innerHTML = banner() + (window.MCStaffHome.html ? window.MCStaffHome.html(cachedMod.d) : htmlEsqueleto());
   } else {
     main.innerHTML = banner() + htmlEsqueleto();
@@ -3820,7 +3822,7 @@ async function draw() {
       await window.MCMaestro.after("proveedores", main, route);
     }
     if (route.kind === "mod" && route.mod === "agenda" && window.MCAgenda) window.MCAgenda.wire(main, route);
-    if (route.kind === "mod" && (route.mod === "inicio" || route.mod === "citas") && !state.admin && window.MCStaffHome) window.MCStaffHome.wire(main, route);
+    if (route.kind === "mod" && (route.mod === "inicio" || route.mod === "citas") && !state.admin && !esVisorRol() && window.MCStaffHome) window.MCStaffHome.wire(main, route);
     if (route.kind === "mod" && route.mod === "personal" && route.sub === "empleados" && window.MCEmpleados) {
       if (window.MCMaestro && document.getElementById("ss-md-empleados")) await window.MCMaestro.after("empleados", main, route);
       else window.MCEmpleados.wire(main, route);
@@ -3869,7 +3871,7 @@ async function renderMod(route) {
   if (route.mod === "inicio") return renderInicioBeta();
   if (route.mod === "personal") return renderPersonal(route);
   if (route.mod === "gift") return renderGiftMod(route);
-  if (route.mod === "citas") return (!state.admin && window.MCStaffHome) ? renderInicioBeta() : renderCitasBeta();
+  if (route.mod === "citas") return (!state.admin && !esVisorRol() && window.MCStaffHome) ? renderInicioBeta() : renderCitasBeta();
   if (route.mod === "productos") return route.sub !== "catalogo" && window.MCProductos ? window.MCProductos.render(route) : renderProductos();
   if (route.mod === "inventario") {
     if (!route.sub || route.sub === "lista") return renderInventarioLista();
@@ -4105,6 +4107,12 @@ if (!window._dashAlWired) {
   });
 }
 async function renderInicioBeta() {
+  if (esVisorRol()) {
+    return '<div class="dash-head"><div class="hola">Hola, ' + esc((state.user && (state.user.name || state.user.nombre)) || "Skin Analysis") + '</div></div>' +
+      '<div class="card"><p>Esta cuenta es solo para consultar cédulas y la agenda. No se puede editar ni ver teléfonos o correos.</p>' +
+      '<p><button class="btn" type="button" data-go="#/m/clientes">Registro de clientas</button> ' +
+      '<button class="btn ghost" type="button" data-go="#/m/agenda">Agenda</button></p></div>';
+  }
   if (!state.admin && window.MCStaffHome) return window.MCStaffHome.render();
   const data = await api("home");
   const homeFail = data.error && !data.bajos ? fail(data) + `<p class="note">Inicio lee el inventario ERP. Si la base todavía no tiene 0009, el resto de módulos de hoja sigue disponible.</p>` : "";
@@ -8894,7 +8902,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-23-TK214"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-23-TK216"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -9078,7 +9086,7 @@ window.SunsuUpdate.init();
 <script src="beta-screens.js?v=20261121tk210"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
-<script src="mc-nav.js?v=20261120tk186"></script>
+<script src="mc-nav.js?v=20261123tk216"></script>
 <script src="mc-permisos.js?v=20261120tk179"></script>
 <script src="mc-protocolos.js?v=20261120tk179"></script>
 <script src="mc-conteo.js?v=20261120tk203"></script>
@@ -9097,7 +9105,7 @@ window.SunsuUpdate.init();
 <script src="mc-caja.js?v=20261120tk179"></script>
 <script src="mc-giftcards.js?v=20261120tk189"></script>
 <script src="mc-multas.js?v=20261120tk179"></script>
-<script src="mc-clientes.js?v=20261120tk184"></script>
+<script src="mc-clientes.js?v=20261123tk216"></script>
 <script src="mc-clientes-dup.js?v=20261120tk179"></script>
 <script src="mc-docpdf.js?v=20261120tk179"></script>
 <script src="mc-compras.js?v=20261120tk179"></script>
@@ -9106,7 +9114,7 @@ window.SunsuUpdate.init();
 <script src="mc-recepciones.js?v=20261120tk179"></script>
 <script src="mc-movil.js?v=20261120tk179"></script>
 <script src="mc-promociones.js?v=20261120tk179"></script>
-<script src="mc-agenda.js?v=20261121tk210"></script>
+<script src="mc-agenda.js?v=20261123tk216"></script>
 <script src="mc-staff-home.js?v=20261121tk210"></script>
 <script src="mc-aviso-tarde.js?v=20261121tk210"></script>
 <script src="mc-borradores.js?v=20261120tk179"></script>

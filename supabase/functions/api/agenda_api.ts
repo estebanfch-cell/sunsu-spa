@@ -5,7 +5,7 @@
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, conTelefono, espejo, kvGet, kvSet } from "./lib.ts";
-import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
+import { acceso, esAdmin, esPropio, esVisor, matrizDe } from "./permisos.ts";
 import { esCanje, telefonoEc, n, normCedula, normNombre, s, ymdUtc, type Row } from "./domain.ts";
 import { acuityCache, acuityReq, citaDeNombre, citasRango, fechaCita, limpiarCacheAcuity, nombreCita } from "./acuity.ts";
 import { contactoDeAcuity } from "./clientes_contacto.ts";
@@ -140,7 +140,9 @@ extend("ag_meta", "any", async (_p, ctx, ses) => {
     tipos: (Array.isArray(tipos) ? tipos : []).filter((t) => t.active !== false).map((t) => ({ id: t.id, nombre: s(t.name), duracion: n(t.duration), precio: s(t.price), calendarIDs: t.calendarIDs || [], nueva: /PRIMERA/i.test(s(t.name)) })),
     etiquetas: labels.map((l) => ({ id: l.id, nombre: s(l.name), color: s(l.color) })),
     addons: (Array.isArray(addons) ? addons : []).map((x) => ({ id: x.id, nombre: s(x.name), precio: s(x.price), duracion: n(x.duration) })),
-    puede: { agendar: c.niv === "todos", mover: c.niv === "todos", cancelar: c.niv === "todos", noLlego: true, ticket: true, eliminar: false, editarCalendarios: esAdmin(ses.rol) },
+    puede: esVisor(ses.rol)
+      ? { agendar: false, mover: false, cancelar: false, noLlego: false, ticket: false, eliminar: false, editarCalendarios: false, whatsapp: false }
+      : { agendar: c.niv === "todos", mover: c.niv === "todos", cancelar: c.niv === "todos", noLlego: true, ticket: true, eliminar: false, editarCalendarios: esAdmin(ses.rol) },
     nota: "Acuity no permite borrar citas por su API: solo cancelarlas (queda el registro y se libera el horario).",
   };
 });
@@ -156,8 +158,10 @@ extend("ag_citas", "any", async (p, ctx, ses) => {
   const L = await citasRango(ctx, desde, hasta, { calendarID: cal || undefined });
   if (!Array.isArray(L)) return { error: L.error };
   try {
-    const extras = L.map((a) => contactoDeAcuity(a as Row)).filter((x): x is NonNullable<typeof x> => !!x);
-    if (extras.length) await rellenarContactosDeFuentes(ctx, actorOf(ses), extras);
+    if (!esVisor(ses.rol)) {
+      const extras = L.map((a) => contactoDeAcuity(a as Row)).filter((x): x is NonNullable<typeof x> => !!x);
+      if (extras.length) await rellenarContactosDeFuentes(ctx, actorOf(ses), extras);
+    }
   } catch { /* el listado de citas no depende del relleno */ }
   const vis = L.filter((a) => c.niv === "todos" || c.mios.includes(Number(a.calendarID)));
   const links = await todas(ctx, "beta_citas_ticket");
@@ -179,6 +183,7 @@ extend("ag_citas", "any", async (p, ctx, ses) => {
       wa_enviado: waOk.has(s(a.id)),
     }));
   }).sort((x, y) => s(x.datetime).localeCompare(s(y.datetime)));
+  if (esVisor(ses.rol)) for (const x of citas) { delete x.ticket; delete x.telefono; delete x.email; delete x.phone; }
   const porDia: Record<string, Record<string, number>> = {};
   for (const x of citas) { const d = porDia[s(x.fecha)] ||= { total: 0 }; d.total++; d[s(x.calendarID)] = (d[s(x.calendarID)] || 0) + 1; }
   return { ok: true, desde, hasta, citas, porDia };
@@ -210,14 +215,25 @@ extend("ag_cita", "any", async (p, ctx, ses) => {
     forms, ticket: ln ? s(ln.ticket_clave) : "",
     ficha: f ? { clienteKey: claveRegistro(f), cedula: normCedula(f.cedula), nombre: s(f.nombre), apellido: s(f.apellido), tipoPiel: s(f.tipo_de_piel), alergias: s(f.alergias), medicacion: s(f.medicacion), autorizaFotos: autorizaDe(await autorizaFotosCorregidas(ctx.db).catch(() => new Map<string, string>()), f) } : null,
   });
-  if (conTelefono(ses)) { out.telefono = telefonoEc(a.phone); out.email = s(a.email); }
+  if (conTelefono(ses) && !esVisor(ses.rol)) { out.telefono = telefonoEc(a.phone); out.email = s(a.email); }
+  if (esVisor(ses.rol)) {
+    delete out.ticket;
+    delete out.telefono; delete out.email; delete out.phone;
+    const forms = Array.isArray(out.forms) ? (out.forms as Row[]) : [];
+    out.forms = forms.filter((f) => !/tel[eé]fono|celular|whatsapp|correo|e-?mail|phone/i.test(s(f.campo)));
+    if (out.ficha && typeof out.ficha === "object") {
+      const ficha = { ...(out.ficha as Row) };
+      delete ficha.telefono; delete ficha.email;
+      out.ficha = ficha;
+    }
+  }
   return { ok: true, cita: out };
 });
 
 extend("ag_disponibilidad", "any", async (p, ctx, ses) => {
   const c = await contexto(ctx, ses);
   if ("error" in c) return c;
-  if (c.niv !== "todos") return { error: "Solo admin o recepción agenda citas" };
+  if (c.niv !== "todos" || esVisor(ses.rol)) return { error: "Solo admin o recepción agenda citas" };
   if (!YMD.test(s(p.fecha)) || !s(p.tipoID)) return { error: "Elige tipo y fecha" };
   const q = `availability/times?appointmentTypeID=${encodeURIComponent(s(p.tipoID))}&date=${s(p.fecha)}` + (s(p.calendarID) ? "&calendarID=" + encodeURIComponent(s(p.calendarID)) : "");
   const r = await acuityReq(ctx, q);
@@ -228,7 +244,7 @@ extend("ag_disponibilidad", "any", async (p, ctx, ses) => {
 extend("ag_crear", "any", async (p, ctx, ses) => {
   const c = await contexto(ctx, ses);
   if ("error" in c) return c;
-  if (c.niv !== "todos") return { error: "Solo admin o recepción agenda citas" };
+  if (c.niv !== "todos" || esVisor(ses.rol)) return { error: "Solo admin o recepción agenda citas" };
   const nom = s(p.nombre).trim(), ape = s(p.apellido).trim(), dt = s(p.datetime);
   if (!nom || !ape) return { error: "Nombre y apellido de la clienta" };
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(dt)) return { error: "Fecha y hora" };
@@ -246,7 +262,7 @@ extend("ag_crear", "any", async (p, ctx, ses) => {
 extend("ag_reagendar", "any", async (p, ctx, ses) => {
   const c = await contexto(ctx, ses);
   if ("error" in c) return c;
-  if (c.niv !== "todos") return { error: "Solo admin o recepción mueve citas" };
+  if (c.niv !== "todos" || esVisor(ses.rol)) return { error: "Solo admin o recepción mueve citas" };
   const dt = s(p.datetime);
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(dt)) return { error: "Nueva fecha y hora" };
   const body: Row = { datetime: dt };
@@ -260,7 +276,7 @@ extend("ag_reagendar", "any", async (p, ctx, ses) => {
 extend("ag_cancelar", "any", async (p, ctx, ses) => {
   const c = await contexto(ctx, ses);
   if ("error" in c) return c;
-  if (c.niv !== "todos") return { error: "Solo admin o recepción cancela citas" };
+  if (c.niv !== "todos" || esVisor(ses.rol)) return { error: "Solo admin o recepción cancela citas" };
   const r = await acuityReq(ctx, "appointments/" + encodeURIComponent(s(p.id)) + "/cancel?admin=true" + (p.avisar === true ? "" : "&noEmail=true"), { method: "PUT", body: { cancelNote: s(p.motivo).slice(0, 300) } });
   if ("error" in r) return { error: r.error };
   limpiarCacheAcuity();
@@ -289,7 +305,7 @@ const ETQ_STAFF = new Set(["NO LLEGO"]);
 extend("ag_wa", "any", async (p, ctx, ses) => {
   const c = await contexto(ctx, ses);
   if ("error" in c) return c;
-  if (c.niv !== "todos") return { error: "Solo recepción o admin confirma citas por WhatsApp" };
+  if (c.niv !== "todos" || esVisor(ses.rol)) return { error: "Solo recepción o admin confirma citas por WhatsApp" };
   const id = s(p.id);
   if (!id) return { error: "Falta la cita" };
   const cur = await acuityReq(ctx, "appointments/" + encodeURIComponent(id));
@@ -330,6 +346,7 @@ extend("ag_wa", "any", async (p, ctx, ses) => {
 extend("ag_etiqueta", "any", async (p, ctx, ses) => {
   const c = await contexto(ctx, ses);
   if ("error" in c) return c;
+  if (esVisor(ses.rol)) return { error: "Esta cuenta es solo lectura" };
   const et = s(p.etiqueta).toUpperCase().trim();
   if (!et) return { error: "Etiqueta" };
   if (c.niv !== "todos" && !ETQ_STAFF.has(et)) return { error: "Solo puedes marcar «No llegó»" };
@@ -344,6 +361,7 @@ extend("ag_etiqueta", "any", async (p, ctx, ses) => {
 extend("ag_vincular", "any", async (p, ctx, ses) => {
   const c = await contexto(ctx, ses);
   if ("error" in c) return c;
+  if (esVisor(ses.rol)) return { error: "Esta cuenta es solo lectura" };
   const cur = await acuityReq(ctx, "appointments/" + encodeURIComponent(s(p.id)));
   if ("error" in cur) return { error: cur.error };
   const a = cur.data as Row;
