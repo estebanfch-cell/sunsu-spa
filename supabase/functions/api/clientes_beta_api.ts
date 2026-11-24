@@ -317,6 +317,9 @@ export async function ficha(ctx: Ctx, ses: Ses, key0: string): Promise<Row> {
     bitacora: visor ? [] : (admin ? ((ov?.historial || []) as Row[]) : redactarBitacora((ov?.historial || []) as Row[], ses, matriz)),
     borrado: ov?.borrado === true, borradoMotivo: s(ov?.borrado_motivo),
     puedeEditar: admin, puedePedir: !admin && !visor, puedeDescargar: visor ? false : puedeDescargarDe(ses, matriz), soloLectura: visor,
+    // TK218: el personal y visor ven si el formulario de registro está completo, aunque no haya visitas.
+    registroEstado: regs.length ? "completo" : "falta",
+    fechaRegistro: s(datos.registrada) || reg.primera || "",
     // TK183: qué guarda directo el personal y qué va por solicitud (el admin guarda todo directo).
     directos: visor ? [] : (admin ? CAMPOS_CLIENTE.map(([k]) => k) : CAMPOS_DIRECTOS_STAFF), conSolicitud: admin ? [] : visor ? [] : [...CAMPOS_CON_SOLICITUD].filter((k) => verPrivados(ses, matriz, k) || !PRIVADOS.has(k)),
   };

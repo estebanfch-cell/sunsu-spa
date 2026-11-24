@@ -11,7 +11,7 @@ import {
   packSesiones, prodCol, productQtys, round2, s, skuCode, tiposAmpolla, ymdUtc, type ComCfg, type Row,
   codigoPaquete, esCancelado, normCedulaVieja, cedulasCompatibles } from "./domain.ts";
 import { claveIdentidad, clavesDe } from "./clientes_alias.ts";
-import { conTelefono, logAccion, type Ses } from "./lib.ts";
+import { conSector, conTelefono, logAccion, type Ses } from "./lib.ts";
 import { esPropio, type SesLite } from "./permisos.ts";
 import { cargarPreciosConsig, resolverPrecio } from "./consig_precios.ts";
 import { NOTA_LIQUIDACION_TK127, mapaAliases, qtyPagableProveedor, resolverSku } from "./inventario_modelo.ts";
@@ -863,6 +863,10 @@ function veTelefono(ses: SesLite): boolean {
   const completo: Ses = { ...ses, color: "", token: "" };
   return conTelefono(completo);
 }
+function veSector(ses: SesLite): boolean {
+  const completo: Ses = { ...ses, color: "", token: "" };
+  return conSector(completo);
+}
 
 export function ordenarClientes(rows: Row[], q: string): Row[] {
   if (!normBusca(q)) return rows;
@@ -968,10 +972,10 @@ export async function clientesResumen(db: Db, ses: SesLite, admin: boolean, verT
       key: g.key, fila: g.fila, cedula: g.cedula, nombres: g.nombres, apellido: g.apellido,
       nombre: (g.nombres + " " + g.apellido).trim(),
       visitas: g.visitas, ultima: g.ultima, cosmetologa: g.cosmetologa,
-      sector: s(ficha?.sector_donde_vive),
       codigo: codigos.get(g.key)?.cod || "",
     };
     if (telOk) item.telefono = s(ficha?.telefono);
+    if (veSector(ses)) item.sector = s(ficha?.sector_donde_vive);
     if (admin) item.total = round2(g.total);
     return item;
   }).sort((a, b) => s(b.ultima).localeCompare(s(a.ultima)) || s(a.nombre).localeCompare(s(b.nombre)));
@@ -1044,7 +1048,7 @@ export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: 
   if (!rows.length && !s(ficha.nombre) && !s(ficha.apellido) && !normCedula(ficha.cedula)) {
     return { error: "No hay visitas de esa clienta en tus tickets" };
   }
-  if (!verTodos && !rows.length) return { error: "No hay visitas de esa clienta en tus tickets" };
+  // TK218: si hay ficha de registro, el personal y visor pueden verificarla aunque no tengan visitas propias.
   const primero = rows.length ? [...rows].sort((a, b) => ymdUtc(b.timestamp).localeCompare(ymdUtc(a.timestamp)))[0] : null;
   const ced = normCedula(primero?.id_3 || ficha.cedula);
   const nom = normNombre(((primero ? s(primero.nombre) : s(ficha.nombre)) + " " + (primero ? s(primero.apellido) : s(ficha.apellido))).trim());
@@ -1090,12 +1094,16 @@ export async function clienteDetalle(db: Db, ses: SesLite, admin: boolean, key: 
     condiciones: s(ficha.condiciones_medicas_o_dermatologicas_que_debamos_saber),
     nacimiento: ymdUtc(ficha.fecha_de_nacimiento), autorizaFotos: s(ficha.autoriza_fotos),
     visitas: tickets.length, ultima: s(tickets[0]?.fecha),
+    consentimiento: s(ficha.apruebo_consentimiento_individual),
+    fechaRegistro: ymdUtc(ficha.timestamp) || ymdUtc(ficha.created_at),
+    registroEstado: (s(ficha.nombre) || s(ficha.apellido) || normCedula(ficha.cedula)) ? "completo" : "falta",
   };
   if (admin) cliente.total = round2(total);
   if (!veTelefono(ses)) {
     delete cliente.telefono;
     delete cliente.email;
   }
+  if (!veSector(ses)) delete cliente.sector;
   return { ok: true, admin, cliente, tickets, paquetes };
 }
 

@@ -4756,6 +4756,9 @@ function valsFicha(c) {
   return v;
 }
 function htmlRegistroInicial(c) {
+  const ok = c.registroEstado ? c.registroEstado === "completo" : !!(c.cedula || c.nacimiento || c.alergias || c.tipoPiel || c.consentimiento || c.fechaRegistro);
+  const fecha = c.fechaRegistro || "";
+  const badge = `<span class="cli-regestado" style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:.68rem;font-weight:800;letter-spacing:.02em;${ok ? "background:#e8f6ee;color:#0b6b38" : "background:#fde8e8;color:#a11"}">${ok ? "Registro completo" : "Falta registro"}</span>`;
   const pares = [
     ["Nombre", c.nombre || ((c.nombres || "") + " " + (c.apellido || "")).trim()],
     ["Cédula", c.cedula],
@@ -4767,10 +4770,12 @@ function htmlRegistroInicial(c) {
     ["Medicación", c.medicacion],
     ["Condiciones", c.condiciones],
     ["Autoriza fotos", c.autorizaFotos],
+    ["Consentimiento", c.consentimiento],
+    ["Fecha de registro", fecha],
   ];
   if (Object.prototype.hasOwnProperty.call(c, "telefono")) pares.splice(3, 0, ["Teléfono", c.telefono]);
   const filas = pares.filter((p) => p[1] != null && String(p[1]).trim() !== "").map((p) => `<div class="note"><b>${esc(p[0])}:</b> ${esc(p[1])}</div>`).join("");
-  return `<div class="card" id="cli-registro"><div class="card-title">Registro inicial</div>${filas || `<p class="note">Sin datos de registro inicial.</p>`}</div>`;
+  return `<div class="card" id="cli-registro"><div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">Registro inicial ${badge}</div>${filas || `<p class="note">Sin datos de registro inicial.</p>`}</div>`;
 }
 function htmlFichaCliente(c) {
   if (!window.SunsuInline) return "";
@@ -8902,7 +8907,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-24-TK217"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-24-TK218"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -9105,7 +9110,7 @@ window.SunsuUpdate.init();
 <script src="mc-caja.js?v=20261120tk179"></script>
 <script src="mc-giftcards.js?v=20261120tk189"></script>
 <script src="mc-multas.js?v=20261120tk179"></script>
-<script src="mc-clientes.js?v=20261123tk216"></script>
+<script src="mc-clientes.js?v=20261124tk218"></script>
 <script src="mc-clientes-dup.js?v=20261120tk179"></script>
 <script src="mc-docpdf.js?v=20261120tk179"></script>
 <script src="mc-compras.js?v=20261120tk179"></script>
