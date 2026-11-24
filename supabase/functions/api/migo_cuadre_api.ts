@@ -143,6 +143,22 @@ function facturasDeFilas(rows: Row[]): FacturaVivo[] {
   return out;
 }
 
+function linkDesdeFila(p0: Row): LinkCuadre {
+  const facs = Array.isArray(p0.facturas) ? (p0.facturas as unknown[]).map((x) => s(x)).filter(Boolean) : [];
+  const tipo = s(p0.tipo);
+  const conf = s(p0.confianza);
+  const est = s(p0.estado);
+  return {
+    ticket_id: n(p0.ticket_id), factura: s(p0.factura),
+    tipo: (tipo === "manual" || tipo === "numero" || tipo === "nombre_fecha_monto" || tipo === "sku_fecha" || tipo === "sku_fecha_suma" || tipo === "facturas_suma" || tipo === "ventana_3d" ? tipo : "manual"),
+    confianza: (conf === "alta" || conf === "media" ? conf : "alta"),
+    diferencia_monto: n(p0.diferencia_monto), diferencia_fecha: n(p0.diferencia_fecha),
+    estado: (est === "cuadra" || est === "redondeo" || est === "diferencia" ? est : "diferencia"),
+    motivo: s(p0.motivo), cliente_migo: s(p0.cliente_migo), total_factura: n(p0.total_factura), total_tickets: n(p0.total_tickets),
+    ...(facs.length > 1 ? { facturas: facs } : {}),
+  };
+}
+
 async function guardarLinks(ctx: Ctx, actor: string, links: LinkCuadre[]): Promise<void> {
   const prev = await todas(ctx, "beta_cuadre_link");
   const packed = new Map<number, LinkCuadre>();
@@ -151,6 +167,13 @@ async function guardarLinks(ctx: Ctx, actor: string, links: LinkCuadre[]): Promi
     if (!cur) { packed.set(L.ticket_id, { ...L, facturas: L.facturas || [L.factura] }); continue; }
     const facs = [...new Set([...(cur.facturas || [cur.factura]), L.factura, ...(L.facturas || [])])];
     packed.set(L.ticket_id, { ...cur, facturas: facs, total_factura: L.total_factura || cur.total_factura, motivo: [cur.motivo, L.motivo].filter(Boolean).join("; ") });
+  }
+  // TK219: un vínculo manual (Alejandra/staff lo confirmó) no lo pisa ni lo borra el cruce automático.
+  for (const p0 of prev) {
+    if (s(p0.tipo) !== "manual") continue;
+    const id = n(p0.ticket_id);
+    if (!id) continue;
+    packed.set(id, linkDesdeFila(p0));
   }
   const nextIds = new Set(packed.keys());
   for (const p0 of prev) {

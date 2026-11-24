@@ -829,7 +829,7 @@
       (t.cancelado ? '<div class="mctk-canc"><b>🚫 Ticket cancelado</b>' + (t.cancelado.por ? " por " + e(t.cancelado.por) : "") + (t.cancelado.ts ? " · " + e(String(t.cancelado.ts).slice(0, 16).replace("T", " ")) : "") + (t.cancelado.motivo ? "<br>Motivo: " + e(t.cancelado.motivo) : "") + "<br><small>No suma en totales, comisiones ni dashboard. El stock de productos volvió a su bodega.</small></div>" : "") +
       flagsHtml() + faltaHtml() + voucherThumbsHtml() +
       (d.hidratando && !(K.L && K.L.length) ? '<p class="mctk-load" id="mctk-load">Cargando detalle…</p>' : "") +
-      '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">' + ((d.chips || []).some(function (c) { return c && (c.k === "sincobro" || c.k === "pagodirecto"); }) ? ((d.chips || []).some(function (c) { return c && c.k === "pagodirecto"; }) ? "Pago directo" : "No se factura (en $0)") : "Falta factura") + "</span>") + "</span>" + (facPdf ? ' <button type="button" class="btn ghost small" data-pv="' + e(facPdf.url) + '" data-pvn="' + e(facPdf.nombre || ("Factura " + fac)) + '">📄 Ver factura</button>' : "") + "</div></div>" + estadosHtml() + "</div>" +
+      '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">' + ((d.chips || []).some(function (c) { return c && (c.k === "sincobro" || c.k === "pagodirecto"); }) ? ((d.chips || []).some(function (c) { return c && c.k === "pagodirecto"; }) ? "Pago directo" : "No se factura (en $0)") : "Falta factura") + "</span>") + "</span>" + (facPdf ? ' <button type="button" class="btn ghost small" data-pv="' + e(facPdf.url) + '" data-pvn="' + e(facPdf.nombre || ("Factura " + fac)) + '">📄 Ver factura</button>' : "") + (d.soloLectura ? "" : ' <button type="button" class="btn ghost small" id="mctk-ligar-fac" title="' + (fac ? "Cambiar factura" : "Asociar factura") + '">' + (fac ? "Cambiar factura" : "Asociar factura") + "</button>") + "</div></div>" + estadosHtml() + "</div>" +
       '<details class="mctk-det"' + (esMovilTk() ? "" : " open") + '><summary>Detalles</summary><div class="mctk-grid"><dl>' + campo("nombre", "Nombre") + campo("apellido", "Apellido") + campo("cedula", "CI") + ((d.campos || []).some(function (c) { return c[0] === "email"; }) ? campo("email", "Email") + campo("telefono", "Teléfono") : "") + campo("cosmetologa", "Atendió") + campo("notas", "Notas") + campo("recomendaciones", "Recomendaciones") + "</dl>" +
       "<dl>" + ro("Fecha", e(fecha(inf.fecha, inf.hora))) + campo("local", "Local") + campo("cabina", "Cabina") + ro("Orden", e(inf.orden != null ? "#" + inf.orden : "")) + campo("retorno", "Fecha de regreso", { fmt: function (v) { return v ? fecha(v) : ""; } }) + campo("retornoTrat", "Tratamiento recomendado") + ro("Reagendada", e(reag)) +
       (d.clienteKey ? ro("Ficha", '<a href="#" id="mctk-ficha" class="mctk-link">Ver clienta</a>') : "") + "</dl></div></details>" +
@@ -1279,6 +1279,14 @@
     pintar();
   }
   function editarCampo(main, k) {
+    if (k === "factura") {
+      if (typeof window.SunsuLigarFactura === "function" && K.d && K.d.clave) {
+        window.SunsuLigarFactura(K.d.clave, function () {
+          return api("tk_get", { clave: K.d.clave }).then(function (nd) { if (nd && nd.ok) { cargarEstado(nd); repintar(main); } });
+        });
+      }
+      return;
+    }
     var dd = main.querySelector('[data-k="' + k + '"]'); if (!dd) return;
     var lbl = ((K.d.campos || []).find(function (c) { return c[0] === k; }) || [k, k])[1], v = val(k), largo = k === "notas" || k === "recomendaciones";
     var tipo = k === "retorno" ? "date" : k === "email" ? "email" : "text";
@@ -1393,6 +1401,8 @@
       window.MCMultas.aplicarDesdeTicket({ id: t.id, so: t.soNum || t.betaNum, cosmetologa: t.cosmetologa, fecha: t.fecha || inf.fecha, cliente: ((t.nombre || "") + " " + (t.apellido || "")).trim() }).catch(function (x) { toast2((x && x.message) || String(x), true); });
     });
     main.querySelectorAll("[data-ed]").forEach(function (b) { b.onclick = function () { editarCampo(main, b.getAttribute("data-ed")); }; b.onkeydown = function (ev) { if (ev.key === "Enter") { ev.preventDefault(); editarCampo(main, b.getAttribute("data-ed")); } }; });
+    var ligarBtn = main.querySelector("#mctk-ligar-fac");
+    if (ligarBtn) ligarBtn.onclick = function (ev) { ev.preventDefault(); ev.stopPropagation(); editarCampo(main, "factura"); };
     var cosmSel = main.querySelector("select.mctk-cosm");
     if (cosmSel) cosmSel.onchange = function () {
       var nv = cosmSel.value.trim(), cur = val("cosmetologa");
@@ -1681,4 +1691,103 @@
     });
   };
   window.api._migoWrap = true;
+})();
+
+/* TK219: diálogo para ligar o cambiar la factura Migo de un ticket. */
+(function () {
+  function esc(v) { return typeof window.esc === "function" ? window.esc(v) : String(v == null ? "" : v).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); }
+  function $m(v) { return "$" + (Number(v) || 0).toFixed(2); }
+  function toast2(msg, mal) { if (typeof toast === "function") { try { toast(msg, mal ? "#B86B6B" : undefined); return; } catch (x) {} } alert(msg); }
+  function okIcon(v) { return v ? '<span style="color:#2E8B57;font-weight:800">Sí</span>' : '<span style="color:#B91C1C;font-weight:800">No</span>'; }
+  function cerrar(box) { if (box && box.parentNode) box.parentNode.removeChild(box); }
+  function pintarPrev(body, prev, clave) {
+    if (!prev || prev.error) {
+      body.innerHTML = '<p class="err" style="margin:8px 0">' + esc((prev && prev.error) || "No pude buscar la factura") + "</p>";
+      return;
+    }
+    var c = prev.coinciden || {}, tk = prev.ticket || {}, avisos = prev.avisos || [];
+    var ligados = (prev.ligados || []).filter(function (x) { return !x.es_este; });
+    var h = "";
+    h += '<div style="font-size:.84rem;line-height:1.45">';
+    h += "<div><b>Factura " + esc(prev.factura) + "</b> · " + esc(prev.factura_fecha || "") + " · " + esc(prev.factura_cliente || "") + " · " + $m(prev.factura_total) + (prev.factura_forma ? " · " + esc(prev.factura_forma) : "") + "</div>";
+    if ((prev.lineas || []).length) {
+      h += '<ul style="margin:6px 0 8px 18px;padding:0">';
+      prev.lineas.forEach(function (l) {
+        h += "<li>" + esc(l.sku || "") + (l.nombre ? " · " + esc(l.nombre) : "") + " × " + esc(l.cantidad) + " · " + $m(l.total) + "</li>";
+      });
+      h += "</ul>";
+    }
+    h += '<div style="margin:8px 0 6px">Ticket <b>' + esc(tk.clave || clave) + "</b> · " + esc(tk.nombre || "") + " · " + esc(tk.fecha || "") + " · " + $m(tk.total) + (tk.factura_actual ? " · hoy: " + esc(tk.factura_actual) : "") + "</div>";
+    h += '<div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:.8rem;margin:8px 0">';
+    h += "<div>¿Misma clienta?</div><div>" + okIcon(c.clienta) + "</div>";
+    h += "<div>¿Mismo monto?</div><div>" + okIcon(c.monto_ticket) + (c.monto_suma && !c.monto_ticket ? " · la suma sí cuadra (" + $m(prev.suma) + ")" : "") + "</div>";
+    h += "<div>¿Fecha ±" + esc(prev.ventana_dias || 3) + " días?</div><div>" + okIcon(c.fecha) + "</div>";
+    h += "</div>";
+    if (ligados.length) {
+      h += '<div style="margin:6px 0;font-size:.8rem">Ya asociada a: ' + ligados.map(function (x) { return esc(x.clave) + " (" + esc(x.nombre) + ", " + $m(x.total) + ")"; }).join(" · ") + ". Suma: " + $m(prev.suma) + " " + (c.monto_suma ? "✓" : "≠ " + $m(prev.factura_total)) + "</div>";
+    }
+    if (avisos.length) {
+      h += '<ul style="margin:6px 0 8px 18px;padding:0;color:#8A6D1A;font-size:.8rem">' + avisos.map(function (a) { return "<li>" + esc(a) + "</li>"; }).join("") + "</ul>";
+    }
+    if (prev.ya_ligada) h += '<p style="color:#2E8B57;font-weight:700;margin:8px 0 0">Este ticket ya está asociado a esa factura.</p>';
+    h += "</div>";
+    body.innerHTML = h;
+    var actions = body.parentNode.querySelector(".mctk-ligar-acts");
+    if (actions) {
+      var conf = actions.querySelector("[data-conf]");
+      if (conf) {
+        conf.style.display = prev.puede_confirmar ? "" : "none";
+        conf.textContent = (prev.ticket && prev.ticket.factura_actual) ? "Cambiar factura" : "Asociar factura";
+      }
+    }
+  }
+  window.SunsuLigarFactura = function (clave, onDone) {
+    if (!clave) { toast2("No pude identificar el ticket", true); return; }
+    if (document.getElementById("mctk-ligar-box")) return;
+    var box = document.createElement("div");
+    box.id = "mctk-ligar-box";
+    box.style.cssText = "position:fixed;inset:0;background:rgba(30,36,50,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:12vh 12px 24px;overflow:auto";
+    box.innerHTML = '<div role="dialog" aria-label="Asociar o cambiar factura" style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:16px 16px 14px;box-shadow:0 12px 40px rgba(0,0,0,.18)">'
+      + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px"><b>Asociar factura</b><button type="button" class="btn ghost small" data-x>×</button></div>'
+      + '<p style="margin:0 0 8px;font-size:.8rem;color:var(--gray,#6b7280)">Escribe el número de la factura de Migo (ej. 3007 o 001-001-000003007). Te muestro si coincide antes de asociarla.</p>'
+      + '<div style="display:flex;gap:6px;margin-bottom:8px"><input id="mctk-ligar-fac-in" class="mctk-in" style="flex:1;padding:8px 10px;border:1.5px solid #EDE6D8;border-radius:8px" placeholder="001-001-000000000" inputmode="numeric"><button type="button" class="btn small" data-buscar>Buscar</button></div>'
+      + '<div data-prev></div>'
+      + '<div class="mctk-ligar-acts" style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button type="button" class="btn ghost small" data-x>Cancelar</button><button type="button" class="btn small" data-conf style="display:none">Asociar factura</button></div>'
+      + "</div>";
+    document.body.appendChild(box);
+    var inp = box.querySelector("#mctk-ligar-fac-in");
+    var prevBox = box.querySelector("[data-prev]");
+    var ultimo = null;
+    function buscar() {
+      var fac = (inp.value || "").trim();
+      if (!fac) { toast2("Escribe el número de factura", true); return; }
+      prevBox.innerHTML = '<p class="mccf-sub">Buscando…</p>';
+      Promise.resolve(window.api("tk_factura_buscar", { clave: clave, factura: fac })).then(function (r) {
+        ultimo = r;
+        pintarPrev(prevBox, r, clave);
+      }).catch(function (err) {
+        ultimo = { error: (err && err.message) || String(err) };
+        pintarPrev(prevBox, ultimo, clave);
+      });
+    }
+    box.addEventListener("click", function (ev) {
+      if (ev.target === box || ev.target.getAttribute("data-x") != null) { ev.preventDefault(); cerrar(box); }
+    });
+    box.querySelector("[data-buscar]").onclick = function (ev) { ev.preventDefault(); buscar(); };
+    inp.onkeydown = function (ev) { if (ev.key === "Enter") { ev.preventDefault(); buscar(); } if (ev.key === "Escape") cerrar(box); };
+    box.querySelector("[data-conf]").onclick = function (ev) {
+      ev.preventDefault();
+      if (!ultimo || !ultimo.puede_confirmar) return;
+      var btn = ev.currentTarget;
+      btn.disabled = true;
+      Promise.resolve(window.api("tk_factura_ligar", { clave: clave, factura: ultimo.factura, confirmar: true })).then(function (r) {
+        if (!r || r.error) { toast2((r && r.error) || "No se pudo asociar", true); btn.disabled = false; return; }
+        toast2(r.anterior ? "Factura cambiada a " + r.factura : "Factura " + r.factura + " asociada");
+        cerrar(box);
+        if (typeof onDone === "function") Promise.resolve(onDone(r));
+        else if (window.MCTickets && typeof window.MCTickets.reload === "function") window.MCTickets.reload();
+      }).catch(function (err) { toast2((err && err.message) || String(err), true); btn.disabled = false; });
+    };
+    setTimeout(function () { try { inp.focus(); } catch (x) {} }, 30);
+  };
 })();
