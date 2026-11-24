@@ -28,7 +28,7 @@ export const ADMIN = ["admin", "admin_master", "super_admin"];
 export const RECEP = ["admin", "admin_master", "super_admin", "gerente", "reception", "recepcion"];
 export const ALL_ROLES = [
   "super_admin", "admin", "admin_master", "gerente",
-  "recepcion", "reception", "cosmetologa", "asistente_cosmetologia", "staff",
+  "recepcion", "reception", "cosmetologa", "asistente_cosmetologia", "staff", "visor",
 ];
 export const PROD_COLS: { sku: string; col: string; typ: "numeric" | "text" }[] = [
   { sku: "HT-002", col: "ht_002", typ: "numeric" }, { sku: "HT-003", col: "ht_003", typ: "numeric" },
