@@ -23,11 +23,12 @@ import { FALTA_DESDE } from "./tickets_beta_api.ts";
 import { parseGcCanje } from "./ventas.ts";
 import { enriquecerItemsLista, totalValorTicket } from "./ticket_lista_card.ts";
 import { pendientesPorClave } from "./propuesta_edicion.ts";
+import { avisosDuplicado } from "./ticket_idempotencia.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 const addD = (ymd: string, d: number) => { const t = new Date(ymd + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + d); return t.toISOString().slice(0, 10); };
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
-const IDX = ["id", "sheet_row", "timestamp", "atendido_por", "estimado", "comp", "comprobante", "cob", "fac", "fac_7", "so_num", "beta_num", "nombre", "apellido", "id_3", "venta_gift", "paquete", "facial_hecho", "gift_card", "notas_generales"];
+const IDX = ["id", "sheet_row", "timestamp", "created_at", "origin", "atendido_por", "estimado", "comp", "comprobante", "cob", "fac", "fac_7", "so_num", "beta_num", "nombre", "apellido", "id_3", "venta_gift", "paquete", "facial_hecho", "servicios_adicionales", "compra_pack_3", "compra_pack_6", "gift_card", "notas_generales"];
 
 async function verTodos(ctx: Ctx, ses: Ses): Promise<boolean> {
   return esAdmin(ses.rol) || acceso(ses.rol, "tickets", await matrizDe(ctx.db)) === "todos";
@@ -290,6 +291,15 @@ extend("tk_historial", "any", async (p, ctx, ses) => {
   if (est && est !== "abierto" && est !== "pagado") borr = [];
   // TK94 (Emilia 18/11): los borradores Migo NO van en Tickets; viven en Ventas › Facturas borrador.
   await enriquecerItemsLista(ctx.db, filas, items, cabMap, { map, canje: canjeFacial });
+  const avisos = avisosDuplicado(L, {
+    claveDe: (r) => claveDe(r, leerSerie(r, "so_num")),
+    datosPorClave: cabMap,
+  });
+  for (const it of items) {
+    const k = s(it.so_num) || s(it.beta_num);
+    const av = (k && avisos.get(k)) || null;
+    if (av) it.posible_duplicado = av;
+  }
   // TK207: si el enriquecido trajo líneas, su suma manda (más fiel que el sintético). Nunca lo cobrado.
   for (const it of items) {
     let tot = n(it.total) > 0 || (Array.isArray(it.lineas) && (it.lineas as Row[]).length) ? n(it.total) : n(it.estimado);

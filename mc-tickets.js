@@ -245,6 +245,17 @@
     c = chipDe("estado") || C[0];
     return { t: c ? c.t : "", tone: "" };
   }
+  function dupBannerHtml() {
+    var d = K.d || {}, av = d.posible_duplicado;
+    if (!av || !(av.con || av.clave)) return "";
+    var con = av.con || av.clave, min = av.hace_min;
+    var h = '<div class="mctk-dup" style="background:#FFF4E0;border:1.5px solid #E0A93B;border-radius:10px;padding:8px 10px;margin:8px 0;font-size:.8rem;color:#8A5A16"><b>Posible duplicado</b> de <a href="#/m/tickets/t/' + encodeURIComponent(con) + '">' + e(con) + "</a>" + (min ? " (hace " + min + " min)" : "") + ".";
+    if (d.puedeCancelar && !d.soloLectura) {
+      h += ' <button type="button" class="btn ghost small" id="mctk-dup-cancel">Cancelar este</button>';
+      h += ' <button type="button" class="btn ghost small" id="mctk-dup-ok">Descartar aviso</button>';
+    }
+    return h + "</div>";
+  }
   function estadosHtml() {
     var pills = chipsHtml(), r, sum;
     if (!pills) return "";
@@ -352,7 +363,9 @@
       chips: chipsDesdeLista(t), documentos: [], faltan: (L.falta && L.falta.length) ? L.falta : [], flags: L.flag ? [{ id: "", motivo: L.flag }] : [], reagendada: { si: !!L.g, cita: "", fuente: "" },
       puedeEditar: !!(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master" || CU.role === "super_admin") && !t.anulado), puedePedir: !(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master" || CU.role === "super_admin")), puedeCancelar: !!(typeof CU !== "undefined" && CU && (CU.role === "admin" || CU.role === "admin_master" || CU.role === "super_admin") && !t.anulado),
       clienteKey: t.clienteKey || t.cliente_key || "",
-      pagosFaltan: (L && L.pagosFaltan) || []
+      pagosFaltan: (L && L.pagosFaltan) || [],
+      posible_duplicado: t.posible_duplicado || null,
+      soloLectura: !!(typeof CU !== "undefined" && CU && CU.role === "visor")
     };
   }
   function guardarVista(d) {
@@ -361,7 +374,7 @@
     window._tkVista[d.clave] = d;
     if (d.lineas && d.lineas.length) cacheLineasClave(d.clave, d.lineas);
     try {
-      var slim = { ok: d.ok, clave: d.clave, admin: d.admin, ticket: d.ticket, info: d.info, lineas: d.lineas, totales: d.totales, descuento: d.descuento, promo: d.promo, pagos: d.pagos, chips: d.chips, documentos: d.documentos, faltan: d.faltan, flags: d.flags, reagendada: d.reagendada, puedeEditar: d.puedeEditar, puedePedir: d.puedePedir, puedeCancelar: d.puedeCancelar, clienteKey: d.clienteKey, excluirCosmetologa: d.excluirCosmetologa, excluirNota: d.excluirNota, campos: d.campos, giftcards: d.giftcards, paquete: d.paquete, pagosFaltan: d.pagosFaltan, cuadre_lineas: d.cuadre_lineas, cuadre: d.cuadre, justificacion_descuento: d.justificacion_descuento, edicion: d.edicion };
+      var slim = { ok: d.ok, clave: d.clave, admin: d.admin, ticket: d.ticket, info: d.info, lineas: d.lineas, totales: d.totales, descuento: d.descuento, promo: d.promo, pagos: d.pagos, chips: d.chips, documentos: d.documentos, faltan: d.faltan, flags: d.flags, reagendada: d.reagendada, puedeEditar: d.puedeEditar, puedePedir: d.puedePedir, puedeCancelar: d.puedeCancelar, clienteKey: d.clienteKey, excluirCosmetologa: d.excluirCosmetologa, excluirNota: d.excluirNota, campos: d.campos, giftcards: d.giftcards, paquete: d.paquete, pagosFaltan: d.pagosFaltan, cuadre_lineas: d.cuadre_lineas, cuadre: d.cuadre, justificacion_descuento: d.justificacion_descuento, edicion: d.edicion, posible_duplicado: d.posible_duplicado, soloLectura: d.soloLectura };
       sessionStorage.setItem("sunsu.tk." + d.clave, JSON.stringify(slim));
     } catch (x) {}
   }
@@ -829,7 +842,7 @@
       (t.cancelado ? '<div class="mctk-canc"><b>🚫 Ticket cancelado</b>' + (t.cancelado.por ? " por " + e(t.cancelado.por) : "") + (t.cancelado.ts ? " · " + e(String(t.cancelado.ts).slice(0, 16).replace("T", " ")) : "") + (t.cancelado.motivo ? "<br>Motivo: " + e(t.cancelado.motivo) : "") + "<br><small>No suma en totales, comisiones ni dashboard. El stock de productos volvió a su bodega.</small></div>" : "") +
       flagsHtml() + faltaHtml() + voucherThumbsHtml() +
       (d.hidratando && !(K.L && K.L.length) ? '<p class="mctk-load" id="mctk-load">Cargando detalle…</p>' : "") +
-      '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">' + ((d.chips || []).some(function (c) { return c && (c.k === "sincobro" || c.k === "pagodirecto"); }) ? ((d.chips || []).some(function (c) { return c && c.k === "pagodirecto"; }) ? "Pago directo" : "No se factura (en $0)") : "Falta factura") + "</span>") + "</span>" + (facPdf ? ' <button type="button" class="btn ghost small" data-pv="' + e(facPdf.url) + '" data-pvn="' + e(facPdf.nombre || ("Factura " + fac)) + '">📄 Ver factura</button>' : "") + (d.soloLectura ? "" : ' <button type="button" class="btn ghost small" id="mctk-ligar-fac" title="' + (fac ? "Cambiar factura" : "Asociar factura") + '">' + (fac ? "Cambiar factura" : "Asociar factura") + "</button>") + "</div></div>" + estadosHtml() + "</div>" +
+      '<div class="mccf-card"><div class="mctk-top"><div><h1 class="mctk-num">' + e(num) + '</h1>' + ((d.info && (d.info.nombre || d.info.clienteCodigo)) ? '<div class="mctk-cli">' + e(((d.info.nombre || "") + " " + (d.info.apellido || "")).trim()) + (d.info.clienteCodigo ? ' · <a class="mctk-cod" href="#/m/clientes/c/' + encodeURIComponent(d.clienteKey || "") + '">' + e(d.info.clienteCodigo) + "</a>" : "") + "</div>" : "") + '<div class="mctk-fac" data-k="factura"><span' + ((d.puedeEditar || d.puedePedir) ? ' class="mctk-ed" data-ed="factura" tabindex="0" title="Clic para editar"' : "") + ">" + (fac ? "Factura " + e(fac) : '<span class="mccf-sub">' + ((d.chips || []).some(function (c) { return c && (c.k === "sincobro" || c.k === "pagodirecto"); }) ? ((d.chips || []).some(function (c) { return c && c.k === "pagodirecto"; }) ? "Pago directo" : "No se factura (en $0)") : "Falta factura") + "</span>") + "</span>" + (facPdf ? ' <button type="button" class="btn ghost small" data-pv="' + e(facPdf.url) + '" data-pvn="' + e(facPdf.nombre || ("Factura " + fac)) + '">📄 Ver factura</button>' : "") + (d.soloLectura ? "" : ' <button type="button" class="btn ghost small" id="mctk-ligar-fac" title="' + (fac ? "Cambiar factura" : "Asociar factura") + '">' + (fac ? "Cambiar factura" : "Asociar factura") + "</button>") + "</div></div>" + estadosHtml() + dupBannerHtml() + "</div>" +
       '<details class="mctk-det"' + (esMovilTk() ? "" : " open") + '><summary>Detalles</summary><div class="mctk-grid"><dl>' + campo("nombre", "Nombre") + campo("apellido", "Apellido") + campo("cedula", "CI") + ((d.campos || []).some(function (c) { return c[0] === "email"; }) ? campo("email", "Email") + campo("telefono", "Teléfono") : "") + campo("cosmetologa", "Atendió") + campo("notas", "Notas") + campo("recomendaciones", "Recomendaciones") + "</dl>" +
       "<dl>" + ro("Fecha", e(fecha(inf.fecha, inf.hora))) + campo("local", "Local") + campo("cabina", "Cabina") + ro("Orden", e(inf.orden != null ? "#" + inf.orden : "")) + campo("retorno", "Fecha de regreso", { fmt: function (v) { return v ? fecha(v) : ""; } }) + campo("retornoTrat", "Tratamiento recomendado") + ro("Reagendada", e(reag)) +
       (d.clienteKey ? ro("Ficha", '<a href="#" id="mctk-ficha" class="mctk-link">Ver clienta</a>') : "") + "</dl></div></details>" +
@@ -1395,6 +1408,23 @@
     on(main, "#mctk-print", "onclick", function () { document.body.classList.add("mctk-printing"); window.print(); setTimeout(function () { document.body.classList.remove("mctk-printing"); }, 500); });
     on(main, "#mctk-excl", "onclick", dlgExcluir);
     on(main, "#mctk-cancelar", "onclick", dlgCancelar);
+    on(main, "#mctk-dup-cancel", "onclick", function () {
+      var av = (K.d && K.d.posible_duplicado) || {}, inp;
+      dlgCancelar();
+      inp = document.getElementById("mctk-cm");
+      if (inp && !inp.value && (av.con || av.clave)) inp.value = "Ticket duplicado de " + (av.con || av.clave);
+    });
+    on(main, "#mctk-dup-ok", "onclick", async function () {
+      var d = K.d, av = (d && d.posible_duplicado) || {}, con = av.con || av.clave;
+      if (!con) return;
+      if (!confirm("¿Quitar el aviso de posible duplicado con " + con + "? El ticket no se cancela.")) return;
+      try {
+        var r = await api("tk_dup_descartar", { clave: d.clave, con: con });
+        if (!r || r.error) throw new Error((r && r.error) || "No se pudo descartar");
+        if (window.toast) toast("Aviso descartado", "var(--green)");
+        var nd = await api("tk_get", { clave: d.clave }); if (nd && nd.ok) { cargarEstado(nd); repintar(document.getElementById("main")); }
+      } catch (x) { toast2((x && x.message) || String(x), true); }
+    });
     on(main, "#mctk-solcancel", "onclick", function (ev) { cerrarMenuDe(ev && ev.target); dlgSolicitarEliminar(); });
     on(main, "#mctk-multa", "onclick", function () {
       var t = K.d.ticket, inf = K.d.info || {};
@@ -1681,14 +1711,22 @@
   var orig = window.api;
   if (typeof orig !== "function" || orig._migoWrap) return;
   window.api = function(accion, body){
-    return Promise.resolve(orig(accion, body)).then(function(r){
-      if (accion === "crearTicket" && r && r.requiere === "vincular_borrador" && r.borrador && !(body && (body.vincular_borrador || body.ignorar_borrador))) {
-        var b = r.borrador;
-        var ok = confirm("Ya hay un borrador de la factura " + (b.factura || "") + " (" + (b.cliente || "") + ", $" + Number(b.total || 0).toFixed(2) + ").\n\n¿Vincular el ticket a esa factura? El ticket sí se crea.");
-        return orig("crearTicket", Object.assign({}, body || {}, ok ? { vincular_borrador: b.factura } : { ignorar_borrador: true }));
+    function sigue(b, r){
+      if (accion === "crearTicket" && r && r.requiere === "vincular_borrador" && r.borrador && !(b && (b.vincular_borrador || b.ignorar_borrador))) {
+        var bor = r.borrador;
+        var ok = confirm("Ya hay un borrador de la factura " + (bor.factura || "") + " (" + (bor.cliente || "") + ", $" + Number(bor.total || 0).toFixed(2) + ").\n\n¿Vincular el ticket a esa factura? El ticket sí se crea.");
+        var b2 = Object.assign({}, b || {}, ok ? { vincular_borrador: bor.factura } : { ignorar_borrador: true });
+        return Promise.resolve(orig("crearTicket", b2)).then(function (r2) { return sigue(b2, r2); });
+      }
+      if (accion === "crearTicket" && r && r.requiere === "confirmar_duplicado" && !(b && (b.confirmar_duplicado || b.forzar_duplicado))) {
+        var msg = r.mensaje || ("Ya existe un ticket parecido de esta clienta hace " + (r.hace_min || "?") + " min, ¿crear igual?");
+        if (!confirm(msg)) return { ok: false, error: "No se creó el ticket: ya existía uno parecido" + (r.so_num || r.ticket ? " (" + (r.so_num || r.ticket) + ")" : "") + "." };
+        var b3 = Object.assign({}, b || {}, { confirmar_duplicado: true });
+        return Promise.resolve(orig("crearTicket", b3)).then(function (r2) { return sigue(b3, r2); });
       }
       return r;
-    });
+    }
+    return Promise.resolve(orig(accion, body)).then(function(r){ return sigue(body, r); });
   };
   window.api._migoWrap = true;
 })();
