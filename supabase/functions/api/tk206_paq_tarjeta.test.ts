@@ -26,7 +26,7 @@ describe("TK206 · tarjeta de paquete lee usado/fecha y u/f", () => {
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     const enSw = (sw.match(/const CACHE = "([^"]+)"/) || [])[1];
     assert.equal(enHtml, enSw);
-    assert.equal(enSw, "sunsu-2026-11-24-TK219");
+    assert.equal(enSw, "sunsu-2026-11-24-TK220");
   });
 });
 
@@ -57,6 +57,21 @@ describe("TK206 · no se crea un ticket gemelo en 2 minutos", () => {
     assert.equal(ticketRecienCreado([previo], base, tarde), null);
     const otro = ticketRecienCreado([previo], { ...base, facial: "SUNSU-42 Facial Peeling Marino de Perla" }, new Date("2026-11-21T23:07:18Z"));
     assert.equal(otro, null);
+  });
+  it("el caso de Nicole (2 min 9 s, mismo total e ítems) ya no se cuela", () => {
+    const a: Row = {
+      so_num: "TK-SO-1977", id_3: "1750000001", facial_hecho: "SUNSU-02 Facial Reparación", estimado: 75,
+      paquete: "", servicios_adicionales: "SUNSU-14 Ampolla Especial Hidratación",
+      atendido_por: "Evelyn Anabel Toapanta Quishpe", created_at: "2026-11-23T23:57:52.778Z",
+      nombre: "Nicole", apellido: "Luzuriaga",
+    };
+    const p: Row = {
+      cedula: "1750000001", facial: "SUNSU-02 Facial Reparación", estimado: 75,
+      colQ: "", extras: "SUNSU-14 Ampolla Especial Hidratación", productos: {},
+      cosmetologa: "Evelyn Anabel Toapanta Quishpe", nombre: "Nicole", apellido: "Luzuriaga",
+    };
+    const now = new Date("2026-11-24T00:00:01.624Z");
+    assert.ok(ticketRecienCreado([a], p, now));
   });
   it("el envío del ticket bloquea un segundo toque y muestra el duplicado", () => {
     const js = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");

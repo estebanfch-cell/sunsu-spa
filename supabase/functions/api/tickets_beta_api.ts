@@ -5,11 +5,11 @@ import { mapaAliases } from "./inventario_modelo.ts";
 // beta_ticket_lineas (0048): cantidad, precio unitario, descuento y total por línea; descuento del ticket
 // (% o $), promoción y exclusión de comisión. Admin edita directo; los demás piden el cambio (solicitudes).
 import { extend, registroDe } from "./handlers.ts";
-import { consultar, type Filtro } from "./query.ts";
+import { cedVariantes, consultar, type Filtro } from "./query.ts";
 import { leerFecha, FECHA_NO_ENTIENDO } from "./fecha_flexible.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, copiarAStorage, guardarArchivo, logAccion } from "./lib.ts";
-import { esAdmin, esSuperAdmin } from "./permisos.ts";
+import { esAdmin, esSuperAdmin, esVisor } from "./permisos.ts";
 import { b, colTicket, hmUtc, n, productQtys, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
 import { armarCatalogoTicket, preciosMigoDeTablas } from "./catalogo_ticket.ts";
 import { contactoParaMostrar } from "./clientes_contacto.ts";
@@ -28,6 +28,7 @@ import { listaProductos } from "./productos_api.ts";
 import { SOLICITUD_HOOKS, veTicket } from "./inline_api.ts";
 import { asegurarPaquetesVenta } from "./paquete_venta.ts";
 import { alertaCanje } from "./canje_linea.ts";
+import { avisosDuplicado } from "./ticket_idempotencia.ts";
 import { calcularTicket, claveDe, type LineaTk, type Promo } from "./ticket_beta.ts";
 import { cicloInicio, comisionFacialLinea, compraParaComision, marcaDePersona, pagaComisionFacial, toCosmMark } from "./domain.ts";
 import { canonStaff, esNombreAdmin, listaStaffActivo } from "./tickets_staff.ts";
@@ -362,7 +363,7 @@ export async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
     descuento: { tipo: s(cab?.descuento_tipo) || null, valor: n(cab?.descuento_valor) }, promo: promo ? promo.nombre : "",
     excluirCosmetologa: cab?.excluir_cosmetologa === true, excluirNota: s(cab?.excluir_nota), exclSistema,
     editado: !!cab, lineasBeta: cab?.lineas_beta === true, historial: Array.isArray(cab?.historial) ? cab!.historial : [],
-    documentos: [...docsDe(r), ...docsBeta(cab)], faltan: [...faltaDe(r, (cab?.datos || {}) as Row), ...(cab?.lineas_beta === true && ymdUtc(r.timestamp) >= FALTA_DESDE ? alertaCanje(r, calc.lineas as unknown as Row[], await paquetesDe(ctx.db, normCedula(s(r.id_3)), normNombre(s(r.nombre) + " " + s(r.apellido))).catch(() => []), !!parseGcCanje(r.gift_card) && !/^\s*SI\b/i.test(s(r.paquete))) : []), ...(avisoCobro ? [avisoCobro] : [])], promos, puedeEditar: admin && !anulado, puedeCancelar: admin && !anulado, puedePedir: !admin,
+    documentos: [...docsDe(r), ...docsBeta(cab)], faltan: [...faltaDe(r, (cab?.datos || {}) as Row), ...(cab?.lineas_beta === true && ymdUtc(r.timestamp) >= FALTA_DESDE ? alertaCanje(r, calc.lineas as unknown as Row[], await paquetesDe(ctx.db, normCedula(s(r.id_3)), normNombre(s(r.nombre) + " " + s(r.apellido))).catch(() => []), !!parseGcCanje(r.gift_card) && !/^\s*SI\b/i.test(s(r.paquete))) : []), ...(avisoCobro ? [avisoCobro] : [])], promos, puedeEditar: admin && !anulado, puedeCancelar: admin && !anulado, puedePedir: !admin && !esVisor(ses.rol), soloLectura: esVisor(ses.rol),
     productosSistema: productQtys(r).length,
     ...(await extrasTicket(ctx, ses, r, cab, calc.total)),
     ...(await cuadreVista(ctx, r, calc.lineas as unknown as Row[], cab)),
@@ -1021,8 +1022,27 @@ async function extrasTicket(ctx: Ctx, ses: Ses, r: Row, cab: Row | undefined, to
     // TK210: subido otro día que la atención (neutro; la comisión va al 50% si aplica).
     ...(orig.subido_tarde === true ? [{ k: "tarde", t: "Subido tarde", c: "neutro" }] : []),
   ];
+  let posible_duplicado: Row | undefined;
+  if (!anulado && s(r.origin) !== "sheet") {
+    try {
+      const cedVars = cedVariantes([r.id_3]);
+      const rec = cedVars.length
+        ? (await consultar(ctx.db, "tickets", { filtros: [{ col: "id_3", op: "in", val: cedVars.slice(0, 20) }], limite: 80, orden: [{ col: "id", dir: "desc" }] })).rows
+        : [r];
+      const cabMap = new Map((await todas(ctx, "beta_tickets")).map((c) => [s(c.clave), c]));
+      const avisos = avisosDuplicado(rec.some((x) => n(x.id) === n(r.id)) ? rec : rec.concat([r]), {
+        claveDe: (x) => claveDe(x, leerSerie(x, "so_num")),
+        datosPorClave: cabMap,
+      });
+      const av = avisos.get(clave) || avisos.get(s(r.so_num)) || avisos.get(s(r.beta_num));
+      if (av) {
+        posible_duplicado = av;
+        chips.push({ k: "dup", t: "Posible duplicado", c: "dup" });
+      }
+    } catch { /* el aviso no tumba el detalle */ }
+  }
   return { info, tiene_tel, falta_factura: faltaFac || undefined, pago_directo: pagoDir || undefined, campos: DATOS_TK.filter(([k]) => (k !== "telefono" || conTelefono(ses)) && (k !== "email" || conEmail(ses) || conTelefono(ses))), corregidos: Object.keys(d), pagos, pagosFaltan, giftcards, paquete, envios, flags, reagendada: reag, faseA: faseA(r), chips, clienteKey: claveCliente(r),
-    costosVisibles: admin };
+    costosVisibles: admin, ...(posible_duplicado ? { posible_duplicado } : {}) };
 }
 
 async function guardarDatos(ctx: Ctx, ses: Ses, r: Row, datos: Row, via: string): Promise<Row> {
