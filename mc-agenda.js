@@ -31,14 +31,36 @@
     var tip = tipoVisible(c.tipo_visible != null ? c.tipo_visible : c.tipo);
     return cal + (tip ? " · " + e(tip) : "");
   }
-  function abrirWaUrl(prep) {
-    if (window.MCWa && typeof window.MCWa.abrirUrl === "function") { window.MCWa.abrirUrl(prep); return; }
+  function reservarWa() {
+    if (window.SunsuWa && typeof window.SunsuWa.reservarVentana === "function") return window.SunsuWa.reservarVentana();
+    if (window.MCWa && typeof window.MCWa.reservarVentana === "function") return window.MCWa.reservarVentana();
+    try { return window.open("about:blank", "_blank"); } catch (eR) { return null; }
+  }
+  function abrirWaUrl(prep, vent) {
+    var fn = (window.SunsuWa && window.SunsuWa.abrirUrl) || (window.MCWa && window.MCWa.abrirUrl);
+    if (typeof fn === "function") { fn(prep, vent); return; }
     var mov = !!(window.matchMedia && window.matchMedia("(max-width: 860px)").matches) || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     var u = mov ? (prep.wa_url || "") : (prep.wa_url_web || prep.wa_url || "");
-    if (!u) return;
-    var v = window.open(u, "_blank");
-    if (!v) window.location.href = u;
-    if (v) setTimeout(function () { try { v.close(); } catch (e0) {} }, 2800);
+    if (!u) { if (vent) try { vent.close(); } catch (e0) {} return; }
+    if (window.SunsuWa && typeof window.SunsuWa.abrirEnlace === "function") { window.SunsuWa.abrirEnlace(u, vent); return; }
+    if (vent) {
+      try { vent.opener = null; } catch (e1) {}
+      try { vent.location = u; } catch (e2) { try { vent.location.href = u; } catch (e3) {} }
+      if (/^https:\/\/wa\.me\//.test(u)) setTimeout(function () { try { vent.close(); } catch (e4) {} }, 2800);
+      return;
+    }
+    var v = null;
+    try { v = window.open(u, "_blank"); } catch (e5) { v = null; }
+    if (v) {
+      try { v.opener = null; } catch (e6) {}
+      if (/^https:\/\/wa\.me\//.test(u)) setTimeout(function () { try { v.close(); } catch (e7) {} }, 2800);
+      return;
+    }
+    try {
+      var a = document.createElement("a");
+      a.href = u; a.target = "_blank"; a.rel = "noopener";
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (e8) {}
   }
   function horaEje(h) { var ap = h >= 12 ? "PM" : "AM", x = h % 12; if (!x) x = 12; return x + " " + ap; }
   function leerVista() {
@@ -385,11 +407,12 @@
       if ((t = ev.target.closest("[data-wa]"))) {
         ev.preventDefault(); ev.stopPropagation();
         var idWa = t.getAttribute("data-wa"), re = t.getAttribute("data-re") === "1"; if (t.disabled) return; t.disabled = true;
+        var vent = reservarWa();
         var rwa = await api("ag_wa", re ? { id: idWa, reconfirmar: true } : { id: idWa });
         t.disabled = false;
-        if (!rwa || rwa.error) { toast2((rwa && rwa.error) || "No se pudo armar el WhatsApp", true); return; }
-        if (!rwa.tiene_tel) { toast2("Esta cita no tiene teléfono registrado", true); return; }
-        abrirWaUrl(rwa);
+        if (!rwa || rwa.error) { if (vent) try { vent.close(); } catch (eW) {} toast2((rwa && rwa.error) || "No se pudo armar el WhatsApp", true); return; }
+        if (!rwa.tiene_tel) { if (vent) try { vent.close(); } catch (eT) {} toast2("Esta cita no tiene teléfono registrado", true); return; }
+        abrirWaUrl(rwa, vent);
         var cwa = cita(idWa); if (cwa) cwa.wa_enviado = true;
         toast2(re ? "WhatsApp de reconfirmación abierto" : "WhatsApp abierto. Cuando la clienta responda, toca «Confirmó».");
         var r9 = main.querySelector("#mcag-root"); if (r9) { r9.outerHTML = html(); wire(main); }

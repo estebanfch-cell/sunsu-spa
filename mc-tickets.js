@@ -1181,7 +1181,17 @@
   function msgT(clave, vars) { try { return typeof _msg === "function" ? _msg(clave, vars || {}) : ""; } catch (e3) { return ""; } }
   function abrirWa(tel, txt) {
     var enc = encodeURIComponent(txt || ""), u = typeof _waURL === "function" ? _waURL(tel, enc) : "https://wa.me/" + tel + "?text=" + enc;
-    var w = window.open(u, "_blank"); if (!w) location.href = u;
+    if (window.SunsuWa && typeof SunsuWa.abrirEnlace === "function") { SunsuWa.abrirEnlace(u); return; }
+    var w = null;
+    try { w = window.open(u, "_blank"); } catch (eW) { w = null; }
+    if (w) { try { w.opener = null; } catch (eO) {} }
+    else {
+      try {
+        var a = document.createElement("a");
+        a.href = u; a.target = "_blank"; a.rel = "noopener";
+        document.body.appendChild(a); a.click(); a.remove();
+      } catch (eA) {}
+    }
   }
   function entregarPdfs(docs) {
     docs = docs.filter(function (x) { return x && x.doc; }); if (!docs.length) return;
