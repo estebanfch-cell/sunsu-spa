@@ -6,6 +6,7 @@
   "use strict";
   function e(v) { return typeof esc === "function" ? esc(v) : String(v == null ? "" : v); }
   function adm() { return !!(state && state.admin); }
+  function esVisor() { return ((state && state.user && state.user.role) || "") === "visor"; }
   function ac(mod) { return typeof acceso === "function" ? acceso(mod) : "no"; }
   function ok(mod) {
     if (mod === "*") return true;
@@ -93,6 +94,10 @@
   // Lo propio de Sunsu (no está en MineCore): se conserva tal cual.
   function propios() {
     var out = [];
+    if (esVisor()) {
+      if (ok("agenda")) out.push({ id: "spa", label: "Spa", items: [["agenda", "📅 Agenda", "#/m/agenda"]] });
+      return out;
+    }
     var mia = typeof etiquetaMia === "function" ? etiquetaMia : function (x) { return x; };
     var personal = [];
     personal.push(["*", "Mis solicitudes", "#/m/solicitudes"]);
@@ -220,6 +225,7 @@
 
   // Botón «+»: los mismos de MineCore que pidió Emilia, sin rutas.
   function crearItems() {
+    if (esVisor()) return [];
     var puedeOc = adm() && ok("compras");
     // Emilia 17/11: accesos rápidos con emoji; el 5.º es 📦 Abrir producto (cabina/local).
     var abierta = (typeof reloj !== "undefined" && reloj && reloj.abierto);

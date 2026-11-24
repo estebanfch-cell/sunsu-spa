@@ -153,7 +153,7 @@
         if (F.visita === "180+" && !(d > 180 && d < 1e9)) return false; if (F.visita === "nunca" && c.visitas > 0) return false;
       }
       if (!q) return true;
-      var blob = norm((K.admin ? [c.codigo, c.nombre, c.cedula, c.telefono, c.sector] : [c.codigo, c.nombre]).join(" "));
+      var blob = norm((K.admin ? [c.codigo, c.nombre, c.cedula, c.telefono, c.sector] : [c.codigo, c.nombre, c.cedula]).join(" "));
       return q.split(/\s+/).every(function (w) { return blob.indexOf(w) >= 0 || blob.replace(/\D/g, "").indexOf(w.replace(/\D/g, "") || "~") >= 0; });
     });
     var k = K.sort || "nombre", dir = K.dir || 1;
@@ -168,6 +168,7 @@
     });
   }
   function cols() {
+    if (K.soloLectura) return [["nombre", "Clienta"], ["codigo", "Código"], ["cedula", "Identificación"]];
     var c = [["nombre", "Clienta"], ["codigo", "Código"], ["cedula", "Identificación"], ["visitas", "Visitas", 1], ["ultima", "Última visita"]];
     if (K.admin) c.push(["total", "Total gastado", 1]);
     if (K.admin && (K.L || []).some(function (x) { return "telefono" in x; })) c.push(["telefono", "Teléfono"]);
@@ -184,10 +185,10 @@
     var l2 = [];
     if (c.cedula) l2.push(e(c.cedula));
     if (K.admin && c.telefono) l2.push(e(c.telefono));
-    l2.push((Number(c.visitas) || 0) + " vis." + (c.ultima ? " · " + e(fCorta(c.ultima)) : ""));
+    if (!K.soloLectura) l2.push((Number(c.visitas) || 0) + " vis." + (c.ultima ? " · " + e(fCorta(c.ultima)) : ""));
     var l3 = [];
-    if (c.cosmetologa) l3.push('<span class="ss-ult">Últ.: ' + cosmPill(c.cosmetologa) + "</span>");
-    if (c.paquetesActivos > 0) l3.push('<span class="ss-pill">Paq. ' + e(c.paquetesActivos) + "</span>");
+    if (!K.soloLectura && c.cosmetologa) l3.push('<span class="ss-ult">Últ.: ' + cosmPill(c.cosmetologa) + "</span>");
+    if (!K.soloLectura && c.paquetesActivos > 0) l3.push('<span class="ss-pill">Paq. ' + e(c.paquetesActivos) + "</span>");
     if (K.admin && c.giftSaldo > 0) l3.push('<span class="ss-pill">GC ' + e($m(c.giftSaldo)) + "</span>");
     return '<div class="mob-card ss-card mccl-card" role="button" tabindex="0" data-k="' + e(c.key) + '">' +
       '<div class="mob-l1"><span class="mob-num">' + e(c.nombre || "Sin nombre") + (c.codigo ? ' <span class="ss-code">' + e(c.codigo) + "</span>" : "") + "</span>" +
@@ -217,16 +218,16 @@
   function htmlLista() {
     var F = K.f, o = function (v, t, sel) { return '<option value="' + e(v) + '"' + (v === sel ? " selected" : "") + ">" + e(t) + "</option>"; };
     var c = cuerpo();
-    var extra = '<select id="mccl-vis">' + o("", "Cualquier visita", F.visita) + o("30", "Vino en 30 días", F.visita) + o("90", "Vino en 90 días", F.visita) + o("365", "Vino en el año", F.visita) + o("180+", "No viene hace 6 meses", F.visita) + o("nunca", "Nunca vino", F.visita) + "</select>" +
+    var extra = K.soloLectura ? "" : ('<select id="mccl-vis">' + o("", "Cualquier visita", F.visita) + o("30", "Vino en 30 días", F.visita) + o("90", "Vino en 90 días", F.visita) + o("365", "Vino en el año", F.visita) + o("180+", "No viene hace 6 meses", F.visita) + o("nunca", "Nunca vino", F.visita) + "</select>" +
       '<label class="ss-chk ss-span2"><input type="checkbox" id="mccl-paq"' + (F.paq ? " checked" : "") + "> Con paquete activo</label>" +
       (K.admin ? '<label class="ss-chk ss-span2"><input type="checkbox" id="mccl-gift"' + (F.gift ? " checked" : "") + "> Con gift card con saldo</label>" : "") +
-      '<button class="btn ghost small ss-span2" type="button" id="mccl-limpiar">Limpiar</button>';
-    var nF = nFiltros();
-    var qph = K.admin ? "Buscar por código, nombre, cédula o teléfono" : "Buscar por nombre";
+      '<button class="btn ghost small ss-span2" type="button" id="mccl-limpiar">Limpiar</button>');
+    var nF = K.soloLectura ? 0 : nFiltros();
+    var qph = K.admin ? "Buscar por código, nombre, cédula o teléfono" : "Buscar por nombre o cédula";
     var menu = (K.admin ? '<select id="mccl-cosm">' + o("", "Todas las cosmetólogas", F.cosm) + (K.cosms || []).map(function (x) { return o(x, x, F.cosm); }).join("") + "</select>" +
       '<select id="mccl-sec">' + o("", "Todos los sectores", F.sector) + (K.secs || []).map(function (x) { return o(x, x, F.sector); }).join("") + "</select>" : "") + extra;
-    var filtros = '<div class="ss-filt mccl-filt"><button type="button" class="ss-filt-btn mccl-filt-btn' + (nF ? " on" : "") + '" id="mccl-filt-btn" aria-haspopup="true" aria-expanded="false">Filtros' + (nF ? '<span class="ss-badge" id="mccl-filt-n">' + nF + "</span>" : '<span class="ss-badge" id="mccl-filt-n" hidden></span>') + " ▾</button>" +
-      '<div class="ss-filt-menu mccl-filt-menu" id="mccl-filt-menu">' + menu + "</div></div>";
+    var filtros = K.soloLectura ? "" : ('<div class="ss-filt mccl-filt"><button type="button" class="ss-filt-btn mccl-filt-btn' + (nF ? " on" : "") + '" id="mccl-filt-btn" aria-haspopup="true" aria-expanded="false">Filtros' + (nF ? '<span class="ss-badge" id="mccl-filt-n">' + nF + "</span>" : '<span class="ss-badge" id="mccl-filt-n" hidden></span>') + " ▾</button>" +
+      '<div class="ss-filt-menu mccl-filt-menu" id="mccl-filt-menu">' + menu + "</div></div>');
     var micro = '<div class="ss-micro"><p class="mccf-sub" id="mccl-n">' + c.n + " clienta" + (c.n === 1 ? "" : "s") + (c.n > K.max ? " · mostrando " + K.max : "") + "</p>" +
       (K.admin ? '<button class="btn ghost small" type="button" data-go="#/m/clientes/docs">Docs sin asignar</button> <button class="btn ghost small" type="button" data-go="#/m/clientes/duplicados">Duplicados</button>' : "") + "</div>";
     return '<div id="mccl-root"><div class="ss-bar mccf-bar"><input type="search" id="mccl-q" placeholder="' + qph + '" value="' + e(K.q) + '" autocomplete="off">' + filtros + "</div>" +
@@ -237,7 +238,7 @@
   }
   async function renderLista() {
     css();
-    var poner = function (d) { K.L = d.clientes || []; K.admin = !!d.admin; K.puedeDescargar = !!d.puedeDescargar; K.cosms = d.cosmetologas || []; K.secs = d.sectores || []; if (!K.admin) { K.f.cosm = ""; K.f.sector = ""; } K.t = Date.now(); };
+    var poner = function (d) { K.L = d.clientes || []; K.admin = !!d.admin; K.soloLectura = !!d.soloLectura; K.puedeDescargar = !!d.puedeDescargar; K.cosms = d.cosmetologas || []; K.secs = d.sectores || []; if (!K.admin) { K.f.cosm = ""; K.f.sector = ""; } K.t = Date.now(); };
     if (!K.L) {
       var d = await api("cl_list", {});
       if (!d || d.error) return '<p class="err">' + e((d && d.error) || "No se pudo cargar") + "</p>";
@@ -409,7 +410,7 @@
   function norm(x) { return String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
   async function renderSinAsignar() {
     css();
-    if (!K.L) { var d = await api("cl_list", {}); if (d && !d.error) { K.L = d.clientes || []; K.admin = !!d.admin; K.puedeDescargar = !!d.puedeDescargar; K.cosms = d.cosmetologas || []; K.secs = d.sectores || []; if (!K.admin) { K.f.cosm = ""; K.f.sector = ""; } K.t = Date.now(); } }
+    if (!K.L) { var d = await api("cl_list", {}); if (d && !d.error) { K.L = d.clientes || []; K.admin = !!d.admin; K.soloLectura = !!d.soloLectura; K.puedeDescargar = !!d.puedeDescargar; K.cosms = d.cosmetologas || []; K.secs = d.sectores || []; if (!K.admin) { K.f.cosm = ""; K.f.sector = ""; } K.t = Date.now(); } }
     var r = await api("doc_sin_asignar", { q: SA.q, limit: 300 });
     if (!r || r.error) return '<p class="err">' + e((r && r.error) || "No se pudo cargar") + '</p><button class="btn ghost small" type="button" data-go="#/m/clientes">← Volver</button>';
     SA.items = r.items || [];
@@ -620,20 +621,21 @@
     return v.length ? '<div class="mccl-reg">' + v.map(function (c) { return "<div><b>" + e(lblE(c[1])) + ":</b> " + e(c[0] === "nacimiento" ? f(d.datos[c[0]]) : (c[0]==="tipoIdentificacion"&&window.SunsuIdent?window.SunsuIdent.etq(d.datos[c[0]]):d.datos[c[0]])) + (d.corregidos.indexOf(c[0]) >= 0 ? ' <span class="mccl-pend" title="Corregido">corregido</span>' : "") + "</div>"; }).join("") + "</div>" : '<p class="mccf-sub">Sin datos de registro.</p>';
   }
   function htmlFicha() {
-    var d = K.d, r = d.resumen, nombre = ((d.datos.nombres || "") + " " + (d.datos.apellido || "")).trim() || "Sin nombre";
+    var d = K.d, r = d.resumen || {}, nombre = ((d.datos.nombres || "") + " " + (d.datos.apellido || "")).trim() || "Sin nombre";
+    var solo = !!(d.soloLectura || (!d.puedeEditar && !d.puedePedir));
     var nDocs = docsPlanos(d).length;
-    var tabs = [["historial", "Historial (" + d.historial.length + ")"], ["paquetes", "Paquetes (" + d.paquetes.length + ")"], ["gift", "Gift cards (" + d.giftcards.length + ")"], ["docs", "Documentos (" + nDocs + ")"]];
-    if (d.bitacora.length) tabs.push(["bitacora", "Cambios"]);
+    var tabs = solo ? [] : [["historial", "Historial (" + (d.historial || []).length + ")"], ["paquetes", "Paquetes (" + (d.paquetes || []).length + ")"], ["gift", "Gift cards (" + (d.giftcards || []).length + ")"], ["docs", "Documentos (" + nDocs + ")"]];
+    if (!solo && d.bitacora && d.bitacora.length) tabs.push(["bitacora", "Cambios"]);
     return '<div id="mccl-root"><p><button class="btn ghost small" type="button" id="mccl-volver" data-go="#/m/clientes">← Volver a la lista</button></p>' +
       (d.borrado ? '<p class="err">Clienta eliminada' + (d.borradoMotivo ? ": " + e(d.borradoMotivo) : "") + "</p>" : "") +
-      '<div class="card"><div class="mccl-h"><div><h2>' + e(nombre) + '</h2><div class="mccl-meta"><span class="mccl-cod">' + e(d.codigo || "sin código") + "</span> · " + e((window.SunsuIdent&&d.datos.tipoIdentificacion)?window.SunsuIdent.etq(d.datos.tipoIdentificacion)+" ":"") + e(d.datos.cedula || "—") + (d.datos.telefono ? " · ☎ " + e(d.datos.telefono) : "") + (r.registros > 1 ? " · registrada " + r.registros + " veces (se muestra una vez)" : "") + "</div></div>" +
-      '<div class="mccl-acts"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button>' +
+      '<div class="card"><div class="mccl-h"><div><h2>' + e(nombre) + '</h2><div class="mccl-meta"><span class="mccl-cod">' + e(d.codigo || "sin código") + "</span> · " + e((window.SunsuIdent&&d.datos.tipoIdentificacion)?window.SunsuIdent.etq(d.datos.tipoIdentificacion)+" ":"") + e(d.datos.cedula || "—") + (!solo && d.datos.telefono ? " · ☎ " + e(d.datos.telefono) : "") + (r.registros > 1 ? " · registrada " + r.registros + " veces (se muestra una vez)" : "") + "</div></div>" +
+      (solo ? "" : '<div class="mccl-acts"><button class="btn small" type="button" data-go="#/doc/ov">Nuevo ticket</button>' +
       (d.borrado ? (d.puedeEditar ? '<button class="btn ghost small" type="button" id="mccl-rest">Restaurar</button>' : "") :
-        '<button class="btn ghost small mccl-del" type="button" id="mccl-del">' + (d.puedeEditar ? "Eliminar clienta" : "Solicitar eliminación") + "</button>") + "</div></div>" +
-      '<div class="mccl-kpis">' + (d.admin ? '<div class="mccl-kpi"><span>Total gastado</span><b>' + e($m(r.total)) + '</b></div><div class="mccl-kpi"><span>Ticket promedio</span><b>' + e($m(r.promedio)) + "</b></div>" : "") +
-      '<div class="mccl-kpi"><span>Tickets</span><b>' + e(r.tickets) + '</b></div><div class="mccl-kpi"><span>Última visita</span><b>' + e(f(r.ultima)) + '</b></div><div class="mccl-kpi"><span>Primera visita</span><b>' + e(f(r.primera)) + '</b></div><div class="mccl-kpi"><span>Sesiones por usar</span><b>' + e(r.sesionesPendientes) + "</b></div></div>" +
+        '<button class="btn ghost small mccl-del" type="button" id="mccl-del">' + (d.puedeEditar ? "Eliminar clienta" : "Solicitar eliminación") + "</button>") + "</div>") + "</div>" +
+      (solo ? "" : '<div class="mccl-kpis">' + (d.admin ? '<div class="mccl-kpi"><span>Total gastado</span><b>' + e($m(r.total)) + '</b></div><div class="mccl-kpi"><span>Ticket promedio</span><b>' + e($m(r.promedio)) + "</b></div>" : "") +
+      '<div class="mccl-kpi"><span>Tickets</span><b>' + e(r.tickets) + '</b></div><div class="mccl-kpi"><span>Última visita</span><b>' + e(f(r.ultima)) + '</b></div><div class="mccl-kpi"><span>Primera visita</span><b>' + e(f(r.primera)) + '</b></div><div class="mccl-kpi"><span>Sesiones por usar</span><b>' + e(r.sesionesPendientes) + "</b></div></div>") +
       '<div class="card-title" style="margin-top:4px">Datos de registro</div><div id="mccl-regbox">' + regHtml() + "</div></div>" +
-      '<div class="card"><div class="mccl-tabs">' + tabs.map(function (t) { return '<button type="button" data-tab="' + t[0] + '" class="' + (K.tab === t[0] ? "on" : "") + '">' + e(t[1]) + "</button>"; }).join("") + '</div><div id="mccl-tab">' + tabHtml() + "</div></div></div>";
+      (tabs.length ? '<div class="card"><div class="mccl-tabs">' + tabs.map(function (t) { return '<button type="button" data-tab="' + t[0] + '" class="' + (K.tab === t[0] ? "on" : "") + '">' + e(t[1]) + "</button>"; }).join("") + '</div><div id="mccl-tab">' + tabHtml() + "</div></div>" : "") + "</div>";
   }
   async function renderFicha(key) {
     css();
