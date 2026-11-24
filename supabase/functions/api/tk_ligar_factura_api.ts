@@ -75,7 +75,7 @@ async function puedeLigar(ctx: Ctx, ses: Ses, t: Row): Promise<{ error: string }
   const acc = acceso(ses.rol, "tickets", matriz);
   if (acc === "no") return { error: "No tienes permiso" };
   if (acc === "propio" && !esAdmin(ses.rol) && !esPropio(s(t.atendido_por) || s(t.cosmetologa), ses)) {
-    return { error: "Solo puedes ligar facturas de tus propios tickets" };
+    return { error: "Solo puedes asociar facturas de tus propios tickets" };
   }
   return null;
 }
@@ -160,10 +160,10 @@ async function preview(ctx: Ctx, ses: Ses, p: Row): Promise<Row> {
   if (Math.abs(dias) > VENTANA_DIAS) avisos.push("La fecha está fuera de la ventana de ±" + VENTANA_DIAS + " días (ticket " + (fechaTk || "s/f") + ", factura " + (fechaFac || "s/f") + ")");
   if (nom < 2) avisos.push("El nombre de la factura (" + s(src.cliente) + ") no coincide del todo con la clienta del ticket (" + (nombreTicket(t) || "s/n") + ")");
   if (!cerca(totTk, totFac)) avisos.push("El monto del ticket ($" + totTk.toFixed(2) + ") no es igual al de la factura ($" + totFac.toFixed(2) + ")");
-  if (otros.length && !cerca(suma, totFac)) avisos.push("La suma de este ticket y los ya ligados ($" + suma.toFixed(2) + ") no cuadra con la factura ($" + totFac.toFixed(2) + ")");
+  if (otros.length && !cerca(suma, totFac)) avisos.push("La suma de este ticket y los ya asociados ($" + suma.toFixed(2) + ") no cuadra con la factura ($" + totFac.toFixed(2) + ")");
   if (otros.length && cerca(suma, totFac)) avisos.push("Esta factura ya cubre " + otros.map((x) => s(x.clave)).join(" + ") + ". Si confirmas, se suma este ticket (total $" + suma.toFixed(2) + ")");
-  if (actual && actual !== fac) avisos.push("Este ticket hoy está ligado a " + actual + ". Si confirmas, se cambia por " + fac);
-  if (actual === fac) avisos.push("Este ticket ya está ligado a " + fac);
+  if (actual && actual !== fac) avisos.push("Este ticket hoy está asociado a " + actual + ". Si confirmas, se cambia por " + fac);
+  if (actual === fac) avisos.push("Este ticket ya está asociado a " + fac);
   const coinciden = {
     clienta: nom >= 2,
     monto_ticket: cerca(totTk, totFac),
@@ -200,8 +200,8 @@ function estadoLink(diff: number): LinkCuadre["estado"] {
 async function confirmar(ctx: Ctx, ses: Ses, p: Row): Promise<Row> {
   const prevw = await preview(ctx, ses, p);
   if (prevw.error) return prevw;
-  if (prevw.ya_ligada) return { ok: true, ya_ligada: true, factura: prevw.factura, ticket_clave: (prevw.ticket as Row).clave, mensaje: "Este ticket ya está ligado a " + prevw.factura };
-  if (!p.confirmar) return { error: "Confirma para ligar la factura" };
+  if (prevw.ya_ligada) return { ok: true, ya_ligada: true, factura: prevw.factura, ticket_clave: (prevw.ticket as Row).clave, mensaje: "Este ticket ya está asociado a " + prevw.factura };
+  if (!p.confirmar) return { error: "Confirma para asociar la factura" };
   const loaded = await cargarTicket(ctx, s(p.clave || p.ticket_clave || p.ticket_id));
   if ("error" in loaded) return loaded;
   const { t, cab } = loaded;
@@ -217,7 +217,7 @@ async function confirmar(ctx: Ctx, ses: Ses, p: Row): Promise<Row> {
   const dias = n(prevw.dias) || 0;
   const hist0 = Array.isArray(cab?.historial) ? [...(cab!.historial as Row[])] : [];
   hist0.push({
-    fecha: now, accion: anterior ? "cambiar factura" : "ligar factura",
+    fecha: now, accion: anterior ? "cambiar factura" : "asociar factura",
     detalle: (anterior ? anterior + " → " : "") + fac, actor, total: totTk,
   });
   const prevDatos = { ...((cab?.datos && typeof cab.datos === "object" ? cab.datos : {}) as Row) };
@@ -240,7 +240,7 @@ async function confirmar(ctx: Ctx, ses: Ses, p: Row): Promise<Row> {
     ticket_id: n(t.id), factura: fac, tipo: "manual", confianza: "alta",
     diferencia_monto: diff, diferencia_fecha: dias,
     estado: estadoLink(diff),
-    motivo: "Ligado a mano por " + actor + (anterior ? " (antes " + anterior + ")" : ""),
+    motivo: "Asociado a mano por " + actor + (anterior ? " (antes " + anterior + ")" : ""),
     cliente_migo: s(prevw.factura_cliente), total_factura: totFac, total_tickets: suma,
   };
   const prevLink = (await todas(ctx, "beta_cuadre_link")).find((L) => n(L.ticket_id) === n(t.id));
@@ -253,7 +253,7 @@ async function confirmar(ctx: Ctx, ses: Ses, p: Row): Promise<Row> {
   const detalle = clave + " · " + (anterior || "(sin factura)") + " → " + fac
     + " · " + s(prevw.factura_cliente) + " · $" + totFac.toFixed(2)
     + (n(prevw.suma) && !cerca(totTk, totFac) ? " · suma tickets $" + suma.toFixed(2) : "");
-  try { await logAccion(ctx.db, actor, "LIGAR FACTURA", detalle); } catch { /* log opcional */ }
+  try { await logAccion(ctx.db, actor, "ASOCIAR FACTURA", detalle); } catch { /* log opcional */ }
   return sinContacto({
     ok: true, ligado: true, factura: fac, ticket_clave: clave,
     anterior: anterior || null, avisos: prevw.avisos, coinciden: prevw.coinciden,

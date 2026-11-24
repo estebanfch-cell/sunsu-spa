@@ -80,7 +80,7 @@ function blobHasContacto(x: unknown): boolean {
   return /0999999999|0988888888|diana@example|1711111111|secreta/.test(JSON.stringify(x));
 }
 
-describe("TK219 ligar / cambiar factura", () => {
+describe("TK219 asociar / cambiar factura", () => {
   it("Alejandra busca una factura y ve si cuadra, sin datos de contacto", async () => {
     const { h } = semilla();
     const r = await h("rec", "tk_factura_buscar", { clave: "TK-SO-1975", factura: "3007" });
@@ -109,7 +109,7 @@ describe("TK219 ligar / cambiar factura", () => {
     assert.ok(String((r.avisos as string[]).join(" ")).includes("ya cubre") || String((r.avisos as string[]).join(" ")).includes("suma"));
   });
 
-  it("confirmar liga el ticket, deja bitácora con quién/cuándo/antes/después y el vínculo manual sobrevive al cuadre", async () => {
+  it("confirmar asocia el ticket, deja bitácora con quién/cuándo/antes/después y el vínculo manual sobrevive al cuadre", async () => {
     const { db, h } = semilla();
     const r = await h("rec", "tk_factura_ligar", { clave: "TK-SO-1975", factura: "3007", confirmar: true });
     assert.equal(r.ok, true, String(r.error));
@@ -124,7 +124,7 @@ describe("TK219 ligar / cambiar factura", () => {
     const L = db.tables.get("beta_cuadre_link")!.find((x) => x.ticket_id === 646275)!;
     assert.equal(L.factura, FAC);
     assert.equal(L.tipo, "manual");
-    const log = db.tables.get("log_acciones")!.filter((x) => String(x.accion).includes("LIGAR FACTURA"));
+    const log = db.tables.get("log_acciones")!.filter((x) => String(x.accion).includes("ASOCIAR FACTURA"));
     assert.ok(log.length >= 1, "debe quedar log_acciones");
     assert.match(String(log[0].detalle), /TK-SO-1975/);
     assert.match(String(log[0].detalle), /001-001-000003007/);
@@ -137,7 +137,7 @@ describe("TK219 ligar / cambiar factura", () => {
     assert.equal(L2!.tipo, "manual");
   });
 
-  it("se puede cambiar una factura ya ligada y el log guarda la anterior", async () => {
+  it("se puede cambiar una factura ya asociada y el log guarda la anterior", async () => {
     const { db, h } = semilla();
     const a = await h("rec", "tk_factura_ligar", { clave: "TK-SO-1977", factura: FAC, confirmar: true });
     assert.equal(a.ok, true, String(a.error));
@@ -147,20 +147,20 @@ describe("TK219 ligar / cambiar factura", () => {
     assert.equal(b.factura, FAC2);
     const cab = db.tables.get("beta_tickets")!.find((x) => x.clave === "TK-SO-1977")!;
     assert.equal((cab.datos as Row).factura, FAC2);
-    const log = db.tables.get("log_acciones")!.filter((x) => String(x.accion).includes("LIGAR FACTURA"));
+    const log = db.tables.get("log_acciones")!.filter((x) => String(x.accion).includes("ASOCIAR FACTURA"));
     assert.ok(log.some((x) => String(x.detalle).includes(FAC) && String(x.detalle).includes(FAC2)));
   });
 
-  it("el visor no puede buscar ni ligar", async () => {
+  it("el visor no puede buscar ni asociar", async () => {
     const { h } = semilla();
     const a = await h("vis", "tk_factura_buscar", { clave: "TK-SO-1975", factura: "3007" });
     assert.ok(a.error, "visor no busca");
     assert.match(String(a.error), /clientas y citas|permiso|visor/i);
     const b = await h("vis", "tk_factura_ligar", { clave: "TK-SO-1975", factura: "3007", confirmar: true });
-    assert.ok(b.error, "visor no liga");
+    assert.ok(b.error, "visor no asocia");
   });
 
-  it("una cosmetóloga no liga el ticket de otra", async () => {
+  it("una cosmetóloga no asocia el ticket de otra", async () => {
     const { h } = semilla();
     const r = await h("and", "tk_factura_ligar", { clave: "TK-SO-1977", factura: FAC2, confirmar: true });
     assert.ok(r.error);
@@ -184,7 +184,8 @@ describe("TK219 ligar / cambiar factura", () => {
     const sc = file("beta-screens.js");
     const sw = file("sw.js");
     const html = file("index.html");
-    assert.match(tk, /Ligar \/ cambiar factura/);
+    assert.match(tk, /Asociar factura/);
+    assert.match(tk, /Cambiar factura/);
     assert.match(tk, /tk_factura_buscar/);
     assert.match(tk, /tk_factura_ligar/);
     assert.match(tk, /SunsuLigarFactura/);
