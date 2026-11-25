@@ -17,6 +17,8 @@
   async function htmlPreRolResumen() {
     var r = await api("rol_prerol_resumen", {});
     if (!r || r.error) return "";
+    // Costo empresa y patronal: solo administración (la API los quita para quien no puede verlos).
+    var conCosto = !!(r.totales && r.totales.costoEmpresa != null);
     var filas = (r.filas || []).map(function (x) {
       if (x.error) return '<tr><td>' + esc(x.nombre) + '</td><td colspan="9" class="err">' + esc(x.error) + "</td></tr>";
       var desc = Number(x.anticipos || 0) + Number(x.prestamos || 0);
@@ -33,6 +35,7 @@
         + '<td class="num">' + (desc ? "$" + m2(desc) : "—") + "</td>"
         + '<td class="num">' + (x.multas ? "$" + m2(x.multas) : "—") + "</td>"
         + '<td class="num"><b>$' + m2(x.neto) + "</b></td>"
+        + (conCosto ? '<td class="num">$' + m2(x.patronal) + '</td><td class="num"><b>$' + m2(x.costoEmpresa) + "</b></td>" : "")
         + "<td>" + estadoRol(x.rol) + "</td>"
         + '<td class="acc"><button class="btn ghost small" type="button" data-prerol="' + esc(x.nombre) + '">Detalle</button>'
         + ((!x.rol || x.rol.estado !== "aprobado") ? '<button class="btn ghost small" type="button" data-prerol-crear="' + esc(x.nombre) + '" data-periodo="' + esc(r.periodo) + '">' + (x.rol ? "Recalcular borrador" : "Crear borrador") + "</button>" : "")
@@ -42,9 +45,10 @@
     var t = r.totales || {};
     return '<div class="card prerol-box"><div class="card-title">Pre-rol de ' + esc(r.etiqueta || "") + " al " + esc(fecha(r.hoy)) + "</div>"
       + '<div class="tools"><button class="btn small" type="button" data-desc-abrir="1">💵 Anticipos y préstamos</button>'
-      + '<button class="btn ghost small" type="button" data-rol-resumen-pdf="' + esc(r.periodo) + '">📄 Resumen PDF del mes</button></div>'
-      + '<div class="prerol-tabla-wrap"><table class="prerol-tabla"><thead><tr><th>Empleada</th><th>Días</th><th>Horas</th><th>Sueldo + bono</th><th>Comisiones</th><th>Horas extra</th><th>Décimos / fondo</th><th>Ingresos</th><th>IESS 9,45%</th><th>Anticipos / préstamos</th><th>Multas</th><th>Neto</th><th>Rol</th><th></th></tr></thead>'
-      + "<tbody>" + filas + '</tbody><tfoot><tr><td><b>Total</b></td><td></td><td></td><td></td><td class="num">$' + m2(t.comisiones) + '</td><td></td><td></td><td class="num">$' + m2(t.totalIngresos) + '</td><td class="num">$' + m2(t.iess) + '</td><td></td><td></td><td class="num"><b>$' + m2(t.neto) + "</b></td><td></td><td></td></tr></tfoot></table></div>"
+      + '<button class="btn ghost small" type="button" data-rol-resumen-pdf="' + esc(r.periodo) + '">📄 Resumen PDF del mes</button>'
+      + '<button class="btn ghost small" type="button" data-go="#/m/personal/config-rol">⚙️ Configuración de rol</button></div>'
+      + '<div class="prerol-tabla-wrap"><table class="prerol-tabla"><thead><tr><th>Empleada</th><th>Días</th><th>Horas</th><th>Sueldo + bono</th><th>Comisiones</th><th>Horas extra</th><th>Décimos / fondo</th><th>Ingresos</th><th>IESS 9,45%</th><th>Anticipos / préstamos</th><th>Multas</th><th>Neto</th>' + (conCosto ? '<th>Patronal</th><th>Costo empresa</th>' : "") + '<th>Rol</th><th></th></tr></thead>'
+      + "<tbody>" + filas + '</tbody><tfoot><tr><td><b>Total</b></td><td></td><td></td><td></td><td class="num">$' + m2(t.comisiones) + '</td><td></td><td></td><td class="num">$' + m2(t.totalIngresos) + '</td><td class="num">$' + m2(t.iess) + '</td><td></td><td></td><td class="num"><b>$' + m2(t.neto) + "</b></td>" + (conCosto ? '<td class="num">$' + m2(t.patronal) + '</td><td class="num"><b>$' + m2(t.costoEmpresa) + "</b></td>" : "") + "<td></td><td></td></tr></tfoot></table></div>"
       + '<div id="desc-panel"></div><div id="prerol-detalle"></div>'
       + '<p class="note">' + esc(r.nota || "") + "</p></div>";
   }
@@ -150,24 +154,24 @@
       doc.text("SUNSU SPA - ROLES DE PAGO - " + String(r.etiqueta || periodo).toUpperCase(), x0, y); y += 18;
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor("#4A5568");
       doc.text("Generado el " + new Date().toLocaleString("es-EC", { timeZone: "America/Guayaquil" }) + " (hora de Ecuador)", x0, y); y += 22;
-      var cols = [["Empleada", 150], ["Cargo", 100], ["Estado", 70], ["Ingresos", 75], ["IESS 9,45%", 70], ["Descuentos", 75], ["Neto", 75], ["Aporte patronal", 85], ["Firma", 62]];
+      var cols = [["Empleada", 120], ["Cargo", 85], ["Estado", 62], ["Ingresos", 68], ["IESS 9,45%", 64], ["Descuentos", 68], ["Neto", 68], ["Aporte patronal", 72], ["Costo empresa", 78], ["Firma", 56]];
       var fila = function (vals, bold) {
         var x = x0; doc.setFont("helvetica", bold ? "bold" : "normal");
-        vals.forEach(function (v, i) { var w = cols[i][1]; var num = i >= 3 && i <= 7; doc.text(String(v), num ? x + w - 6 : x, y, num ? { align: "right" } : undefined); x += w; });
+        vals.forEach(function (v, i) { var w = cols[i][1]; var num = i >= 3 && i <= 8; doc.text(String(v), num ? x + w - 6 : x, y, num ? { align: "right" } : undefined); x += w; });
         y += 16;
       };
       doc.setFontSize(9); fila(cols.map(function (c) { return c[0]; }), true);
       doc.setDrawColor(196, 148, 58); doc.line(x0, y - 11, W - 40, y - 11);
-      var tot = { i: 0, s: 0, e: 0, n: 0, p: 0 };
+      var tot = { i: 0, s: 0, e: 0, n: 0, p: 0, c: 0 };
       r.items.forEach(function (it) {
         if (y > 540) { doc.addPage(); y = 50; }
-        fila([it.persona, it.cargo || "", it.estado, "$" + m2(it.totalIngresos), "$" + m2(it.iess), "$" + m2(it.totalEgresos), "$" + m2(it.neto), "$" + m2(it.aportePatronal), it.firma ? "Firmado" : (it.estado === "aprobado" ? "Pendiente" : "—")]);
-        tot.i += it.totalIngresos; tot.s += it.iess; tot.e += it.totalEgresos; tot.n += it.neto; tot.p += it.aportePatronal;
+        fila([it.persona, it.cargo || "", it.estado, "$" + m2(it.totalIngresos), "$" + m2(it.iess), "$" + m2(it.totalEgresos), "$" + m2(it.neto), "$" + m2(it.aportePatronal), "$" + m2(it.costoEmpresa), it.firma ? "Firmado" : (it.estado === "aprobado" ? "Pendiente" : "—")]);
+        tot.i += it.totalIngresos; tot.s += it.iess; tot.e += it.totalEgresos; tot.n += it.neto; tot.p += it.aportePatronal; tot.c += it.costoEmpresa;
       });
       doc.line(x0, y - 11, W - 40, y - 11);
-      fila(["TOTAL", "", "", "$" + m2(tot.i), "$" + m2(tot.s), "$" + m2(tot.e), "$" + m2(tot.n), "$" + m2(tot.p), ""], true);
+      fila(["TOTAL", "", "", "$" + m2(tot.i), "$" + m2(tot.s), "$" + m2(tot.e), "$" + m2(tot.n), "$" + m2(tot.p), "$" + m2(tot.c), ""], true);
       y += 10; doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-      doc.text("Descuentos = aporte IESS personal + anticipos + cuotas de préstamos + préstamos IESS + multas. El rol individual de cada empleada (con su firma) se descarga desde su rol.", x0, y);
+      doc.text("Costo empresa = ingresos (con décimos y fondo) + aporte patronal. Descuentos = aporte IESS personal + anticipos + cuotas de préstamos + préstamos IESS + multas. El rol individual de cada empleada (con su firma) se descarga desde su rol.", x0, y);
       if (typeof _entregarPDF === "function") _entregarPDF(doc, "ROLES " + String(r.etiqueta || periodo).toUpperCase() + " resumen.pdf");
       else doc.save("roles-resumen.pdf");
       toast("📄 Resumen listo");
@@ -229,5 +233,74 @@
     };
   }
 
-  window.SunsuRol = { htmlPreRolResumen: htmlPreRolResumen, abrirDesc: abrirDesc, wireDesc: wireDesc, resumenPdf: resumenPdf, htmlFirma: htmlFirma, wireFirma: wireFirma };
+
+  // ── Configuración de rol (solo administración) ─────────────────────────────────────────────────────────
+  function cfgCard(c, nueva) {
+    var k = esc(c.persona);
+    return '<div class="card cfgrol-card" data-cfgrol="' + k + '"' + (nueva ? ' data-cfgrol-nueva="1"' : "") + '>'
+      + '<div class="card-title">' + esc(c.persona) + (c.nombreCompleto ? ' <span class="note">' + esc(c.nombreCompleto) + "</span>" : "")
+      + (nueva ? ' <span class="rol-pill borrador">Sin configurar</span>' : "") + "</div>"
+      + '<p class="note">' + esc(c.cargo || "") + (c.cedula ? " · C.I. " + esc(c.cedula) : "") + "</p>"
+      + '<div class="cfgrol-form">'
+      + '<label>Sueldo base $ <input data-f="sueldoBase" inputmode="decimal" value="' + esc(m2(c.sueldoBase)) + '"></label>'
+      + '<label>Bono fijo $ <input data-f="bono" inputmode="decimal" value="' + esc(m2(c.bono)) + '"></label>'
+      + '<label>Afiliada al IESS <select data-f="afiliada"><option value="si"' + (c.afiliada !== false ? " selected" : "") + '>Sí</option><option value="no"' + (c.afiliada === false ? " selected" : "") + ">No (factura sus servicios)</option></select></label>"
+      + '<label>Fecha de ingreso <input data-f="fechaIngreso" type="date" value="' + esc(c.fechaIngreso || "") + '"></label>'
+      + '<label>Cargo <input data-f="cargo" value="' + esc(c.cargo || "") + '"></label>'
+      + '<label>Nota <input data-f="notas" maxlength="400" value="' + esc(c.notas || "") + '"></label>'
+      + '<label>Motivo del cambio (opcional) <input data-f="motivo" maxlength="300"></label>'
+      + "</div>"
+      + '<p class="note">Décimos 13º y 14º: mensualizados. Fondo de reserva (8,33 %): mensualizado, ' + esc(c.fondoEstado ? c.fondoEstado.charAt(0).toLowerCase() + c.fondoEstado.slice(1) : "desde que cumple 1 año") + ". El mes en que cumple el año se prorratea por días.</p>"
+      + '<div class="tools"><button class="btn small" type="button" data-cfgrol-guardar="' + k + '">Guardar</button>'
+      + (nueva ? "" : '<button class="btn ghost small" type="button" data-cfgrol-activa="' + k + '" data-activa="0">Marcar inactiva</button>') + '</div>'
+      + '<p class="err" data-cfgrol-err></p></div>';
+  }
+  async function htmlConfigRol() {
+    var d = await api("rolcfg_lista", {});
+    if (!d || d.error) return '<p class="err">' + esc((d && d.error) || "No se pudo cargar") + "</p>";
+    var activas = (d.items || []).map(function (c) { return cfgCard(c, false); }).join("");
+    var nuevas = (d.sinConfig || []).map(function (c) { return cfgCard(Object.assign({ afiliada: true, fondoEstado: "" }, c), true); }).join("");
+    var inact = (d.inactivas || []).map(function (c) {
+      return '<div class="note" data-cfgrol="' + esc(c.persona) + '"><b>' + esc(c.persona) + "</b> · inactiva (sus datos se conservan, no sale en roles ni pre-rol) "
+        + '<button class="btn ghost small" type="button" data-cfgrol-activa="' + esc(c.persona) + '" data-activa="1">Reactivar</button></div>';
+    }).join("");
+    var log = (d.log || []).map(function (l) {
+      return '<div class="note">' + esc(typeof horaEc === "function" ? horaEc(l.fecha) : l.fecha) + " · " + esc(l.actor) + " · <b>" + esc(l.persona) + "</b> · " + esc(l.accion) + (l.motivo ? " · " + esc(l.motivo) : "") + "</div>";
+    }).join("") || '<p class="note">Todavía no hay cambios.</p>';
+    return '<h1>Configuración de rol</h1><p class="note">Datos base de cada empleada para el rol de pagos. Solo administración. Cada cambio queda en el historial (quién, antes y después). Emi y EFCH son administradoras: no aparecen aquí.</p>'
+      + (activas || '<p class="note">Todavía no hay empleadas configuradas.</p>') + nuevas
+      + (inact ? '<details class="card"><summary>Inactivas</summary>' + inact + "</details>" : "")
+      + '<details class="card"><summary>Historial de cambios</summary>' + log + "</details>";
+  }
+  function wireConfig(main) {
+    if (main._cfgWired) return;
+    var hay = main.querySelector("[data-cfgrol]");
+    if (!hay) return;
+    main._cfgWired = true;
+    main.addEventListener("click", async function (ev) {
+      var g = ev.target.closest("[data-cfgrol-guardar],[data-cfgrol-activa]");
+      if (!g) return;
+      var persona = g.getAttribute("data-cfgrol-guardar") || g.getAttribute("data-cfgrol-activa");
+      var card = g.closest("[data-cfgrol]");
+      var val = function (f) { var e = card.querySelector('[data-f="' + f + '"]'); return e ? e.value : ""; };
+      var body;
+      if (g.hasAttribute("data-cfgrol-activa")) {
+        var a = await api("rolcfg_lista", {});
+        var prev = ((a.items || []).concat(a.inactivas || [])).find(function (x) { return x.persona === persona; }) || {};
+        var activa = g.getAttribute("data-activa") === "1";
+        if (!activa && !window.confirm("¿Marcar a " + persona + " como inactiva? Ya no saldrá en roles ni en el pre-rol. Sus datos se conservan.")) return;
+        body = { persona: persona, sueldoBase: prev.sueldoBase, bono: prev.bono, afiliada: prev.afiliada !== false ? "si" : "no", fechaIngreso: prev.fechaIngreso, cargo: prev.cargo, notas: prev.notas, activa: activa, motivo: activa ? "Reactivada" : "Marcada inactiva" };
+      } else {
+        body = { persona: persona, sueldoBase: Number(String(val("sueldoBase")).replace(",", ".")), bono: Number(String(val("bono")).replace(",", ".")), afiliada: val("afiliada"), fechaIngreso: val("fechaIngreso"), cargo: val("cargo"), notas: val("notas"), motivo: val("motivo"), activa: true };
+      }
+      var err = card.querySelector("[data-cfgrol-err]");
+      if (err) err.textContent = "";
+      var r = await api("rolcfg_guardar", body);
+      if (!r || r.error) { if (err) err.textContent = (r && r.error) || "No se pudo guardar"; else toast((r && r.error) || "No se pudo guardar"); return; }
+      toast(r.sinCambios ? "Sin cambios" : "Configuración guardada");
+      if (typeof draw === "function") await draw();
+    });
+  }
+
+  window.SunsuRol = { htmlConfigRol: htmlConfigRol, wireConfig: wireConfig, htmlPreRolResumen: htmlPreRolResumen, abrirDesc: abrirDesc, wireDesc: wireDesc, resumenPdf: resumenPdf, htmlFirma: htmlFirma, wireFirma: wireFirma };
 })();

@@ -4,6 +4,7 @@ import "./handlers_extra.ts";
 import "./roles_api.ts";
 import "./roles_crear_api.ts";
 import "./rol_descuentos_api.ts";
+import "./rol_config_api.ts";
 import "./jibble_importar.ts";
 import "./empleados_api.ts";
 import "./erp_api.ts";

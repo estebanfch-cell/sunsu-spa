@@ -1303,12 +1303,26 @@ export type RolOficialOut = {
   prestOtro: number; multas: number; egresos: number; totalEgresos: number; totalRecibir: number;
   iessPatronal: number; secap: number; iece: number; aportePatronal: number; aportePatronalPct: number;
   costoEmpresa: number;
+  fondoFactor: number; fondoDesde: string;
 };
 
 /**
  * Motor del rol mensual RRHH (pestaña MES_AÑO). No usa rolCalcular del beta:
  * sueldo con divisor 30, extras con FLOOR, fondo = A×0.0833, sin vacaciones mensualizadas.
  */
+/** Fondo de reserva de un mes: 0 antes del año de servicio, 1 con el año cumplido, fracción en el mes del aniversario. */
+export function fondoFactorMes(fechaIngreso: string, anio: number, mes: number): { factor: number; desde: string } {
+  const m = String(fechaIngreso || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return { factor: 0, desde: "" };
+  const aniv = new Date(Date.UTC(Number(m[1]) + 1, Number(m[2]) - 1, Number(m[3])));
+  const desde = aniv.toISOString().slice(0, 10);
+  const ini = Date.UTC(anio, mes - 1, 1), fin = Date.UTC(anio, mes, 0);
+  if (aniv.getTime() > fin) return { factor: 0, desde };
+  if (aniv.getTime() <= ini) return { factor: 1, desde };
+  const dia = Math.min(30, aniv.getUTCDate());
+  return { factor: Math.round(((30 - dia + 1) / 30) * 1e6) / 1e6, desde };
+}
+
 export function rolCalcularOficial(input: RolOficialIn): RolOficialOut {
   const sueldoBase = Number(input.sueldoBase) || 0;
   const faltas = Math.max(0, Number(input.faltas) || 0);
@@ -1330,14 +1344,15 @@ export function rolCalcularOficial(input: RolOficialIn): RolOficialOut {
   const A = sueldo + bono + comFacialesExtrasRecep + comPaquetes + comProductos + valSupl + valExtr + valDesc;
   const dec13 = A / 12;
   const dec14 = SBU_ROL / 12;
-  let fondoOk = !!input.fondoReserva;
-  if (fondoOk && input.fechaIngreso && input.anio && input.mes) {
-    const fin = new Date(Date.UTC(input.anio, input.mes, 0));
-    const ing = new Date(input.fechaIngreso);
-    const dias = (fin.getTime() - ing.getTime()) / 86400000;
-    fondoOk = dias >= 365;
+  // DEV-31b (Emilia t907u): el fondo corre desde que cumple 1 año de la fecha de ingreso (aniversario inclusive).
+  // El mes del aniversario se prorratea por días comerciales (30): días desde el aniversario hasta fin de mes ÷ 30.
+  let fondoFactor = input.fondoReserva ? 1 : 0;
+  let fondoDesde = "";
+  if (fondoFactor && input.fechaIngreso && input.anio && input.mes) {
+    const f = fondoFactorMes(input.fechaIngreso, input.anio, input.mes);
+    fondoFactor = f.factor; fondoDesde = f.desde;
   }
-  const fondoCalc = fondoOk ? A * FONDO_RESERVA_PCT : 0;
+  const fondoCalc = A * FONDO_RESERVA_PCT * fondoFactor;
   // Mensualizado (por defecto, Art. 111/113 CT) se paga en el rol; acumulado se provisiona y no suma.
   const dec13Mensual = input.dec13Mensual !== false, dec14Mensual = input.dec14Mensual !== false, fondoMensual = input.fondoMensual !== false;
   const dec13Pago = dec13Mensual ? dec13 : 0, dec14Pago = dec14Mensual ? dec14 : 0;
@@ -1366,6 +1381,7 @@ export function rolCalcularOficial(input: RolOficialIn): RolOficialOut {
     totalIngresos, iess, anticipo, prestHip, prestQuir, prestOtro, multas, egresos, totalEgresos, totalRecibir,
     iessPatronal, secap, iece, aportePatronal, aportePatronalPct: 0.1215,
     costoEmpresa: round2(totalIngresos + aportePatronal),
+    fondoFactor, fondoDesde,
   };
 }
 

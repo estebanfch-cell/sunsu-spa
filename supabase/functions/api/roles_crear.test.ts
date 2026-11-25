@@ -23,7 +23,7 @@ function seed() {
     "app_modulos", "beta_empleados", "beta_iess_descuentos", "beta_empleado_docs", "beta_rol_publicaciones",
     "beta_roles", "beta_roles_log", "beta_multas", "log_acciones", "pago_config", "tickets", "catalogo",
     "cosmetologas", "multas_descuentos", "horarios", "horario_dias", "horario_asignaciones",
-    "asistencia_marcajes", "asistencia_feriados", "jibble_historial", "permisos", "app_kv",
+    "asistencia_marcajes", "asistencia_feriados", "asistencia_historico", "permisos", "app_kv",
   ]) db.tables.set(t, []);
   db.tables.set("rrhh_empleadas", [
     { nombre_app: "Andrea Robles", apellidos_y_nombres: "ROBLES ANDREA", cargo: "COSMETOLOGA", fecha_ingreso: "2025-05-01", sueldo_base: 482, bono_fijo: 130, fondo_reserva: "SI", nombre_jibble: "Andrea", cedula: "1711" },

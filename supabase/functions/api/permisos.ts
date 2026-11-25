@@ -348,6 +348,19 @@ function quitarContacto(v: unknown, tel: boolean, mail: boolean): unknown {
   return o;
 }
 
+/** DEV-31b (Emilia t907u): el aporte patronal y el costo empresa los ve solo administración. */
+const PATRONAL = new Set(["aportespatronal", "aportepatronal", "aportepatronalpct", "iesspatronal", "iess_patronal_11_15", "secap", "iece", "costoempresa", "costo_empresa", "costototalempresa"]);
+function quitarPatronal(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map((x) => quitarPatronal(x));
+  if (!v || typeof v !== "object") return v;
+  const o: Row = {};
+  for (const [k, val] of Object.entries(v as Row)) {
+    if (PATRONAL.has(k.toLowerCase().replace(/[\s-]+/g, "_"))) continue;
+    o[k] = quitarPatronal(val);
+  }
+  return o;
+}
+
 function quitarCostos(v: unknown, puede: boolean, action = ""): unknown {
   if (puede || v == null) return v;
   if (Array.isArray(v)) return v.map((x) => quitarCostos(x, false, action));
@@ -380,13 +393,14 @@ function quitarContactoVisor(v: unknown): unknown {
 
 export function redactar(action: string, data: unknown, ses: SesLite | null, matriz: Record<string, Partial<Record<string, Acceso>>> = DEFAULT_MATRIZ): unknown {
   const puedeCostos = !!(ses && esSuperAdmin(ses.rol));
-  if (!ses) return quitarCostos(structuredClone(data), false, action);
+  if (!ses) return quitarPatronal(quitarCostos(structuredClone(data), false, action));
   if (!esAdmin(ses.rol) && action === "getRolIndividual" && data && typeof data === "object") {
     const nombre = String(((data as Row).data as Row | undefined)?.nombre || (data as Row).nombre || "");
     if (nombre && !esPropio(nombre, ses)) return { error: "No tienes permiso para ver el rol de otra persona" };
   }
   let out = quitarCostos(structuredClone(data), puedeCostos, action);
   if (esAdmin(ses.rol)) return out;
+  out = quitarPatronal(out);
   // TK216: el visor nunca ve contacto, aunque alguien le suelte el permiso en la matriz.
   if (esVisor(ses.rol) && action !== "whoami" && !action.startsWith("cred_")) out = quitarContactoVisor(out);
   // TK147: el correo del propio acceso (whoami / Mi acceso / reseteo) no es el email de una clienta.

@@ -1,7 +1,7 @@
 // Personal, gift cards, paquetes y citas de la beta. Las secuencias siguen el número que ya existe.
 import { extend, origConMarca, rechazoSegundaMarca } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
-import { actorOf, bajasDe, logAccion, nextSheet } from "./lib.ts";
+import { actorOf, adminesDe, bajasDe, logAccion, nextSheet } from "./lib.ts";
 import { codigoPaquete, ecuadorParts, n, normNombre, s, siguienteCodigoGc, siguienteCodigoPaq, USO_FIELDS, type Row } from "./domain.ts";
 import { enPrueba } from "./db.ts";
 import { esAdmin, esPropio, acceso, matrizDe } from "./permisos.ts";
@@ -37,7 +37,9 @@ extend("personal_personas", "any", async (_p, ctx, ses) => {
   const { personasUnicas, nombreMostrar, aliasesDe } = await import("./personas_unir.ts");
   const aliases = await aliasesDe(ctx);
   if (!esAdmin(ses.rol)) return { ok: true, personas: [{ nombre: nombreMostrar(ses.name, aliases), cedula: "" }] };
-  const personas = (await personasUnicas(ctx, { incluirAdmin: true })).map((p) => ({
+  // DEV-31b (t908u): EFCH y Emi son administradoras, no empleadas: no salen en los selectores de Personal.
+  const esAdm = await adminesDe(ctx.db);
+  const personas = (await personasUnicas(ctx, { incluirAdmin: false })).filter((p) => !esAdm(p.nombre)).map((p) => ({
     nombre: p.nombre, cedula: p.cedula || "", uid: p.uid || "",
   }));
   if (!personas.length) personas.push({ nombre: nombreMostrar(ses.name, aliases), cedula: "", uid: "" });

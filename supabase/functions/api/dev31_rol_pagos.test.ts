@@ -14,7 +14,7 @@ import "./roles_crear_api.ts";
 import "./rol_descuentos_api.ts";
 import "./empleados_api.ts";
 import { planDe, periodoSiguiente } from "./rol_descuentos_api.ts";
-import { jibbleVigente } from "./asistencia_api.ts";
+import { historicoVigente } from "./asistencia_api.ts";
 import type { Row } from "./domain.ts";
 
 function seed(): MemoryDb {
@@ -36,7 +36,7 @@ function seed(): MemoryDb {
       { cedula: "1712", nombre_app: "Evelyn", apellidos_y_nombres: "Evelyn Toapanta", sueldo_base: 482, bono_fijo: 0, fondo_reserva: "NO", fecha_ingreso: "2026-11-14", cargo: "Cosmetologa" },
     ],
     beta_empleados: [{ id: "emp-evelyn", nombre_app: "Evelyn", afiliada_iess: false }],
-    jibble_historial: [], tickets: [], multas_descuentos: [], asistencia_marcajes: [], permisos: [],
+    asistencia_historico: [], tickets: [], multas_descuentos: [], asistencia_marcajes: [], permisos: [],
     beta_roles: [], beta_rol_descuentos: [], beta_rol_firmas: [],
   });
 }
@@ -127,9 +127,9 @@ describe("DEV-31 rol de pagos", () => {
     }
   });
 
-  it("desde el 26 nov 2026 Jibble ya no cuenta: solo la asistencia de Sunsu", () => {
-    const rows = [{ fecha: "2026-11-19" }, { fecha: "2026-11-25" }, { fecha: "2026-11-26" }, { fecha: "2026-12-02" }];
-    assert.deepEqual(jibbleVigente(rows).map((r) => r.fecha), ["2026-11-19", "2026-11-25"]);
+  it("solo el histórico de la app hasta el 19 nov: nada posterior cuenta como importado", () => {
+    const rows = [{ fecha: "2026-11-19" }, { fecha: "2026-11-20" }, { fecha: "2026-11-26" }];
+    assert.deepEqual(historicoVigente(rows).map((r) => r.fecha), ["2026-11-19"]);
   });
 
   it("front: pre-rol en tabla, botón Anticipos y préstamos, firma con el dedo, sin «ligar»", () => {
@@ -138,7 +138,7 @@ describe("DEV-31 rol de pagos", () => {
     assert.match(js, /Anticipos y préstamos/);
     assert.match(js, /pointerdown/);
     assert.match(js, /rol_firmar/);
-    assert.match(html, /mc-rol\.js\?v=20261125tk221/);
+    assert.match(html, /mc-rol\.js\?v=20261125tk222/);
     assert.match(html, /touch-action:none/);
     assert.doesNotMatch(js, /ligar/i);
   });
