@@ -87,7 +87,7 @@ describe("TK144 tarjetas compactas de la lista", () => {
     const card = screens.slice(screens.indexOf("function _histCardHTML"), screens.indexOf("function _tkFotoTipo"));
     assert.match(card, /mob-who/);
     assert.match(card, /_histFacNum\(t\)/);
-    assert.match(card, /_histCamHTML\(t,i\)/);
+    assert.match(card, /_histActsHTML\(t,i\)/);
     assert.match(card, /style="color:'\+_histEsc\(colWho\)/);
     assert.doesNotMatch(card, /👤 /);
     assert.doesNotMatch(card, /mob-saldo/);
@@ -101,17 +101,19 @@ describe("TK144 tarjetas compactas de la lista", () => {
     assert.match(html, /white-space: nowrap; overflow: hidden; text-overflow: ellipsis/);
     assert.match(html, /\.tab-plus \{[^}]*width: 48px; height: 48px/);
     assert.doesNotMatch(html, /width: 66px; height: 66px/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-20-TK191"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-25-DEV34"/);
   });
 
-  it("fila 1 es ticket-factura, el creador va de su color y la cámara queda bajo la chica", () => {
+  it("fila 1 es ticket-factura, el creador va de su color y las acciones van en la 3.ª línea", () => {
     const card = screens.slice(screens.indexOf("function _histCardHTML"), screens.indexOf("function _tkFotoTipo"));
-    assert.match(card, /\(facn\?\(' - '\+facn\):''\)/);
+    assert.match(card, /_histFacTag\(t,facn,anul\)/);
+    assert.match(card, /mob-l1r/);
     assert.match(card, /mob-l3t/);
-    assert.match(screens, /📷✓/);
+    assert.match(card, /_histMenuHTML\(t,i\)/);
+    assert.match(card, /_histActsHTML\(t,i\)/);
     assert.match(screens, /Tomar foto de voucher o transferencia/);
     assert.match(screens, /onclick="event.stopPropagation\(\)"/);
-    assert.match(screens, /capture="environment"/);
+    assert.doesNotMatch(screens.slice(screens.indexOf("function _histCamHTML"), screens.indexOf("function _histWaHTML")), /capture=/);
     assert.match(screens, /onchange="_tkVoucherCard\(event,'\+i\+'\)"/);
     assert.match(html, /\.mob-cam\.ok/);
     assert.match(lista, /fotoPago: 1/);

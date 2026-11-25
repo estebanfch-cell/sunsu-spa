@@ -1120,6 +1120,7 @@
   .tk-row.tk-wapend td:first-child { box-shadow: inset 5px 0 0 #25D366; }
   .mob-card.tk-wapend { border-left: 6px solid #25D366 !important; box-shadow: inset 3px 0 0 #DCFCE7, 0 1px 3px rgba(43,63,92,.06); }
   .mob-l1 { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
+  .mob-l1r { display: flex; align-items: center; gap: 6px; flex: none; min-width: 0; }
   .mob-num { font-weight: 800; color: var(--navy-d, #2b3f5c); font-size: 0.86rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mob-fac { font-weight: 500; color: var(--gray); font-size: 11.5px; letter-spacing: 0; font-variant-numeric: tabular-nums; }
   .mob-fac-no { color: #B45309; font-weight: 600; }
@@ -1212,6 +1213,25 @@
   .apr-camb .apr-antes { color: #9A3B2E; text-decoration: line-through; } .apr-camb .apr-desp { color: #1E7A46; font-weight: 700; }
   .apr-mot { margin-top: 2px; }
   .mob-thumbs { display: flex; align-items: center; gap: 4px; margin-top: 4px; min-width: 0; }
+  /* DEV-34 (Emilia t922u, opción 1): lista de Tickets en 3 líneas compactas, ~6–7 por pantalla iPhone.
+     Estilos acotados a #tk-cards para no apretar Compras, Clientas u otras listas .mob-card/.ss-card. */
+  #tk-cards.mob-cards { gap: 5px; }
+  #tk-cards .mob-card { padding: 5px 10px; }
+  #tk-cards .mob-num { font-size: 0.8rem; }
+  #tk-cards .mob-l2 { margin-top: 1px; font-size: 0.82rem; align-items: center; }
+  #tk-cards .mob-l2 .mob-l3t { flex: none; color: var(--gray); font-size: 12px; }
+  #tk-cards .mob-l3 { margin-top: 2px; }
+  #tk-cards .mob-thumbs { margin-top: 0; flex: 1; min-width: 0; }
+  #tk-cards .mob-th, #tk-cards .mob-thmore { width: 22px; height: 22px; min-width: 22px; max-width: 22px; min-height: 22px; max-height: 22px; flex: 0 0 22px; }
+  #tk-cards .mob-acts { flex-direction: row; gap: 6px; align-items: center; margin-left: auto; }
+  #tk-cards .mob-cam, #tk-cards .mob-wa { flex: 0 0 22px; width: 22px; height: 22px; min-width: 22px; max-width: 22px; min-height: 22px; max-height: 22px; border-width: 1.5px; }
+  #tk-cards .mob-cam .cam-icon, #tk-cards .mob-wa .wa-icon { width: 12px; height: 12px; }
+  #tk-cards .mob-menu { position: relative; flex: none; }
+  #tk-cards .mob-more { flex: 0 0 22px; width: 22px; height: 22px; min-width: 22px; padding: 0; border: 0; background: transparent; border-radius: 6px; font-size: 16px; line-height: 1; font-weight: 800; color: var(--navy-d, #2b3f5c); cursor: pointer; }
+  #tk-cards .mob-dd { position: absolute; right: 0; top: calc(100% + 2px); z-index: 40; background: #fff; border: 1px solid var(--cream-d); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12); min-width: 168px; padding: 4px; }
+  #tk-cards .mob-dd-item { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 0; background: none; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; border-radius: 8px; color: var(--navy-d, #2b3f5c); }
+  #tk-cards .mob-dd-item:active, #tk-cards .mob-more:active { background: var(--cream); }
+  #tk-cards .mob-card.tk-flagged .mob-more, #tk-cards .mob-card.tk-flagged .mob-dd-item { color: #1A0505; }
   .mob-th, .mob-thmore { width: 28px; height: 28px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; flex: 0 0 28px; box-sizing: border-box; border-radius: 6px; border: 1px solid #e6ded0; object-fit: cover; background: #fff; padding: 0; overflow: hidden; }
   /* TK154: la fotito que todavía llega reserva su espacio (sin saltos) con un tono suave. */
   .mob-th.mob-th-wait { background: linear-gradient(90deg, #F3EEE4 0%, #FBF8F2 50%, #F3EEE4 100%); color: transparent; font-size: 0; }
@@ -8975,7 +8995,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-25-TK223"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-25-DEV34"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -9156,7 +9176,7 @@ window.SunsuUpdate.init();
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk195"></script>
-<script src="beta-screens.js?v=20261125tk227"></script>
+<script src="beta-screens.js?v=20261125dev34"></script>
 <script src="mc-rol.js?v=20261125tk227"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
@@ -9168,7 +9188,7 @@ window.SunsuUpdate.init();
 <script src="mc-ajustes.js?v=20261120tk179"></script>
 <script src="vendor-qrcode.js?v=20261120tk179"></script>
 <script src="mc-wa.js?v=20261124tk217"></script>
-<script src="mc-tickets.js?v=20261124tk217"></script>
+<script src="mc-tickets.js?v=20261125dev34"></script>
 <script src="mc-maestro.js?v=20261120tk186"></script>
 <script src="mc-empleados.js?v=20261120tk179"></script>
 <script src="mc-edit.js?v=20261120tk179"></script>
