@@ -10,38 +10,47 @@ const sw = readFileSync(new URL("sw.js", root), "utf8");
 const card = screens.slice(screens.indexOf("function _histCardHTML"), screens.indexOf("function _tkFotoTipo"));
 
 describe("DEV-34 lista de Tickets compacta (opción 1)", () => {
-  it("la versión de caché coincide y subió a DEV31K", () => {
+  it("la versión de caché coincide y subió a DEV34C", () => {
     const enSw = (sw.match(/const CACHE = "([^"]+)"/) || [])[1];
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     assert.equal(enSw, enHtml);
-    assert.equal(enSw, "sunsu-2026-11-25-DEV31K");
-    assert.match(html, /beta-screens\.js\?v=20261125dev34b/);
+    assert.equal(enSw, "sunsu-2026-11-25-DEV34C");
+    assert.match(html, /beta-screens\.js\?v=20261125dev34c/);
     assert.match(html, /mc-tickets\.js\?v=20261125dev34/);
   });
 
-  it("línea 1: solo el número + estado + cosmetóloga a la derecha + menú ⋯ (la factura ya no va aquí)", () => {
+  it("línea 1: número · Fac. 3014 + estado + cosmetóloga a la derecha + menú ⋯", () => {
     assert.match(card, /class="mob-l1"/);
-    assert.match(card, /class="mob-num">'\+_histEsc\(l1\)\+'<\/span>/);
-    assert.doesNotMatch(card, /mob-num">'\+_histEsc\(l1\)\+_histFacTag/);
+    assert.match(card, /class="mob-num">'\+_histEsc\(l1\)\+_histFacTag\(t,facn,anul,true\)/);
     assert.match(card, /class="mob-l1r"/);
     assert.match(card, /class="mob-who"/);
     assert.match(card, /_histMenuHTML\(t,i\)/);
     assert.match(card, /style="color:'\+_histEsc\(colWho\)/);
   });
 
-  it("línea 2: clienta a la izquierda; factura completa (con ceros) + fecha · monto a la derecha, sin recortar", () => {
+  it("línea 2: clienta a la izquierda, fecha · monto (total de líneas) a la derecha", () => {
     assert.match(card, /class="mob-l2"/);
     assert.match(card, /class="mob-cli"/);
-    assert.match(card, /class="mob-l2r"/);
-    assert.match(card, /_histFacTag\(t,facn,anul,true\)/);
     assert.match(card, /class="mob-l3t"/);
     assert.match(card, /_histFechaFmt\(t\.fecha\)/);
     assert.match(card, /_histMontos\(t\)\.tot\.toFixed\(2\)/);
-    assert.match(card, /_histFacNum\(t\)/);
+    assert.doesNotMatch(card.split("mob-l2")[1] || "", /_histFacTag/);
     assert.doesNotMatch(card, /mob-saldo/);
-    assert.match(html, /#tk-cards \.mob-l2r \{ display: flex;/);
-    assert.match(html, /#tk-cards \.mob-l2 \.mob-fac, #tk-cards \.mob-fac-full \{[^}]*white-space: nowrap; overflow: visible; text-overflow: clip;/);
-    assert.match(html, /#tk-cards \.mob-l2 \.mob-l3t \{[^}]*overflow: visible; text-overflow: clip;/);
+  });
+
+  it("en la tarjeta móvil la factura se acorta a Fac. 3014; el title y el escritorio conservan la completa", () => {
+    const src = screens.slice(screens.indexOf("function _histFacCortaTxt"), screens.indexOf("function _histFacCorta("));
+    const fn = new Function(src + "; return _histFacCortaTxt;")() as (s: string) => string;
+    assert.equal(fn("001-001-000003014"), "Fac. 3014");
+    assert.equal(fn("000002982"), "Fac. 2982");
+    assert.equal(fn("001-001-000000014"), "Fac. 14");
+    const fac = screens.slice(screens.indexOf("function _histFacTag"), screens.indexOf("function _histColorQuien"));
+    assert.match(fac, /_histFacCortaTxt\(facn\)/);
+    assert.match(fac, /title="'\+_histEsc\(facn\)/);
+    assert.match(fac, / · '\+_histEsc\(_histFacCortaTxt\(facn\)\)/);
+    assert.match(screens, /tk-fac-full">'\+_histEsc\(ff\)/);
+    assert.match(html, /#tk-cards \.mob-num \.mob-fac \{[^}]*white-space: nowrap; overflow: visible; text-overflow: clip;/);
+    assert.match(html, /#tk-cards \.mob-fac-full \{[^}]*font-family: ui-monospace/);
   });
 
   it("línea 3: miniaturas + resumen, cámara y WhatsApp chicos a la derecha; sin botón grande de factura", () => {

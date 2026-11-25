@@ -156,8 +156,8 @@ describe("TK156 Tickets instantáneo (stale-while-revalidate)", () => {
 
 describe("TK156 versión", () => {
   it("caché y motor en TK156", () => {
-    assert.match(file("sw.js"), /const CACHE = "sunsu-2026-11-25-DEV31K"/);
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-25-DEV31K"/);
+    assert.match(file("sw.js"), /const CACHE = "sunsu-2026-11-25-DEV34C"/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-25-DEV34C"/);
     assert.match(file("supabase/functions/api/sunsu_version.ts"), /sunsu-engine-2026-11-19-TK157/);
   });
 });
@@ -311,7 +311,7 @@ describe("TK156 factura completa SRI en la tarjeta (t699u)", () => {
     assert.equal(fac({ f: "001-001-000002980" }), "001-001-000002980");
     assert.equal(fac({ f: "000002982" }), "000002982");
     assert.match(screens, /<span class="mob-fac"> - '\+_histEsc\(facn\)/);
-    assert.match(screens, /Canje · sin factura/); assert.match(screens, /mob-fac-no/); assert.match(screens, /\(solo\?'':' · '\)\+'Sin factura/);
+    assert.match(screens, /Canje · sin factura/); assert.match(screens, /mob-fac-no"> · Sin factura/);
     assert.match(html, /\.mob-fac \{ font-weight: 500; color: var\(--gray\); font-size: 11\.5px;/);
     assert.match(html, /\.mob-l3 \{ color: var\(--gray\); font-size: 12px;/);
   });
