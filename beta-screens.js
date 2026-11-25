@@ -6387,9 +6387,15 @@ function _histCreador(t){
   var orig=t&&t.orig&&typeof t.orig==='object'?t.orig:{};
   return _histNombreCorto(orig.creado_por||t.creado_por||t.usuario_creador||t.atendido_por||t.cosmetologa||'');
 }
+function _histFacCortaTxt(facn){
+  var s=String(facn||'').trim();
+  if(!s) return '';
+  var m=s.match(/(\d+)$/);
+  if(!m) return 'Fac. '+s;
+  return 'Fac. '+String(Number(m[1]));
+}
 function _histFacCorta(t){
-  var n=_histFacNum(t);
-  return n?('Fac. '+n):'';
+  return _histFacCortaTxt(_histFacNum(t));
 }
 function _histFacNum(t){
   var ff=_tkFacFull(t); if(!ff) return '';
@@ -6403,15 +6409,15 @@ function _histFacNum(t){
 /* TK156 (Emilia t699u–t701u): junto al Nº, la factura completa (mismo gris de fecha/valor, un pelín más chica);
    sin factura: «Canje · sin factura» ($0, gris) o «Sin factura» (ámbar suave) para ver rápido qué falta facturar. */
 function _histFacTag(t,facn,anul,solo){
-  /* DEV-34b (Emilia t928u): en la tarjeta compacta (solo=true) la factura va completa
-     en la línea 2, sin " - "/" · " inicial y sin recortar. El default conserva el formato
-     anterior (tests TK156). Todos los ceros SRI se quedan (via _histFacNum). */
-  if(facn) return solo?('<span class="mob-fac mob-fac-full" title="'+_histEsc(facn)+'">'+_histEsc(facn)+'</span>'):('<span class="mob-fac"> - '+_histEsc(facn)+'</span>');
+  /* DEV-34c (Emilia t932u/t933u): en la tarjeta compacta (solo=true) la línea 1 muestra
+     «TK-SO-1988 · Fac. 3014» (últimos dígitos significativos). El title y el escritorio/detalle
+     conservan la completa con ceros (tests TK156). */
+  if(facn) return solo?('<span class="mob-fac mob-fac-full" title="'+_histEsc(facn)+'"> · '+_histEsc(_histFacCortaTxt(facn))+'</span>'):('<span class="mob-fac"> - '+_histEsc(facn)+'</span>');
   if(anul||(t&&(t.borrador||t.por_completar))) return '';
-  if(_tkPagoDirecto(t)) return '<span class="mob-fac">'+(solo?'':' · ')+'Pago directo</span>';
-  if(_tkFaltaFactura(t)) return '<span class="mob-fac mob-fac-falta">'+(solo?'':' · ')+'Falta factura</span>';
+  if(_tkPagoDirecto(t)) return '<span class="mob-fac"> · Pago directo</span>';
+  if(_tkFaltaFactura(t)) return '<span class="mob-fac mob-fac-falta"> · Falta factura</span>';
   var sc=false; try{ sc=_histSinCobro(t); }catch(_e){}
-  return sc?'<span class="mob-fac">'+(solo?'':' · ')+'Canje · sin factura</span>':'<span class="mob-fac mob-fac-no">'+(solo?'':' · ')+'Sin factura</span>';
+  return sc?'<span class="mob-fac"> · Canje · sin factura</span>':'<span class="mob-fac mob-fac-no"> · Sin factura</span>';
 }
 /* TK156 (Emilia t702u): colores de cosmetóloga/usuario bien marcados (saturados, buen contraste sobre blanco). */
 var _HIST_COL_FUERTE=[[/andrea/i,'#1D4ED8'],[/daniela/i,'#B45309'],[/dejaneira/i,'#047857'],[/alejandra/i,'#BE185D'],[/evelyn/i,'#7E22CE'],[/^emi\b|emilia/i,'#4338CA'],[/efch|esteban/i,'#0F766E']];
@@ -6759,8 +6765,8 @@ function _histCardHTML(t, i, showPrices){
   var tip=faltaFac?'Falta factura':(fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'');
   var tipExtra=tip&&tip!=='Falta factura';
   return '<div class="mob-card'+(_tkSolPend(t)?' tk-solpend':fl?' tk-flagged':fa?' tk-falta':'')+(waP?' tk-wapend':'')+'" role="button" tabindex="0"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'
-    +'<div class="mob-l1"><span class="mob-num">'+_histEsc(l1)+'</span><span class="mob-l1r">'+est+(who?'<span class="mob-who" style="color:'+_histEsc(colWho)+'" title="Creado por '+_histEsc(who)+'">'+_histEsc(who)+'</span>':'')+_histMenuHTML(t,i)+'</span></div>'
-    +'<div class="mob-l2"><span class="mob-cli">'+_histEsc(nombre)+'</span><span class="mob-l2r">'+_histFacTag(t,facn,anul,true)+'<span class="mob-l3t">'+_histEsc(l2meta.join(' · '))+'</span></span></div>'
+    +'<div class="mob-l1"><span class="mob-num">'+_histEsc(l1)+_histFacTag(t,facn,anul,true)+'</span><span class="mob-l1r">'+est+(who?'<span class="mob-who" style="color:'+_histEsc(colWho)+'" title="Creado por '+_histEsc(who)+'">'+_histEsc(who)+'</span>':'')+_histMenuHTML(t,i)+'</span></div>'
+    +'<div class="mob-l2"><span class="mob-cli">'+_histEsc(nombre)+'</span><span class="mob-l3t">'+_histEsc(l2meta.join(' · '))+'</span></div>'
     +'<div class="mob-l3">'+_histThumbsHTML(t, res)+_histActsHTML(t,i)+'</div>'
     +(tipExtra?'<div class="mob-tip">'+_histEsc(tip)+'</div>':'')
     +'</div>';
