@@ -1579,8 +1579,9 @@ b + p.mcpq-hist { margin-top: 8px; border-top: 0; }
   .rolx-banda { background:#FDECD6; color:#B5651D; font-weight:800; text-align:center; border-radius:6px; padding:5px; font-size:.78rem; margin-bottom:8px; }
   .rolx-titulo { text-align:center; font-weight:900; font-size:1.2rem; color:#3D5A7A; letter-spacing:.02em; }
   .rolx-sub { text-align:center; font-size:.76rem; margin-bottom:8px; }
-  .rolx-datos { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:2px 12px; margin-bottom:8px; font-size:.78rem; }
-  .rolx-datos b { color:#3D5A7A; margin-right:4px; font-size:.7rem; }
+  .rolx-datos { display:grid; grid-template-columns:7.2rem 1fr; column-gap:0; row-gap:2px; margin-bottom:8px; font-size:.78rem; align-items:start; }
+  .rolx-datos b { color:#3D5A7A; font-size:.7rem; padding-right:8px; }
+  .rolx-datos span { min-width:0; }
   .rolx-bar { color:#fff; font-weight:800; font-size:.78rem; padding:4px 10px; border-radius:5px; margin-top:6px; }
   .rolx-bar.ing { background:#2E7D52; } .rolx-bar.egr { background:#B84040; }
   .rolx-fila { display:flex; justify-content:space-between; gap:8px; padding:3px 10px; background:#fff; }
@@ -8955,7 +8956,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-25-DEV31F"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-25-DEV31G"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -9136,8 +9137,8 @@ window.SunsuUpdate.init();
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk195"></script>
-<script src="beta-screens.js?v=20261125tk226"></script>
-<script src="mc-rol.js?v=20261125tk226"></script>
+<script src="beta-screens.js?v=20261125tk227"></script>
+<script src="mc-rol.js?v=20261125tk227"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
 <script src="mc-nav.js?v=20261123tk216"></script>
