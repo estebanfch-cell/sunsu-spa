@@ -16908,8 +16908,11 @@ function _lineasRol(d){
   d=d||{};
   var N=_rolNum, ing=[], egr=[], notas=[];
   var add=function(arr,l,v){ var m=Math.round(N(v)*100)/100; if(m!==0) arr.push([l,m]); };
-  var normales=N(d.hrsOrdinarias), dias=N(d.diasTrabajados)||N(d.diasJibble);
-  var lblSueldo='Sueldo'+(normales?(' ('+_rolHrs(normales)+' h normales'+(dias?(' · '+dias+' días'):'')+')'):(dias?(' ('+dias+' días)'):''));
+  var normales=N(d.hrsOrdinarias);
+  var hrsTot=N(d.hrsNomina);
+  if(!hrsTot) hrsTot=normales+N(d.hrsSupl)+N(d.hrsExtr)+N(d.hrsDesc);
+  var asumHrs=N(d.diasAsumidos)*((N(d.jornadaMins)||480)/60);
+  var lblSueldo='Sueldo'+(normales?(' ('+_rolHrs(normales)+' h normales)'):'');
   add(ing,lblSueldo,d.sueldo);
   add(ing,'Bono',d.bono);
   var tieneSplit=(d.comFacialesSolo!=null||d.comExtras!=null||d.comRecepcion!=null);
@@ -16924,8 +16927,8 @@ function _lineasRol(d){
   if(!tieneSplit && d.comPaquetes==null && d.comProductos==null && d.comFaciales==null) add(ing,'Comisiones',d.comisiones);
   var horasDet=(d.valSupl!=null||d.valExtr!=null||d.valDesc!=null);
   add(ing,'Horas suplementarias 50% ('+_rolHrs(d.hrsSupl)+' h)',d.valSupl);
-  add(ing,'Horas extraordinarias 100% ('+_rolHrs(d.hrsExtr)+' h)',d.valExtr);
-  add(ing,'Horas descanso/feriado 100% ('+_rolHrs(d.hrsDesc)+' h)',d.valDesc);
+  add(ing,'Horas extraordinarias descanso ('+_rolHrs(d.hrsDesc)+' h)',d.valDesc);
+  add(ing,'Horas extraordinarias periodo ('+_rolHrs(d.hrsExtr)+' h)',d.valExtr);
   if(!horasDet) add(ing,'Horas extras',d.extras);
   var decDet=(d.dec13!=null||d.dec14!=null||d.fondoReserva!=null);
   add(ing,'Décimo tercero',d.dec13);
@@ -16955,8 +16958,15 @@ function _lineasRol(d){
   var totalIng=d.totalIngresos!=null?N(d.totalIngresos):ing.reduce(function(a,x){return a+x[1];},0);
   var totalEgr=d.totalEgresos!=null?N(d.totalEgresos):(N(d.iess)+N(d.egresos));
   var neto=d.totalRecibir!=null?N(d.totalRecibir):(d.neto!=null?N(d.neto):totalIng-totalEgr);
+  var horasTxt=hrsTot?(_rolHrs(hrsTot)+' h'+(asumHrs?(' (incl. '+_rolHrs(asumHrs)+' h asumidas)'):'')):'—';
+  var dt=N(d.diasTrabajados), da=N(d.diasAsumidos), dfest=N(d.diasFest);
+  var diasRef='';
+  if(dt||da||dfest){
+    diasRef=dt+' con asistencia'+(da?(' + '+da+' proyectados'):'')+(dfest?(' · '+dfest+' feriado(s) trabajado(s) van en extraordinarias periodo'):'');
+  }
   return {
-    dias: dias?dias+' días':'—',
+    horas: horasTxt,
+    dias: diasRef||'—',
     ingresos: ing, egresos: egr, multas: multas, notas: notas,
     totalIngresos: totalIng, totalEgresos: totalEgr, neto: neto
   };
@@ -17087,9 +17097,11 @@ function _pdfRolPagina(doc, d, sheetName, apro, fondo){
     fila('EMPLEADA:',d.nombre);
     fila('CÉDULA:',d.cedula);
     fila('CARGO:',d.cargo);
-    // Días REALES contados en Jibble (días con marcación) — nunca derivados de horas
+    // DEV-31e (Emilia t916u): en el rol se muestran las HORAS (asistencia + proyectadas).
+    // Los días quedan solo como referencia legal, no como dato principal.
     var rol=_lineasRol(d);
-    fila('DÍAS TRABAJADOS:', rol.dias);
+    fila('HORAS TRABAJADAS:', rol.horas||'—');
+    if(rol.dias&&rol.dias!=='—') fila('DÍAS (REF. LEGAL):', rol.dias);
     y+=6;
     var salto=function(need){ if(y+need>H-70){doc.addPage();pintar();y=140;} };
     var barra=function(titulo,cRGB){
