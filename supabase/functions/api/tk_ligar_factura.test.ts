@@ -12,7 +12,7 @@ import type { Ctx } from "./lib.ts";
 
 const root = new URL("../../../", import.meta.url);
 const file = (p: string) => readFileSync(new URL(p, root), "utf8");
-const CACHE = "sunsu-2026-11-25-DEV34B";
+const CACHE = "sunsu-2026-11-25-DEV31K";
 const FAC = "001-001-000003007";
 const FAC2 = "001-001-000003001";
 

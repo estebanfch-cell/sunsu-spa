@@ -10,11 +10,11 @@ const sw = readFileSync(new URL("sw.js", root), "utf8");
 const card = screens.slice(screens.indexOf("function _histCardHTML"), screens.indexOf("function _tkFotoTipo"));
 
 describe("DEV-34 lista de Tickets compacta (opción 1)", () => {
-  it("la versión de caché coincide y subió a DEV34B", () => {
+  it("la versión de caché coincide y subió a DEV31K", () => {
     const enSw = (sw.match(/const CACHE = "([^"]+)"/) || [])[1];
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     assert.equal(enSw, enHtml);
-    assert.equal(enSw, "sunsu-2026-11-25-DEV34B");
+    assert.equal(enSw, "sunsu-2026-11-25-DEV31K");
     assert.match(html, /beta-screens\.js\?v=20261125dev34b/);
     assert.match(html, /mc-tickets\.js\?v=20261125dev34/);
   });
