@@ -148,6 +148,12 @@ export function clasificarHorasRol(opts: {
       if (esFest) { diasFest++; minsNomina -= jornada; }
       continue;
     }
+    // Feriado oficial ya pasado, sin marca: es día pagado, no falta ni día trabajado.
+    // Si sí trabajó, las horas van a extraordinarias (feriado / periodo), no a días trabajados.
+    if (esFest && nom <= 0) {
+      if (perm.has(fecha)) diasPermiso++;
+      continue;
+    }
     if (nom > 0) {
       if (esFest) {
         diasFest++;
@@ -182,6 +188,6 @@ export function clasificarHorasRol(opts: {
     hrsOrdinarias: round2(Math.max(0, minsNomina - minsSupl - minsFest - minsDesc) / 60),
     hrsNoct: round2(recorte15(minsNoct) / 60),
     jornadaMins: jornada,
-    regla: "Hoy y los días que faltan hasta el fin de mes (calendario; en un mes de 30 días, hasta el 30) se asumen como jornada completa. Las faltas solo cuentan días ya pasados, que tocaba trabajar, sin marca de asistencia ni historial importado de Jibble.",
+    regla: "Hoy y los días hábiles que faltan hasta fin de mes se asumen como jornada completa. Las faltas solo cuentan días ya pasados, que tocaba trabajar, sin marca. Un feriado oficial sin marca no es falta; si se trabajó, esas horas se pagan como extraordinarias periodo. Las horas en día de descanso se pagan como extraordinarias descanso.",
   };
 }
