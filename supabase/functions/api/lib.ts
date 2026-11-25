@@ -246,6 +246,29 @@ export async function bajasDe(db: { all: (t: string) => Promise<Record<string, u
   return (nombre: string) => set.has(norm(nombre));
 }
 
+/**
+ * DEV-31b (Emilia t908u): EFCH y Emi son administradoras, no empleadas. Devuelve un predicado por nombre (nombre
+ * completo, corto, id o alias) para sacarlas de Asistencia, Rol de pagos, pre-rol y Configuración de rol.
+ * No borra nada: solo se filtra.
+ */
+export async function adminesDe(db: { all: (t: string) => Promise<Record<string, unknown>[]> }): Promise<(nombre: string) => boolean> {
+  const norm = (x: unknown) => String(x ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  const set = new Set<string>(["emi", "emilia", "efch", "esteban"]);
+  for (const tabla of ["usuarios", "app_usuarios"]) {
+    let rows: Record<string, unknown>[] = [];
+    try { rows = await db.all(tabla); } catch { rows = []; }
+    for (const r of rows) {
+      const rol = String(r.rol ?? r.role ?? "");
+      if (rol !== "admin" && rol !== "super_admin") continue;
+      for (const k of [r.nombre, r.name, r.short, r.id, r.uid]) if (norm(k)) set.add(norm(k));
+    }
+  }
+  return (nombre: string) => {
+    const n = norm(nombre);
+    return !!n && (set.has(n) || set.has(n.split(" ")[0]));
+  };
+}
+
 export async function guardarArchivo(db: Db, actor: string, kind: string, nombre: string, dataUrl: string, maxB64 = 1_500_000): Promise<string | null> {
   const i = dataUrl.indexOf("base64,");
   if (i < 0) return null;

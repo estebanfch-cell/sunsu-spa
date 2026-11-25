@@ -4,7 +4,8 @@
 // Hoy y lo que falta del mes (hasta el último día calendario; en un mes de 30, el 30) se asumen trabajados.
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
-import { actorOf, logAccion } from "./lib.ts";
+import { actorOf, adminesDe, logAccion } from "./lib.ts";
+import { configRolDe } from "./rol_config_api.ts";
 import { cicloFin, cicloInicio, ecuadorParts, n, normNombre, rolCalcularOficial, round2, s, type Row } from "./domain.ts";
 import { esAdmin, esPropio } from "./permisos.ts";
 import { clavePeriodo, etiquetaPeriodo, estaPublicado, mismaPersonaRol } from "./roles_api.ts";
@@ -121,7 +122,7 @@ export function snapshotDe(opts: {
       ...calc0, dec13: 0, dec14: 0, fondoReserva: 0, dec13Acumulado: 0, dec14Acumulado: 0, fondoReservaIess: 0,
       iess: 0, prestHip: 0, prestQuir: 0, prestOtro: 0,
       totalIngresos: ing, egresos: egr, totalEgresos: egr, totalRecibir: round2(ing - egr),
-      iessPatronal: 0, secap: 0, iece: 0, aportePatronal: 0, costoEmpresa: round2(ing - egr),
+      iessPatronal: 0, secap: 0, iece: 0, aportePatronal: 0, costoEmpresa: ing,
     };
   })();
   const ingR = round2(calc.totalIngresos), egrR = round2(calc.totalEgresos), netoR = round2(ingR - egrR);
@@ -274,9 +275,11 @@ export function mensualDe(overlays: Row[], persona: string): { dec13: boolean; d
  * armado que «Crear rol» (horario, ingreso, sueldo vigente, recorte de 15 min y valor oficial).
  */
 export async function rolHorasMesDe(ctx: Ctx, nombre: string, anio: number, mes: number): Promise<Row | null> {
+  if ((await adminesDe(ctx.db))(nombre)) return null;
   const emp = await empleadaDe(ctx, nombre);
   if (!emp) return null;
   const persona = s(emp.nombre_app) || s(emp.apellidos_y_nombres);
+  const cfgRolH = await configRolDe(ctx, persona);
   const desdeSnap = (snap: Row, fuente: string): Row => ({
     anio, mes, fuente,
     hrsNormales: n(snap.hrsOrdinarias), hrsSupl: n(snap.hrsSupl), hrsExtr: n(snap.hrsExtr), hrsDesc: n(snap.hrsDesc),
@@ -289,25 +292,31 @@ export async function rolHorasMesDe(ctx: Ctx, nombre: string, anio: number, mes:
     .filter((r) => clavePeriodo(r.periodo) === clave && s(r.origin) !== "test" && normNombre(s(r.persona)) === normNombre(persona) && r.snapshot && typeof r.snapshot === "object")
     .sort((a, b) => s(b.updated_at).localeCompare(s(a.updated_at)));
   if (guardados[0]) return desdeSnap(guardados[0].snapshot as Row, s(guardados[0].estado) || "guardado");
-  const { horas } = await horasRolDe(ctx, persona, anio, mes, { ingreso: s(emp.fecha_ingreso).slice(0, 10) || null });
+  const { horas } = await horasRolDe(ctx, persona, anio, mes, { ingreso: (cfgRolH && cfgRolH.fechaIngreso) || s(emp.fecha_ingreso).slice(0, 10) || null });
   const last = new Date(Date.UTC(anio, mes, 0)).toISOString().slice(0, 10);
-  const cfg = await pagoVigenteDe(ctx, persona, last);
-  const sueldoBase = cfg ? n(cfg.sueldo) : dineroDe(emp, ["sueldo_base", "sueldo", "sueldo_mensual"]);
+  const cfg = cfgRolH ? null : await pagoVigenteDe(ctx, persona, last);
+  const sueldoBase = cfgRolH ? cfgRolH.sueldoBase : cfg ? n(cfg.sueldo) : dineroDe(emp, ["sueldo_base", "sueldo", "sueldo_mensual"]);
   const calc = rolCalcularOficial({ sueldoBase, bono: 0, faltas: 0, hrsSupl: horas.hrsSupl, hrsExtr: horas.hrsExtr, hrsDesc: horas.hrsDesc, anio, mes } as never) as unknown as Row;
   return desdeSnap({ ...horas, valSupl: calc.valSupl, valExtr: calc.valExtr, valDesc: calc.valDesc, faltas: horas.diasFalta }, "calculado");
 }
 
 export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string, anio?: number, mes?: number, opts: { origin?: string } = {}): Promise<Row> {
   const per = parsePeriodo(periodoRaw, anio, mes);
+  // DEV-31b (t908u): EFCH y Emi son administradoras, no empleadas: no tienen rol de pagos.
+  if ((await adminesDe(ctx.db))(nombre)) return { error: "EFCH y Emi son administradoras: no tienen rol de pagos." };
   const emp = await empleadaDe(ctx, nombre);
   if (!emp) return { error: "No encuentro a esa persona en Personal › Empleados / RRHH." };
   const persona = s(emp.nombre_app) || s(emp.apellidos_y_nombres);
+  // DEV-31b (t907u): datos base del rol desde «Configuración de rol»; sin fila, la hoja RRHH.
+  const cfgRol = await configRolDe(ctx, persona);
+  if (cfgRol && !cfgRol.activa) return { error: persona + " está inactiva: ya no tiene rol de pagos." };
+  const ingresoCfg = (cfgRol && cfgRol.fechaIngreso) || s(emp.fecha_ingreso).slice(0, 10);
   const { fichaIessDe, afiliadaSegunOverlay } = await import("./empleados_api.ts");
   const overlays = await ctx.db.all("beta_empleados").catch(() => [] as Row[]);
   // TK170: sin afiliación también sale rol (sueldo + bonos + comisiones, sin IESS ni décimos/fondo) con el total a facturar.
-  const afiliada = afiliadaSegunOverlay(overlays, persona);
+  const afiliada = cfgRol ? cfgRol.afiliada : afiliadaSegunOverlay(overlays, persona);
   const iessFicha = await fichaIessDe(ctx, persona, per.cicloHasta);
-  const { nomina, horas, asumidoDesde, ultimoDato } = await horasRolDe(ctx, persona, per.anio, per.mes, { ingreso: s(emp.fecha_ingreso).slice(0, 10) || null });
+  const { nomina, horas, asumidoDesde, ultimoDato } = await horasRolDe(ctx, persona, per.anio, per.mes, { ingreso: ingresoCfg || null });
   const { comisionesDeTablas } = await import("./handlers_extra.ts");
   const com = await comisionesDeTablas(ctx, persona, per.anio, per.mes);
   // DEV-31: las comisiones del rol son las MISMAS de la pantalla Comisiones (mismo ciclo 26→25); multas igual que antes.
@@ -322,31 +331,41 @@ export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string,
   com.multas = round2(n(com.multas) + mBeta.total);
   const finMes = `${per.anio}-${String(per.mes).padStart(2, "0")}-28`;
   const last = new Date(Date.UTC(per.anio, per.mes, 0)).toISOString().slice(0, 10);
-  const cfg = await pagoVigenteDe(ctx, persona, last);
-  const sueldoBase = cfg ? n(cfg.sueldo) : dineroDe(emp, ["sueldo_base", "sueldo", "sueldo_mensual"]);
-  const bono = cfg ? n(cfg.bono) : dineroDe(emp, ["bono_fijo", "bono"]);
-  const fondo = cfg ? cfg.fondo === true || s(cfg.fondo).toUpperCase() === "SI" : s(emp.fondo_reserva).toUpperCase() === "SI";
+  const cfg = cfgRol ? null : await pagoVigenteDe(ctx, persona, last);
+  const sueldoBase = cfgRol ? cfgRol.sueldoBase : cfg ? n(cfg.sueldo) : dineroDe(emp, ["sueldo_base", "sueldo", "sueldo_mensual"]);
+  const bono = cfgRol ? cfgRol.bono : cfg ? n(cfg.bono) : dineroDe(emp, ["bono_fijo", "bono"]);
+  // DEV-31b: el fondo de reserva no depende de un SI/NO: corre solo desde que cumple 1 año de la fecha de ingreso.
+  const fondo = true;
   // DEV-31: anticipos (mes siguiente) y cuotas de préstamos internos que caen en este rol.
   const { descuentosDelPeriodo } = await import("./rol_descuentos_api.ts");
   const desc = await descuentosDelPeriodo(ctx, persona, per.periodo, opts.origin || "beta").catch(() => ({ anticipo: 0, prestamo: 0, total: 0, detalle: [] as Row[] }));
   const fuenteHoras = !nomina.hayDatos && horas.diasTrabajados === 0
     ? (horas.diasAsumidos ? "asumidas" : "sin_marcajes")
-    : (nomina.diasPropios ? "asistencia+jibble" : "jibble+asumidas");
+    : (nomina.diasPropios ? "asistencia de la app" : "histórico de la app+asumidas");
   const snap = snapshotDe({
-    persona, cedula: s(emp.cedula), cargo: s(emp.cargo), periodo: per.periodo,
+    persona, cedula: (cfgRol && cfgRol.cedula) || s(emp.cedula), cargo: (cfgRol && cfgRol.cargo) || s(emp.cargo), periodo: per.periodo,
     anio: per.anio, mes: per.mes, cicloDesde: per.cicloDesde, cicloHasta: per.cicloHasta,
-    sueldoBase, bono, fondo, fechaIngreso: s(emp.fecha_ingreso) || "2020-01-01",
+    sueldoBase, bono, fondo, fechaIngreso: ingresoCfg || "2020-01-01",
     horas, com, iess: { quir: iessFicha.quir, hip: iessFicha.hip, otros: iessFicha.otros },
     anticipo: desc.total, multasDetalle: mBeta.detalle || [], fuenteHoras,
     descInternos: desc,
-    mensual: mensualDe(overlays, persona),
+    mensual: { dec13: true, dec14: true, fondo: true }, // DEV-31b: décimos y fondo siempre mensualizados (t907u)
     afiliada,
   });
   snap.asumidoDesde = asumidoDesde; snap.ultimoDato = ultimoDato;
   return { ok: true, ...per, persona, snap };
 }
 
-function vista(row: Row, snap: Row, admin: boolean): Row {
+/** DEV-31b (t907u/t908u): el aporte patronal y el costo empresa los ve solo administración, nunca la empleada. */
+export const CLAVES_PATRONAL = ["aportesPatronal", "aportePatronal", "aportePatronalPct", "iessPatronal", "secap", "iece", "costoEmpresa", "costoTotalEmpresa"];
+export function sinPatronal(snap: Row): Row {
+  const o: Row = { ...snap };
+  for (const k of CLAVES_PATRONAL) delete o[k];
+  return o;
+}
+
+function vista(row: Row, snap0: Row, admin: boolean): Row {
+  const snap = admin ? snap0 : sinPatronal(snap0);
   return {
     ok: true, id: row.id, persona: row.persona, cedula: row.cedula, cargo: row.cargo,
     periodo: row.periodo, etiqueta: etiquetaPeriodo(s(row.periodo)),
@@ -368,18 +387,14 @@ export async function rolAprobadoDe(ctx: Ctx, periodo: string, persona: string):
 
 extend("rol_opciones", "any", async (_p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo administración crea un rol de pagos." };
-  const { afiliadaSegunOverlay, esFilaNotasRrhh } = await import("./empleados_api.ts");
-  const overlays = await ctx.db.all("beta_empleados").catch(() => [] as Row[]);
-  const emps = (await ctx.db.all("rrhh_empleadas").catch(() => [] as Row[])).filter((r) => !esFilaNotasRrhh(r) && (s(r.nombre_app) || s(r.apellidos_y_nombres)));
+  const { empleadasDelRol } = await import("./rol_config_api.ts");
   const afiliadas: Row[] = [];
   const sinIess: Row[] = [];
-  for (const e of emps) {
-    const nombre = s(e.nombre_app) || s(e.apellidos_y_nombres);
-    const afi = afiliadaSegunOverlay(overlays, nombre);
-    const item = { nombre, cedula: s(e.cedula), cargo: s(e.cargo), afiliada: afi };
+  for (const e of await empleadasDelRol(ctx)) {
+    const item = { nombre: e.nombre, cedula: e.cedula, cargo: e.cargo, afiliada: e.afiliada };
     // TK170: sin afiliación también se crea su rol (sin IESS, con el total a facturar).
     afiliadas.push(item);
-    if (!afi) sinIess.push(item);
+    if (!e.afiliada) sinIess.push(item);
   }
   const now = ecuadorParts(ctx.now);
   const y = Number(now.ymd.slice(0, 4));
@@ -534,7 +549,7 @@ extend("rol_prerol", "any", async (p, ctx, ses) => {
   const snap = armado.snap as Row;
   const ini = `${anio}-${String(mes).padStart(2, "0")}-01`;
   const ayer = new Date(Date.parse(hoy + "T12:00:00Z") - 86400000).toISOString().slice(0, 10);
-  const { horasEnRango, correccionesJibble } = await import("./asistencia_api.ts");
+  const { horasEnRango } = await import("./asistencia_api.ts");
   let hastaHoy: Row | null = null;
   // Desde el ingreso (si entró este mes); las faltas solo cuentan hasta el último dato importado.
   const ingreso = s(snap.fechaIngreso).slice(0, 10);
@@ -556,6 +571,6 @@ extend("rol_prerol", "any", async (p, ctx, ses) => {
     } catch { hastaHoy = null; }
   }
   let jibble: Row | null = null;
-  try { jibble = await correccionesJibble(ctx, s(armado.persona), ini, hoy) as unknown as Row; } catch { jibble = null; }
+  // DEV-31b: Jibble ya no es fuente ni se revisa; la asistencia es solo de la app.
   return { ok: true, persona: armado.persona, periodo, etiqueta: etiquetaPeriodo(periodo), hoy, convencion, snap, hastaHoy, jibble };
 });

@@ -1556,6 +1556,9 @@ b + p.mcpq-hist { margin-top: 8px; border-top: 0; }
   .rol-pill.rechazado { color:#B84040; border-color:#B84040; }
   .rol-pill.firmado { color:#2E7D52; border-color:#2E7D52; background:#E8F8EE; }
   .rol-pill.porfirmar { color:#8A6D1A; border-color:#C4A35A; background:#FFF8E6; }
+  .cfgrol-form { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px 12px; margin:8px 0; }
+  .cfgrol-form label { display:flex; flex-direction:column; gap:3px; font-size:.72rem; color:var(--navy,#3D5A7A); font-weight:700; }
+  .cfgrol-form input, .cfgrol-form select { padding:7px 8px; border:1px solid var(--cream-d,#E6DCCB); border-radius:8px; font-size:.82rem; }
   .prerol-tabla-wrap { overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; }
   .prerol-tabla { border-collapse:collapse; font-size:.74rem; width:100%; }
   .prerol-tabla th, .prerol-tabla td { padding:5px 6px; border-bottom:1px solid var(--cream-d,#E6DCCB); text-align:left; vertical-align:top; }
@@ -2718,7 +2721,7 @@ function tituloRuta(route, tab) {
   if (route.mod === "inventario" && !route.sub) return "Inventario";
   if (route.mod === "inventario") return "Stock";
   if (route.mod === "reportes") return "Consumos / reportes";
-  if (route.mod === "personal") return etiquetaMia({ comisiones: "Mis comisiones", rol: "Mi rol de pagos", asistencia: "Mi asistencia", permisos: "Permisos y vacaciones", multas: "Multas", horarios: "Horarios", empleados: "Empleados" }[route.sub] || "Personal");
+  if (route.mod === "personal") return etiquetaMia({ comisiones: "Mis comisiones", rol: "Mi rol de pagos", asistencia: "Mi asistencia", permisos: "Permisos y vacaciones", multas: "Multas", horarios: "Horarios", empleados: "Empleados", "config-rol": "Configuración de rol" }[route.sub] || "Personal");
   if (route.mod === "gift") return route.sub === "paquetes" ? (route.id ? "Paquete" : "Paquetes") : (route.id === "nueva" ? "Nueva gift card" : route.id ? "Gift card" : "Gift cards");
   if (route.mod === "citas") return "Citas";
   if (route.mod === "cotizaciones_cliente") return route.id ? "Cotización" : "Cotizaciones";
@@ -3124,6 +3127,7 @@ function gruposVisibles() {
     personal.push(["asistencia", "Multas", "#/m/personal/multas"]);
     if (state.admin) personal.push(["asistencia", "Empleados", "#/m/personal/empleados"]);
     if (state.admin) personal.push(["asistencia", "Horarios", "#/m/personal/horarios"]);
+    if (state.admin) personal.push(["rol_pagos", "Configuración de rol", "#/m/personal/config-rol"]);
   }
   if (personal.length) out.push({ id: "personal", label: "👤 Personal", items: personal });
   const gift = [];
@@ -5370,7 +5374,7 @@ async function renderRol() {
     <div id="rol-sheet"></div>
     ${state.admin ? `<p class="note"><a href="#/m/configuracion">Sueldo, bono e IESS se editan en Configuración general</a></p>
       <div class="tools"><button class="btn small" type="button" id="rol-pub-ciclo" data-on="1">Publicar este ciclo</button><button class="btn ghost small" type="button" id="rol-oculta-ciclo" data-on="0">Ocultar este ciclo</button></div>` : ""}
-    <p class="note">El sueldo y el bono salen de Configuración general, no de la hoja. Las horas salen de Jibble y de los marcajes del ciclo. Las comisiones son las mismas de la tabla de comisiones. El personal solo ve un rol cuando lo publicas.</p>`;
+    <p class="note">El sueldo y el bono salen de Configuración general, no de la hoja. Las horas salen solo de la asistencia de la app (Mi asistencia). Las comisiones son las mismas de la tabla de comisiones. El personal solo ve un rol cuando lo publicas.</p>`;
 }
 function mismaPersonaCfg(a, b) {
   const na = String(a || "").trim().toLowerCase();
@@ -5674,7 +5678,7 @@ function htmlAsisCalendario(cal, vista, fecha) {
 }
 
 async function renderAsistencia() {
-  const ajena = state.admin && location.hash.indexOf("/personal/asistencia") >= 0;
+  const ajena = state.admin; // DEV-31b: la administradora no es empleada; siempre elige a una empleada
   const sel = ajena ? await htmlSelectorPersona() : "";
   const hoy = await api("asis_hoy", ajena && state.persona ? { nombre: state.persona } : {});
   if (hoy.error) return fail(hoy);
@@ -5880,6 +5884,8 @@ async function htmlSelectorPersona(opts) {
   const data = await api("personal_personas");
   const personas = data.personas || [];
   if (!(opts && opts.todas) && !state.persona && state.user) state.persona = state.user.name || "";
+  // DEV-31b: la administradora no es empleada; si su nombre no está en la lista, arranca con la primera empleada.
+  if (!(opts && opts.todas) && personas.length && !personas.some((p) => p.nombre === state.persona)) state.persona = personas[0].nombre;
   const hit = personas.find((p) => p.nombre === state.persona);
   if (hit) state.personaCedula = hit.cedula || "";
   const todas = opts && opts.todas ? `<option value=""${!state.persona ? " selected" : ""}>Todas</option>` : "";
@@ -6082,6 +6088,10 @@ async function renderPersonal(route) {
   if (route.sub === "permisos") return renderPersonalPermisos();
   if (route.sub === "multas" && window.MCMultas) return window.MCMultas.render(route);
   if (route.sub === "multas") return renderPersonalMultas();
+  if (route.sub === "config-rol") {
+    if (!state.admin) return `<p class="err">Solo administración ve la configuración de rol.</p>`;
+    return window.SunsuRol ? window.SunsuRol.htmlConfigRol() : `<p class="err">No se cargó el módulo de rol.</p>`;
+  }
   if (route.sub === "empleados") {
     if (!state.admin) return `<p class="err">Solo administración ve el módulo de empleados.</p>`;
     return window.MCEmpleados ? window.MCEmpleados.render(route) : `<p class="err">No se cargó el módulo de empleados.</p>`;
@@ -6213,8 +6223,8 @@ function htmlPreRol(r) {
     ${h.suplMin ? `<div class="rol-line"><span class="concepto">Suplementarias 50%</span><span class="monto">${esc(hm(h.suplMin))}</span></div>` : ""}
     ${h.extrMin ? `<div class="rol-line"><span class="concepto">Feriado 100%</span><span class="monto">${esc(hm(h.extrMin))}</span></div>` : ""}
     ${h.descMin ? `<div class="rol-line"><span class="concepto">Descanso 100%</span><span class="monto">${esc(hm(h.descMin))}</span></div>` : ""}
-    <p class="note">${h.diasConMarca ? esc(h.diasConMarca) + " día(s) con marca de la app · " : ""}${esc(h.diasJibble)} día(s) de Jibble${h.faltas ? " · " + esc(h.faltas) + " falta(s)" : ""}.</p>` : "";
-  const supuesto = d.asumidoDesde ? `<p class="note">Desde el ${esc(fmtDiaCorto(d.asumidoDesde))} hasta fin de mes se asume la jornada del horario${d.ultimoDato ? " (último dato: " + esc(fmtDiaCorto(d.ultimoDato)) + ")" : " (sin marcas ni Jibble este mes)"}.</p>` : "";
+    <p class="note">${h.diasConMarca ? esc(h.diasConMarca) + " día(s) con marca de la app · " : ""}${esc(h.diasJibble)} día(s) del histórico de la app (antes del 20/11)${h.faltas ? " · " + esc(h.faltas) + " falta(s)" : ""}.</p>` : "";
+  const supuesto = d.asumidoDesde ? `<p class="note">Desde el ${esc(fmtDiaCorto(d.asumidoDesde))} hasta fin de mes se asume la jornada del horario${d.ultimoDato ? " (último dato: " + esc(fmtDiaCorto(d.ultimoDato)) + ")" : " (sin marcas este mes)"}.</p>` : "";
   const jb = r.jibble && (r.jibble.dias || []).length ? `<details class="prerol-jibble"><summary>Revisión de Jibble: ${esc(r.jibble.dias.length)} día(s) con diferencia</summary>${r.jibble.dias.map((x) => x.abierto
       ? `<div class="rol-line"><span class="concepto">${esc(fmtDiaCorto(x.fecha))} · sin salida</span><span class="monto">${esc(hm(x.guardado.payroll))} guardado (parcial)</span></div>`
       : `<div class="rol-line"><span class="concepto">${esc(fmtDiaCorto(x.fecha))}</span><span class="monto">Jibble ${esc(hm(x.guardado.payroll))} · 50% ${esc(hm(x.guardado.supl))} · 100% ${esc(hm(x.guardado.extr + x.guardado.desc))} → recalculado ${esc(hm(x.recalculado.payroll))} · 50% ${esc(hm(x.recalculado.supl))} · 100% ${esc(hm(x.recalculado.extr + x.recalculado.desc))}</span></div>`).join("")}
@@ -6245,7 +6255,7 @@ function htmlMarcasAdminBox(r) {
     <div class="mk-tools"><label>Día <select class="mk-sel" data-mk-fecha>${dias.join("")}</select></label>
     <label>Motivo <input class="mk-in" data-mk-motivo value="Corrección de marca" maxlength="120"></label></div>
     <div data-mk-box><p class="note">Elige el día.</p></div>
-    <p class="note">Cada cambio queda registrado (quién, antes/después, cuándo) y el pre-rol se recalcula al guardar. Antes del 20/11 manda Jibble cuando ese día tiene dato.</p></details>`;
+    <p class="note">Cada cambio queda registrado (quién, antes/después, cuándo) y el pre-rol se recalcula al guardar. Antes del 20/11 manda el histórico de la app cuando ese día tiene dato.</p></details>`;
 }
 function htmlMarcasAdminDia(data) {
   const filas = (data.marcas || []).map((m) => `<div class="mk-row${m.anulado ? " mk-anulada" : ""}" data-mk-id="${esc(m.id)}">
@@ -6256,7 +6266,7 @@ function htmlMarcasAdminDia(data) {
   const nueva = `<div class="mk-row mk-nueva">${mkSelTipo("data-mk-ntipo", "entrada")}<input class="mk-in mk-hora" type="time" step="60" data-mk-nhora>
       <button class="btn small" type="button" data-mk-agregar>+ Agregar</button></div>`;
   const d = data.dia || {};
-  const resumen = `<p class="note">Ese día: ${esc(hHm(d.workedMin || 0))} trabajadas${d.almuerzoMin ? " · almuerzo " + esc(d.almuerzoMin) + " min" : ""}${data.jibble ? " · tiene dato de Jibble" : ""}${d.falta ? " · falta" : ""}.</p>`;
+  const resumen = `<p class="note">Ese día: ${esc(hHm(d.workedMin || 0))} trabajadas${d.almuerzoMin ? " · almuerzo " + esc(d.almuerzoMin) + " min" : ""}${data.jibble ? " · día del histórico de la app" : ""}${d.falta ? " · falta" : ""}.</p>`;
   const nom = { marca_manual: "agregó", correccion: "cambió" };
   const fmt = (x) => x ? [x.tipo ? etiquetaMarca(x.tipo) : "", x.ts ? mkHoraLocal(x.ts) : "", x.anulado === true ? "borrada" : x.anulado === false && x.ts == null ? "restaurada" : ""].filter(Boolean).join(" ") : "";
   const hist = (data.historial || []).length ? `<details class="mk-hist"><summary>Historial de cambios (${esc(data.historial.length)})</summary>${data.historial.map((a) =>
@@ -6417,11 +6427,11 @@ function htmlRolOficial(pack) {
     ${motivo}
     ${editable ? htmlRolEditable(d, campo, linea, hrs) : htmlRolLineas(d)}
     ${window.SunsuRol ? SunsuRol.htmlFirma(pack) : ""}
-    <div class="rol-patronal">
+    ${admin && d.aportesPatronal ? `<div class="rol-patronal">
       <strong>Aporte patronal a pagar: ${money(patron.total)}</strong>
       IESS 11.15%: ${money(patron.iess)} · SECAP 0.5%: ${money(patron.secap)} · IECE 0.5%: ${money(patron.iece)} · Total 12.15%<br>
-      Costo empresa: ${money(patron.costoEmpresa)}
-    </div>
+      Costo total empresa (ingresos ${money(d.totalIngresos)} + patronal ${money(patron.total)}): <strong style="display:inline">${money(patron.costoEmpresa)}</strong>
+    </div>` : ""}
     <div class="rol-dirty-bar"><button class="btn small" type="button" data-rol-guardar="${esc(pack.id || "")}">Guardar</button><button class="btn ghost small" type="button" data-rol-descartar="${esc(pack.id || "")}">Descartar</button></div>
     ${acciones}
   </div>`;
@@ -8403,7 +8413,7 @@ function wireAsistencia(main) {
     if (data.error) { box.innerHTML = fail(data); return; }
     box.innerHTML = (data.filas || []).map((f) => {
       const d = f.dia || {};
-      const estado = d.falta ? "Falta" : d.fuente === "permiso" ? "Permiso/vacación" : d.fuente === "jibble" ? "Jibble" : d.abierto ? "Adentro" : d.diaContado ? "Cerrada" : "—";
+      const estado = d.falta ? "Falta" : d.fuente === "permiso" ? "Permiso/vacación" : d.fuente === "jibble" ? "Histórico de la app" : d.abierto ? "Adentro" : d.diaContado ? "Cerrada" : "—";
       const marcas = (f.marcas || []).map((m) => `${horaEc(m.ts).slice(-5)} ${etiquetaMarca(m.tipo)}${m.anulado ? " (anulada)" : ""}`).join(" · ");
       return `<div class="row"><div class="sku">${esc(estado)}</div><div><div class="name">${esc(f.nombre)}</div><div class="note">${esc(marcas || "sin marcas")}</div></div><div class="meta">${esc(hHm(d.workedMin))} · almuerzo ${esc(d.almuerzoMin || 0)} min${(d.atrasoMin||0)>0 ? " · atraso " + esc(d.atrasoMin) + " min" : ""}</div></div>`;
     }).join("") || `<p class="note">Sin personas.</p>`;
@@ -8678,7 +8688,7 @@ function wirePersonal(main) {
       await draw();
     };
   });
-  if (window.SunsuRol) SunsuRol.wireDesc(main);
+  if (window.SunsuRol) { SunsuRol.wireDesc(main); SunsuRol.wireConfig(main); }
   main.querySelectorAll("[data-desc-abrir]").forEach((b) => { b.onclick = () => SunsuRol.abrirDesc(main); });
   main.querySelectorAll("[data-rol-resumen-pdf]").forEach((b) => { b.onclick = () => SunsuRol.resumenPdf(b.getAttribute("data-rol-resumen-pdf")); });
   main.querySelectorAll("[data-prerol]").forEach((b) => {
@@ -8947,7 +8957,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-25-TK221"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-25-DEV31B"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -9128,8 +9138,8 @@ window.SunsuUpdate.init();
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk195"></script>
-<script src="beta-screens.js?v=20261125tk221"></script>
-<script src="mc-rol.js?v=20261125tk221"></script>
+<script src="beta-screens.js?v=20261125tk222"></script>
+<script src="mc-rol.js?v=20261125tk222"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
 <script src="mc-nav.js?v=20261123tk216"></script>

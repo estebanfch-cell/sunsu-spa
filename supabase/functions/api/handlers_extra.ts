@@ -450,7 +450,7 @@ extend("pago_config_guardar", "any", async (p, ctx, ses) => {
 async function corteAsistencia(ctx: Ctx): Promise<string> {
   let max = "";
   const tomar = (f: string) => { const y = f.slice(0, 10); if (/^\d{4}-\d{2}-\d{2}$/.test(y) && y > max) max = y; };
-  for (const r of await ctx.db.all("jibble_historial").catch(() => [])) tomar(s(r.fecha));
+  for (const r of await ctx.db.all("asistencia_historico").catch(() => [])) tomar(s(r.fecha));
   for (const r of await ctx.db.all("asistencia_marcajes").catch(() => [])) {
     if (r.anulado === true) continue;
     const cruda = s(r.ts);
