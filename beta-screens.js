@@ -6530,16 +6530,40 @@ function _histDupDescartar(i){
   }).catch(function(){ if(typeof toast==='function') toast('❌ Sin conexión','#B86B6B'); });
 }
 function _histActsHTML(t,i){
-  return '<span class="mob-acts">' + _histCamHTML(t,i) + _histWaHTML(t,i) + _histLigarHTML(t,i) + '</span>';
+  return '<span class="mob-acts">' + _histCamHTML(t,i) + _histWaHTML(t,i) + '</span>';
 }
-function _histLigarHTML(t,i){
+function _histLigarLab(t){
   var orig=t&&t.orig||{};
   if(t&&(t.anulado===true||orig.anulado===true)) return '';
   if(typeof _tkPagoDirecto==='function'&&_tkPagoDirecto(t)) return '';
   if(t&&t.sin_cobro&&typeof _tkFaltaFactura==='function'&&!_tkFaltaFactura(t)) return '';
   var asociar=(typeof _tkFaltaFactura==='function'&&_tkFaltaFactura(t))||!(typeof _tkFacFull==='function'&&_tkFacFull(t));
-  var lab=asociar?'Asociar factura':'Cambiar factura';
+  return asociar?'Asociar factura':'Cambiar factura';
+}
+function _histLigarHTML(t,i){
+  var lab=_histLigarLab(t); if(!lab) return '';
   return '<button type="button" class="btn ghost small" onclick="event.stopPropagation();_histLigarFac('+i+')" title="'+lab+'">'+lab+'</button>';
+}
+function _histMenuHTML(t,i){
+  var lab=_histLigarLab(t); if(!lab) return '';
+  return '<span class="mob-menu" onclick="event.stopPropagation()"><button type="button" class="mob-more" aria-label="Más acciones" aria-haspopup="true" aria-expanded="false" onclick="_histToggleMenu(event,this)">⋯</button><div class="mob-dd" hidden><button type="button" class="mob-dd-item" onclick="_histLigarFac('+i+')">'+lab+'</button></div></span>';
+}
+function _histToggleMenu(ev, btn){
+  if(ev) ev.stopPropagation();
+  var wrap=btn&&btn.parentNode, dd=wrap&&wrap.querySelector&&wrap.querySelector('.mob-dd');
+  var open=dd&&!dd.hidden;
+  document.querySelectorAll('#tk-cards .mob-dd').forEach(function(x){ x.hidden=true; });
+  document.querySelectorAll('#tk-cards .mob-more').forEach(function(x){ x.setAttribute('aria-expanded','false'); });
+  if(!open&&dd){ dd.hidden=false; btn.setAttribute('aria-expanded','true'); }
+}
+if(typeof document!=='undefined'&&typeof window!=='undefined'&&!window._histMenuBound){
+  window._histMenuBound=true;
+  document.addEventListener('click', function(e){
+    var t=e.target;
+    if(t&&t.closest&&t.closest('.mob-menu')) return;
+    document.querySelectorAll('#tk-cards .mob-dd').forEach(function(x){ x.hidden=true; });
+    document.querySelectorAll('#tk-cards .mob-more').forEach(function(x){ x.setAttribute('aria-expanded','false'); });
+  });
 }
 function _histLigarFac(i){
   if(event&&event.stopPropagation) event.stopPropagation();
@@ -6724,18 +6748,18 @@ function _histCardHTML(t, i, showPrices){
   var est=(t&&(t.borrador||t.por_completar||t.factura_migo)&&!t.so_num)?(t.listo?_tkPill('pendaprobar','Pend. aprobar'):_tkPill('porcompletar','Por completar')):(anul?_tkPill('anulado','Cancelado'):_histEstadoDoc(t)==='cerrado'?_tkPill('cerrado','Cerrado'):_tkPill('abierto','Abierto'))+(_tkPillEdicion(t)?' '+_tkPillEdicion(t):'')+(_tkDupHTML(t,i)?' '+_tkDupHTML(t,i):'');
   var facn=_histFacNum(t);
   var l1=(_histNum(t)||'—');
-  var l3=[_histFechaFmt(t.fecha)];
-  if(showPrices) l3.push('$'+_histMontos(t).tot.toFixed(2));
+  var l2meta=[_histFechaFmt(t.fecha)];
+  if(showPrices) l2meta.push('$'+_histMontos(t).tot.toFixed(2));
   var who=_histCreador(t);
   var colWho=_histColorQuien((t.orig&&t.orig.creado_por)||t.creado_por||t.atendido_por||t.cosmetologa||who);
   var res=_histResumenTxt(t);
   var tip=faltaFac?'Falta factura':(fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'');
+  var tipExtra=tip&&tip!=='Falta factura';
   return '<div class="mob-card'+(_tkSolPend(t)?' tk-solpend':fl?' tk-flagged':fa?' tk-falta':'')+(waP?' tk-wapend':'')+'" role="button" tabindex="0"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'
-    +'<div class="mob-l1"><span class="mob-num">'+_histEsc(l1)+_histFacTag(t,facn,anul)+'</span>'+est+'</div>'
-    +'<div class="mob-l2"><span class="mob-cli">'+_histEsc(nombre)+'</span>'+(who?'<span class="mob-who" style="color:'+_histEsc(colWho)+'" title="Creado por '+_histEsc(who)+'">'+_histEsc(who)+'</span>':'')+'</div>'
-    +'<div class="mob-l3"><span class="mob-l3t">'+_histEsc(l3.join(' · '))+'</span>'+_histActsHTML(t,i)+'</div>'
-    +_histThumbsHTML(t, res)
-    +(tip?'<div class="mob-tip">'+_histEsc(tip)+'</div>':'')
+    +'<div class="mob-l1"><span class="mob-num">'+_histEsc(l1)+_histFacTag(t,facn,anul)+'</span><span class="mob-l1r">'+est+(who?'<span class="mob-who" style="color:'+_histEsc(colWho)+'" title="Creado por '+_histEsc(who)+'">'+_histEsc(who)+'</span>':'')+_histMenuHTML(t,i)+'</span></div>'
+    +'<div class="mob-l2"><span class="mob-cli">'+_histEsc(nombre)+'</span><span class="mob-l3t">'+_histEsc(l2meta.join(' · '))+'</span></div>'
+    +'<div class="mob-l3">'+_histThumbsHTML(t, res)+_histActsHTML(t,i)+'</div>'
+    +(tipExtra?'<div class="mob-tip">'+_histEsc(tip)+'</div>':'')
     +'</div>';
 }
 function _tkFotoTipo(metodo){

@@ -270,6 +270,7 @@
       '<div class="mctk-acc-sec">Documentos</div>' + docsHtml2() +
       '<div class="mctk-acc-sec">WhatsApp</div>' + waHtml() +
       '<div class="mctk-acc-sec">Ticket</div>' +
+      (!d.soloLectura ? '<button type="button" id="mctk-ligar-fac-menu">' + ((typeof val === "function" && val("factura")) ? "Cambiar factura" : "Asociar factura") + "</button>" : "") +
       '<button type="button" id="mctk-print">Imprimir</button>' +
       '<button type="button" id="mctk-excl">Excluir comisión</button>' +
       (d.admin && window.MCMultas ? '<button type="button" id="mctk-multa">⚠️ Aplicar multa</button>' : "") +
@@ -1431,8 +1432,9 @@
       window.MCMultas.aplicarDesdeTicket({ id: t.id, so: t.soNum || t.betaNum, cosmetologa: t.cosmetologa, fecha: t.fecha || inf.fecha, cliente: ((t.nombre || "") + " " + (t.apellido || "")).trim() }).catch(function (x) { toast2((x && x.message) || String(x), true); });
     });
     main.querySelectorAll("[data-ed]").forEach(function (b) { b.onclick = function () { editarCampo(main, b.getAttribute("data-ed")); }; b.onkeydown = function (ev) { if (ev.key === "Enter") { ev.preventDefault(); editarCampo(main, b.getAttribute("data-ed")); } }; });
-    var ligarBtn = main.querySelector("#mctk-ligar-fac");
-    if (ligarBtn) ligarBtn.onclick = function (ev) { ev.preventDefault(); ev.stopPropagation(); editarCampo(main, "factura"); };
+    main.querySelectorAll("#mctk-ligar-fac, #mctk-ligar-fac-menu").forEach(function (ligarBtn) {
+      ligarBtn.onclick = function (ev) { ev.preventDefault(); ev.stopPropagation(); cerrarMenuDe(ligarBtn); editarCampo(main, "factura"); };
+    });
     var cosmSel = main.querySelector("select.mctk-cosm");
     if (cosmSel) cosmSel.onchange = function () {
       var nv = cosmSel.value.trim(), cur = val("cosmetologa");
