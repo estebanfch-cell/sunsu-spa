@@ -261,7 +261,7 @@ extend("rol_prerol_resumen", "any", async (p, ctx, ses) => {
     filas.push({
       nombre: e.nombre, cargo: e.cargo, afiliada: d.afiliada !== false,
       diasTrabajados: n(d.diasTrabajados), diasAsumidos: n(d.diasAsumidos), faltas: n(d.faltas),
-      hrsNormales: n(d.hrsOrdinarias), hrsSupl: n(d.hrsSupl), hrsExtr: n(d.hrsExtr), hrsDesc: n(d.hrsDesc),
+      hrsNomina: n(d.hrsNomina), hrsNormales: n(d.hrsOrdinarias), hrsSupl: n(d.hrsSupl), hrsExtr: n(d.hrsExtr), hrsDesc: n(d.hrsDesc),
       sueldo: n(d.sueldo), bono: n(d.bono), comisiones,
       comFaciales: n(d.comFacialesSolo), comExtras: n(d.comExtras), comRecepcion: n(d.comRecepcion), comPaquetes: n(d.comPaquetes), comProductos: n(d.comProductos),
       horasExtra: round2(n(d.valSupl) + n(d.valExtr) + n(d.valDesc)),
@@ -282,7 +282,7 @@ extend("rol_prerol_resumen", "any", async (p, ctx, ses) => {
   return {
     ok: true, periodo, etiqueta: etiquetaPeriodo(periodo), hoy, filas,
     totales: { totalIngresos: tot("totalIngresos"), iess: tot("iess"), totalEgresos: tot("totalEgresos"), neto: tot("neto"), comisiones: tot("comisiones"), patronal: tot("patronal"), ccc: tot("ccc"), costoEmpresa: tot("costoEmpresa") },
-    nota: "Días y horas: solo la asistencia de la app (Mi asistencia). Desde hoy hasta fin de mes se asume la jornada del horario. Comisiones y multas del ciclo 26→25.",
+    nota: "Horas: asistencia de la app (Mi asistencia). Hoy y los días hábiles que faltan se asumen como jornada completa. Un feriado sin marca no es falta; si se trabajó, va en horas extraordinarias periodo. Las horas en día de descanso van en horas extraordinarias descanso. Comisiones y multas del ciclo 26→25.",
   };
 });
 
