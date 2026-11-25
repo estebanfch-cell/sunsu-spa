@@ -16937,7 +16937,11 @@ function _lineasRol(d){
   // TK170: sin afiliación IESS no hay aporte, décimos ni fondo; se indica cuánto debe facturar a Sunsu.
   if(d.afiliada===false){ notas.unshift(d.mensajeFactura||('Debes facturarnos $'+N(d.facturar!=null?d.facturar:d.totalRecibir).toFixed(2)+' por este período.')); notas.push('Sin afiliación al IESS: sin aporte personal, décimos ni fondo de reserva.'); }
   add(egr,'Aporte IESS personal (9,45%)',d.iess);
-  add(egr,'Anticipo de sueldo',d.anticipo);
+  // DEV-31: anticipos y cuotas de préstamos internos, una línea cada uno (si el total no se cambió a mano).
+  var dInt=(d.descuentosInternos||[]).filter(function(x){return N(x.monto)>0;});
+  var sumInt=dInt.reduce(function(a,x){return a+N(x.monto);},0);
+  if(dInt.length && Math.abs(sumInt-N(d.anticipo))<0.02){ dInt.forEach(function(x){ add(egr,x.etiqueta||(x.tipo==='prestamo'?'Préstamo Sunsu':'Anticipo de sueldo'),x.monto); }); }
+  else add(egr,'Anticipo de sueldo',d.anticipo);
   add(egr,'Préstamo IESS hipotecario',d.prestHip);
   add(egr,'Préstamo IESS quirografario',d.prestQuir);
   add(egr,'Otros descuentos IESS',d.prestOtro!=null?d.prestOtro:d.sandalo);
@@ -17127,8 +17131,21 @@ function _pdfRolFondo(d, sheetName, apro, fondo){
       y+=altoN+14;
     }
     // ── Aceptación: sello digital o línea de firma ──
-    salto(70);
-    if(apro&&apro.fecha){
+    salto(apro&&apro.png?120:70);
+    if(apro&&apro.png){
+      // DEV-31: firma con el dedo de la empleada (PNG) sobre la línea de «Recibí conforme».
+      doc.setFillColor(232,248,238);
+      doc.roundedRect(xI,y,ANCHO,104,6,6,'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(VERDE);
+      doc.text('ROL FIRMADO POR LA EMPLEADA',xI+12,y+16);
+      try{ doc.addImage(apro.png,'PNG',W/2-90,y+20,180,56); }catch(e){}
+      doc.setDrawColor(90,110,140); doc.setLineWidth(0.8);
+      doc.line(W/2-110,y+78,W/2+110,y+78);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.8); doc.setTextColor(TXT);
+      doc.text('Recibí conforme - '+(d.nombre||'')+(d.cedula?' - C.I. '+d.cedula:''),W/2,y+89,{align:'center'});
+      doc.text('Firmado con el dedo en el app SUNSU el '+(apro.fechaLocal||apro.fecha||'')+' (hora de Ecuador)',W/2,y+99,{align:'center'});
+      y+=116;
+    } else if(apro&&apro.fecha){
       doc.setFillColor(232,248,238);
       doc.roundedRect(xI,y,ANCHO,42,6,6,'F');
       doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(VERDE);

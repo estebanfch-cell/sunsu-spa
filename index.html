@@ -1554,6 +1554,23 @@ b + p.mcpq-hist { margin-top: 8px; border-top: 0; }
   .rol-pill.borrador { color:#8A6D1A; border-color:#C4A35A; }
   .rol-pill.aprobado { color:#2E7D52; border-color:#2E7D52; }
   .rol-pill.rechazado { color:#B84040; border-color:#B84040; }
+  .rol-pill.firmado { color:#2E7D52; border-color:#2E7D52; background:#E8F8EE; }
+  .rol-pill.porfirmar { color:#8A6D1A; border-color:#C4A35A; background:#FFF8E6; }
+  .prerol-tabla-wrap { overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; }
+  .prerol-tabla { border-collapse:collapse; font-size:.74rem; width:100%; }
+  .prerol-tabla th, .prerol-tabla td { padding:5px 6px; border-bottom:1px solid var(--cream-d,#E6DCCB); text-align:left; vertical-align:top; }
+  .prerol-tabla th { color:var(--navy,#3D5A7A); font-weight:800; }
+  .prerol-tabla td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .prerol-tabla td.acc { min-width:7.5rem; }
+  .prerol-tabla td.acc .btn { margin:0 2px 2px 0; }
+  .prerol-tabla tfoot td { font-weight:800; border-bottom:0; }
+  .desc-form { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px 12px; align-items:end; }
+  .desc-form label { display:flex; flex-direction:column; gap:3px; font-size:.78rem; }
+  .desc-form .full { grid-column:1/-1; }
+  .desc-item { border-top:1px solid var(--cream-d,#E6DCCB); padding:8px 0; font-size:.84rem; }
+  .rol-firma, .rol-firma-ok { margin-top:12px; padding:10px; border:1.5px dashed var(--gold,#C4943A); border-radius:12px; background:#fff; }
+  .rol-firma-canvas { width:100%; aspect-ratio:600/190; display:block; background:#fff; border:1px solid var(--cream-d,#E6DCCB); border-radius:8px; touch-action:none; -webkit-user-select:none; user-select:none; }
+  .rol-firma-img { width:100%; max-width:360px; display:block; background:#fff; border-radius:6px; }
   #rol-preview, .rol-oficial { overflow-x: hidden; max-width: 100%; box-sizing: border-box; }
   .rol-oficial .rol-line { display:flex; justify-content:space-between; gap:10px; align-items:baseline; padding:4px 0; border-bottom:1px solid var(--cream-d,#E6DCCB); font-size:.86rem; }
   .rol-oficial .rol-line .concepto { min-width:0; flex:1; overflow-wrap:anywhere; }
@@ -6153,7 +6170,8 @@ async function renderPersonalRol() {
   const crear = state.admin ? await htmlRolCrear() : "";
   if (!state.admin) {
     const actualClave = clavePeriodoActual();
-    const actual = items.filter((it) => String(it.periodo || it.sheet || "").toUpperCase() === actualClave && (it.estado === "aprobado" || it.fuente === "historial"));
+    // DEV-31: arriba, el mes actual y cualquier rol aprobado que falte firmar.
+    const actual = items.filter((it) => (String(it.periodo || it.sheet || "").toUpperCase() === actualClave && (it.estado === "aprobado" || it.fuente === "historial")) || (it.fuente === "beta" && it.estado === "aprobado" && !it.firmado));
     const top = actual.length
       ? `<h2>Este mes</h2>` + actual.map((it) => htmlRolCard(it, false)).join("")
       : `<h2>Este mes</h2><p class="note">Cuando administración apruebe tu rol, aparece aquí.</p>`;
@@ -6175,6 +6193,8 @@ async function renderPersonalRol() {
 }
 // TK170 (Emilia t768u): lista de todas las empleadas; al tocar una se abre su PRE-ROL al día de hoy.
 async function htmlPreRolLista() {
+  // DEV-31: tabla con lo que gana cada una al día de hoy (+ anticipos/préstamos y resumen PDF).
+  if (window.SunsuRol) { try { const html = await SunsuRol.htmlPreRolResumen(); if (html) return html; } catch (e) { /* respaldo abajo */ } }
   const r = await api("rol_prerol", {});
   if (!r || r.error) return "";
   const btns = (r.items || []).map((x) => `<button class="btn ghost small prerol-btn" type="button" data-prerol="${esc(x.nombre)}">${esc(x.nombre)}${x.afiliada === false ? " · sin IESS" : ""}</button>`).join("");
@@ -6319,7 +6339,7 @@ function htmlRolCard(it, admin) {
     ? `<button class="btn small" type="button" data-rol-ab="${esc(it.id)}">Ver</button>`
     : `<button class="btn small" type="button" data-rol-ver="${esc(it.sheet || it.periodo)}" data-cedula="${esc(it.cedula || "")}" data-persona="${esc(it.persona || "")}">Ver</button>`;
   return `<div class="card rol-card${off ? " is-off" : ""}">
-    <div class="k">${esc(it.etiqueta || it.periodo)} ${rolPill(est)}</div>
+    <div class="k">${esc(it.etiqueta || it.periodo)} ${rolPill(est)}${it.fuente === "beta" && est === "aprobado" ? (it.firmado ? ' <span class="rol-pill firmado">Firmado</span>' : ' <span class="rol-pill porfirmar">Por firmar</span>') : ""}</div>
     <div class="v">${money(it.neto != null ? it.neto : it.totalIngresos)}</div>
     <div class="note">${esc(it.persona || "")}${it.motivoRechazo ? " · " + esc(it.motivoRechazo) : ""}</div>
     <div class="tools">${ver}</div>
@@ -6362,7 +6382,8 @@ function htmlRolEditable(d, campo, linea, hrs) {
     <div class="rol-line rol-total"><span class="concepto">Total ingresos</span><span class="monto">${money(d.totalIngresos)}</span></div>
     <h3>Descuentos</h3>
     ${linea("Aporte IESS personal (9,45%)", d.iess)}
-    ${campo("anticipo", d.anticipo, "Anticipo de sueldo")}
+    ${campo("anticipo", d.anticipo, "Anticipos y préstamos Sunsu")}
+    ${(d.descuentosInternos || []).map((x) => `<div class="rol-line note"><span class="concepto">↳ ${esc(x.etiqueta || "")}</span><span class="monto">$${mon2(x.monto)}</span></div>`).join("")}
     ${campo("prestHip", d.prestHip, "Préstamo IESS hipotecario")}
     ${campo("prestQuir", d.prestQuir, "Préstamo IESS quirografario")}
     ${campo("prestOtro", d.prestOtro, "Otros descuentos IESS")}
@@ -6395,6 +6416,7 @@ function htmlRolOficial(pack) {
       ${esc(d.fuenteHoras || "")}${d.reglaHoras ? " · " + esc(d.reglaHoras) : ""}</p>
     ${motivo}
     ${editable ? htmlRolEditable(d, campo, linea, hrs) : htmlRolLineas(d)}
+    ${window.SunsuRol ? SunsuRol.htmlFirma(pack) : ""}
     <div class="rol-patronal">
       <strong>Aporte patronal a pagar: ${money(patron.total)}</strong>
       IESS 11.15%: ${money(patron.iess)} · SECAP 0.5%: ${money(patron.secap)} · IECE 0.5%: ${money(patron.iece)} · Total 12.15%<br>
@@ -6416,6 +6438,7 @@ function mostrarRolOficial(pack) {
   }
   box.classList.remove("is-dirty");
   box.innerHTML = htmlRolOficial(pack);
+  if (window.SunsuRol) SunsuRol.wireFirma(box, pack);
   box.scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
@@ -8643,6 +8666,21 @@ function wirePersonal(main) {
     if ((location.hash || "").indexOf("/personal/rol") >= 0) await draw();
     else go("#/m/personal/rol");
   };
+  // DEV-31: crear/recalcular borrador desde el pre-rol, anticipos y préstamos, resumen PDF.
+  main.querySelectorAll("[data-prerol-crear]").forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      const data = await api("rol_crear", { persona: b.getAttribute("data-prerol-crear"), periodo: b.getAttribute("data-periodo") || "" });
+      b.disabled = false;
+      if (data.error) { toast(data.error); return; }
+      toast("Borrador listo");
+      window._rolPendiente = data;
+      await draw();
+    };
+  });
+  if (window.SunsuRol) SunsuRol.wireDesc(main);
+  main.querySelectorAll("[data-desc-abrir]").forEach((b) => { b.onclick = () => SunsuRol.abrirDesc(main); });
+  main.querySelectorAll("[data-rol-resumen-pdf]").forEach((b) => { b.onclick = () => SunsuRol.resumenPdf(b.getAttribute("data-rol-resumen-pdf")); });
   main.querySelectorAll("[data-prerol]").forEach((b) => {
     b.onclick = async () => {
       const box = main.querySelector("#prerol-detalle");
@@ -8708,6 +8746,8 @@ function wirePersonal(main) {
         if (typeof _pdfRol === "function") {
           // TK166: plantilla oficial Sunsu (fondo + aves) y sello de aprobación digital si la persona ya aprobó.
           let apro = null;
+          // DEV-31: si la empleada ya firmó con el dedo, la firma va en el PDF.
+          if (pack.firma && pack.firma.png) { _pdfRol(d, periodo, { png: pack.firma.png, fecha: pack.firma.fechaLocal || pack.firma.firmadoAt, fechaLocal: pack.firma.fechaLocal }); return; }
           try {
             const ap = await api("getAprobacionesRol", { sheet: periodo });
             const ced = String(d.cedula || "").replace(/\.0+$/, "").replace(/\D/g, "");
@@ -8907,7 +8947,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-24-TK220"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-25-DEV31"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -9088,7 +9128,8 @@ window.SunsuUpdate.init();
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk195"></script>
-<script src="beta-screens.js?v=20261124tk217"></script>
+<script src="beta-screens.js?v=20261125tk221"></script>
+<script src="mc-rol.js?v=20261125tk221"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
 <script src="mc-nav.js?v=20261123tk216"></script>

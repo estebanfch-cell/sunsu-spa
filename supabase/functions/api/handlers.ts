@@ -2661,6 +2661,20 @@ function filasPersona(nombre: string, packs: Awaited<ReturnType<typeof cicloDe>>
     };
   });
 }
+/**
+ * DEV-31: comisiones de una persona en un ciclo 26→25 EXACTAMENTE como las muestra Comisiones (getComisionesTabla),
+ * para que el rol y el pre-rol cuadren con esa pantalla. Las admins no ganan comisión (todo en 0).
+ */
+export async function comisionesComoPantalla(ctx: Ctx, nombre: string, ciclo: string): Promise<{ comFaciales: number; comPaquetes: number; comProductos: number; comExtras: number; comRecepcion: number; esAdmin: boolean }> {
+  const pack = await cicloDe(ctx, ciclo);
+  const admins = pack.admins || [];
+  const cero = { comFaciales: 0, comPaquetes: 0, comProductos: 0, comExtras: 0, comRecepcion: 0 };
+  if (nombreEsAdmin(nombre, admins)) return { ...cero, esAdmin: true };
+  const users = await ctx.db.all("usuarios");
+  const filas = filasPersona(nombre, [pack], personaEsRecepcionista(nombre, users));
+  const v = (c: string) => round2(filas.find((f) => f.concepto === c)?.total || 0);
+  return { comFaciales: v("Faciales"), comPaquetes: v("Paquetes"), comProductos: v("Productos"), comExtras: v("Extras"), comRecepcion: v("Recepción"), esAdmin: false };
+}
 function juntarLineas(a: LineaCom[], b: LineaCom[]): LineaCom[] {
   const map = new Map<string, LineaCom>();
   for (const ln of a.concat(b)) {

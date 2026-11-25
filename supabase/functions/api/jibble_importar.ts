@@ -8,6 +8,7 @@ import type { Ctx, Ses } from "./lib.ts";
 import { actorOf } from "./lib.ts";
 import { ecuadorParts, s, type Row } from "./domain.ts";
 import { esAdmin } from "./permisos.ts";
+import { JIBBLE_ULTIMO_DIA } from "./asistencia_api.ts";
 
 const TOKEN_URL = "https://identity.prod.jibble.io/connect/token";
 const TS_URL = "https://time-attendance.prod.jibble.io/v1/Timesheets";
@@ -80,6 +81,8 @@ export async function importarJibbleRango(ctx: Ctx, ses: Ses, desde: string): Pr
       for (const x of daily) {
         const f = s(x.date || x.day).slice(0, 10);
         if (!f || seen.has(f)) continue;
+        // DEV-31: desde el 26 nov 2026 las horas salen solo de la asistencia de Sunsu; Jibble ya no se importa.
+        if (f > JIBBLE_ULTIMO_DIA) continue;
         const ph = (x.payrollHours && typeof x.payrollHours === "object") ? x.payrollHours as Row : {};
         const th = (x.trackedHours && typeof x.trackedHours === "object") ? x.trackedHours as Row : {};
         const g = (k: string) => dur(((ph[k] as Row) || {}).time);
