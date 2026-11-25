@@ -54,7 +54,7 @@ describe("DEV-31e horas del rol (t916u)", () => {
 });
 
 describe("DEV-31e etiquetas del rol", () => {
-  it("cabecera en días (trabajados + feriado + descanso + asumidos) y extras con sus horas", () => {
+  it("cabecera en días; una sola línea de extraordinarias (descanso + feriado)", () => {
     const src = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
     const pick = (name: string) => {
       const i = src.indexOf("function " + name + "(");
@@ -62,16 +62,17 @@ describe("DEV-31e etiquetas del rol", () => {
       for (; j < src.length; j++) { if (src[j] === "{") depth++; else if (src[j] === "}" && --depth === 0) break; }
       return src.slice(i, j + 1);
     };
-    const fn = new Function(`${pick("_rolNum")}\n${pick("_rolHrs")}\n${pick("_rolDiasLinea")}\n${pick("_lineasRol")}\nreturn _lineasRol;`)() as (d: unknown) => { ingresos: [string, number][]; dias: string };
+    const fn = new Function(`${pick("_rolNum")}\n${pick("_rolHrs")}\n${pick("_rolDiasLinea")}\n${pick("_rolNombre")}\n${pick("_lineasRol")}\nreturn _lineasRol;`)() as (d: unknown) => { ingresos: [string, number][]; dias: string };
     const out = fn({
       sueldo: 482, hrsOrdinarias: 144, hrsNomina: 183.5, jornadaMins: 480, diasTrabajados: 14, diasAsumidos: 4, diasFest: 3, diasDesc: 1,
-      valSupl: 0, hrsSupl: 0, valExtr: 96.4, hrsExtr: 24, valDesc: 30.12, hrsDesc: 7.5,
+      valSupl: 0, hrsSupl: 0, valExtr: 98.4, hrsExtr: 24.5, valDesc: 30.12, hrsDesc: 7.5,
       dec13: 40, dec14: 39.17, iess: 45,
     });
     const lbl = out.ingresos.map((x) => x[0]);
-    assert.ok(lbl.some((l) => l.startsWith("Horas extraordinarias descanso (7,5 h)")));
-    assert.ok(lbl.some((l) => l.startsWith("Horas extraordinarias periodo (24 h)")));
-    assert.ok(!lbl.some((l) => l.includes("descanso/feriado") || l.startsWith("Horas extraordinarias 100%")));
+    const ext = lbl.find((l) => l.startsWith("Horas extraordinarias"));
+    assert.equal(ext, "Horas extraordinarias (7,5 h descanso + 24,5 h feriado) · Total 32 h");
+    assert.equal(out.ingresos.find((x) => x[0] === ext)?.[1], 128.52);
+    assert.ok(!lbl.some((l) => l.includes("descanso/feriado") || l.startsWith("Horas extraordinarias descanso") || l.startsWith("Horas extraordinarias periodo")));
     assert.equal(out.dias, "Días trabajados 14 + Días feriado (trabajados) 3 + Día descanso (trabajado) 1 + Días asumidos 4 = Total 22 días");
   });
 });
