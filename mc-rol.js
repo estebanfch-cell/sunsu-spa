@@ -24,7 +24,7 @@
       if (x.error) return '<tr><td>' + esc(x.nombre) + '</td><td colspan="9" class="err">' + esc(x.error) + "</td></tr>";
       var desc = Number(x.anticipos || 0) + Number(x.prestamos || 0);
       return '<tr data-prerol-fila="' + esc(x.nombre) + '">'
-        + '<td><b>' + esc(x.nombre) + "</b>" + (x.afiliada ? "" : ' <span class="note">sin IESS</span>') + "</td>"
+        + '<td><b>' + esc(x.nombreCompleto || x.nombre) + "</b>" + (x.afiliada ? "" : ' <span class="note">sin IESS</span>') + "</td>"
         + '<td class="num">' + esc(typeof _rolDiasLinea === "function" ? _rolDiasLinea(x) : ((Number(x.diasTrabajados || 0) + Number(x.diasFest || 0) + Number(x.diasDesc || 0) + Number(x.diasAsumidos || 0)) + " días"))
         + (x.faltas ? ' <span class="err">' + esc(x.faltas) + " f.</span>" : "") + "</td>"
         + '<td class="num">$' + m2(x.sueldo + x.bono) + "</td>"
@@ -330,13 +330,13 @@
     var pre = !!o.pre;
     var pie;
     if (pre) pie = '<div class="rolx-pie pre"><b>PRE-ROL / Borrador para revisión</b><span>Pendiente de revisión de Contabilidad y de aprobación de administración. Sin firma de la empleada.</span></div>';
-    else if (o.firma && o.firma.png) pie = '<div class="rolx-pie ok"><b>ROL FIRMADO POR LA EMPLEADA</b><img alt="Firma" src="' + esc(o.firma.png) + '"><span>Recibí conforme · ' + esc(d.nombre || "") + " · firmado el " + esc(o.firma.fechaLocal || o.firma.firmadoAt || "") + "</span></div>";
-    else pie = '<div class="rolx-pie"><span>Recibí conforme · ' + esc(d.nombre || "") + "</span></div>";
+    else if (o.firma && o.firma.png) pie = '<div class="rolx-pie ok"><b>ROL FIRMADO POR LA EMPLEADA</b><img alt="Firma" src="' + esc(o.firma.png) + '"><span>Recibí conforme · ' + esc(typeof _rolNombre === "function" ? _rolNombre(d) : (d.nombre || "")) + " · firmado el " + esc(o.firma.fechaLocal || o.firma.firmadoAt || "") + "</span></div>";
+    else pie = '<div class="rolx-pie"><span>Recibí conforme · ' + esc(typeof _rolNombre === "function" ? _rolNombre(d) : (d.nombre || "")) + "</span></div>";
     return '<div class="rolx-doc' + (pre ? " is-pre" : "") + '">'
       + (pre ? '<div class="rolx-banda">PRE-ROL / Borrador para revisión</div>' : "")
       + '<div class="rolx-titulo">' + (pre ? "PRE-ROL DE PAGOS" : "ROL DE PAGOS") + "</div>"
       + '<div class="rolx-sub">Sunsu Spa · Quito · Período: ' + esc(String(d.etiqueta || pack.etiqueta || pack.periodo || "").toUpperCase()) + "</div>"
-      + '<div class="rolx-datos"><b>EMPLEADA</b><span>' + esc(d.nombre || pack.persona || "") + "</span>"
+      + '<div class="rolx-datos"><b>EMPLEADA</b><span>' + esc((typeof _rolNombre === "function" ? _rolNombre(d) : "") || d.nombreCompleto || d.nombre || pack.persona || "") + "</span>"
       + (d.cedula ? "<b>CÉDULA</b><span>" + esc(d.cedula) + "</span>" : "")
       + (d.cargo ? "<b>CARGO</b><span>" + esc(d.cargo) + "</span>" : "")
       + "<b>DÍAS</b><span>" + esc(r.dias || (typeof _rolDiasLinea === "function" ? _rolDiasLinea(d) : "")) + "</span></div>"
@@ -549,7 +549,7 @@
     return new Promise(function (ok, no) {
       if (window.XLSX) return ok(window.XLSX);
       var sc = document.createElement("script");
-      sc.src = "vendor-xlsx.js?v=20261125tk228";
+      sc.src = "vendor-xlsx.js?v=20261125tk229";
       sc.onload = function () { window.XLSX ? ok(window.XLSX) : no(new Error("No se pudo cargar el lector de Excel")); };
       sc.onerror = function () { no(new Error("No se pudo cargar el lector de Excel")); };
       document.head.appendChild(sc);

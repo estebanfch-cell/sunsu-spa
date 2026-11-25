@@ -10,6 +10,7 @@ import { cicloFin, cicloInicio, ecuadorParts, n, normNombre, rolCalcularOficial,
 import { esAdmin, esPropio } from "./permisos.ts";
 import { clavePeriodo, etiquetaPeriodo, estaPublicado, mismaPersonaRol } from "./roles_api.ts";
 import { clasificarHorasRol, enMapaRrhh, horarioRolDeTabla, horarioRrhhDe, type DiaHorasRol } from "./horas_rol.ts";
+import { elegirNombreLegal, mapaNombresLegales, snapConNombreLegal } from "./rol_nombres.ts";
 
 const MESES: Record<string, number> = {
   ENERO: 1, FEBRERO: 2, MARZO: 3, ABRIL: 4, MAYO: 5, JUNIO: 6,
@@ -102,6 +103,8 @@ export function snapshotDe(opts: {
   afiliada?: boolean;
   /** DEV-31: anticipos y cuotas de préstamos internos de este rol (ya sumados en «anticipo»). */
   descInternos?: { anticipo: number; prestamo: number; detalle: Row[] } | null;
+  /** DEV-31j (t926u): nombre legal (nombres y apellidos). `nombre` sigue siendo el nombre corto de la app. */
+  nombreCompleto?: string;
 }): Row {
   const afiliada = opts.afiliada !== false;
   const calc0 = rolCalcularOficial({
@@ -129,7 +132,7 @@ export function snapshotDe(opts: {
   const diasVis = (opts.horas.diasTrabajados + opts.horas.diasAsumidos);
   return {
     ...calc,
-    nombre: opts.persona, cedula: opts.cedula, cargo: opts.cargo,
+    nombre: opts.persona, nombreCompleto: s(opts.nombreCompleto) || opts.persona, cedula: opts.cedula, cargo: opts.cargo,
     periodo: opts.periodo, etiqueta: etiquetaPeriodo(opts.periodo),
     anio: opts.anio, mes: opts.mes, ciclo: opts.cicloDesde, fin: opts.cicloHasta,
     sueldoBase: opts.sueldoBase, fechaIngreso: opts.fechaIngreso, fondoFlag: opts.fondo,
@@ -176,7 +179,7 @@ export function aplicarAjustes(base: Row, aj: Row): Row {
     jornadaMins: n(base.jornadaMins), regla: s(base.reglaHoras),
   };
   return snapshotDe({
-    persona: s(base.nombre), cedula: s(base.cedula), cargo: s(base.cargo), periodo: s(base.periodo),
+    persona: s(base.nombre), nombreCompleto: s(base.nombreCompleto), cedula: s(base.cedula), cargo: s(base.cargo), periodo: s(base.periodo),
     anio: n(base.anio), mes: n(base.mes), cicloDesde: s(base.ciclo), cicloHasta: s(base.fin),
     sueldoBase, bono: aj.bono != null ? n(aj.bono) : n(base.bono),
     fondo: aj.fondoFlag != null ? !!aj.fondoFlag : !!base.fondoFlag,
@@ -343,8 +346,9 @@ export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string,
   const fuenteHoras = !nomina.hayDatos && horas.diasTrabajados === 0
     ? (horas.diasAsumidos ? "asumidas" : "sin_marcajes")
     : (nomina.diasPropios ? "asistencia de la app" : "histórico de la app+asumidas");
+  const nombreCompleto = elegirNombreLegal((cfgRol && cfgRol.nombreCompleto) || s(emp.apellidos_y_nombres), persona);
   const snap = snapshotDe({
-    persona, cedula: (cfgRol && cfgRol.cedula) || s(emp.cedula), cargo: (cfgRol && cfgRol.cargo) || s(emp.cargo), periodo: per.periodo,
+    persona, nombreCompleto, cedula: (cfgRol && cfgRol.cedula) || s(emp.cedula), cargo: (cfgRol && cfgRol.cargo) || s(emp.cargo), periodo: per.periodo,
     anio: per.anio, mes: per.mes, cicloDesde: per.cicloDesde, cicloHasta: per.cicloHasta,
     sueldoBase, bono, fondo, fechaIngreso: ingresoCfg || "2020-01-01",
     horas, com, iess: { quir: iessFicha.quir, hip: iessFicha.hip, otros: iessFicha.otros },
@@ -459,7 +463,9 @@ extend("rol_get", "any", async (p, ctx, ses) => {
   if (!admin && !(esPropio(s(row.persona), ses) || mismaPersonaRol(s(row.persona), ses.name || "") || mismaPersonaRol(s(row.persona), ses.short || ""))) {
     return { error: "Solo puedes ver tu propio rol." };
   }
-  const snap = (row.snapshot && typeof row.snapshot === "object") ? row.snapshot as Row : {};
+  const snap0 = (row.snapshot && typeof row.snapshot === "object") ? row.snapshot as Row : {};
+  const legal = s(snap0.nombreCompleto) || (await mapaNombresLegales(ctx))(s(row.persona) || s(snap0.nombre), s(row.cedula) || s(snap0.cedula));
+  const snap = snapConNombreLegal(snap0, legal);
   const { firmaDeRol, vistaFirma } = await import("./rol_descuentos_api.ts");
   const firma = vistaFirma(await firmaDeRol(ctx, s(row.id)), true);
   return { ...vista(row, snap, admin), firma, puedeFirmar: !admin && s(row.estado) === "aprobado" && !firma && !!s(ses.token) };

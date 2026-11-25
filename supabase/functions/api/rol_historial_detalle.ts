@@ -10,6 +10,7 @@
 // pagado NO se cambia: se anota en `diferencias` para que administración decida.
 import type { Ctx } from "./lib.ts";
 import { floorCent, n, normNombre, round2, s, SBU_ROL, IESS_PERSONAL_PCT, FONDO_RESERVA_PCT, type Row } from "./domain.ts";
+import { elegirNombreLegal, mapaNombresLegales, snapConNombreLegal } from "./rol_nombres.ts";
 
 export const MESES_NUM: Record<string, number> = {
   ENERO: 1, FEBRERO: 2, MARZO: 3, ABRIL: 4, MAYO: 5, JUNIO: 6,
@@ -233,7 +234,7 @@ export function armarDetalleHistorial(inp: EntradaDetalle): { d: Row; diferencia
 
   const iessPatronal = round2(n(h.iess_patronal_11_15)) || round2(A * 0.1115);
   const d: Row = {
-    nombre: s(h.empleada), cedula: cedulaNorm(h.cedula), cargo: s(inp.emp?.cargo) || s(R?.col_3),
+    nombre: s(h.empleada), nombreCompleto: elegirNombreLegal(inp.emp?.apellidos_y_nombres, h.empleada), cedula: cedulaNorm(h.cedula), cargo: s(inp.emp?.cargo) || s(R?.col_3),
     periodo: inp.periodo, etiqueta: inp.etiqueta, anio: inp.anio, mes: inp.mes,
     sueldoBase: base, sueldo, bono,
     hrsOrdinarias: H ? round2(n(H.col_3)) : (R ? round2(n(R.col_4)) : round2(n(motor?.hrsOrdinarias))),
@@ -312,7 +313,10 @@ export async function detalleHistorialDe(ctx: Ctx, hist: Row, periodo: string, e
     try { ficha = await fichaIessDe(ctx, nombreApp, `${anio}-${String(mes).padStart(2, "0")}-25`); } catch { /* sin ficha */ }
     egresosSinHoja = { multas, prestHip: ficha.hip, prestQuir: ficha.quir, prestOtro: ficha.otros, multasDetalle };
   }
-  return armarDetalleHistorial({ hist, periodo, etiqueta, anio, mes, hoja, emp, esRecepcion, afiliada, motor, egresosSinHoja });
+  const out = armarDetalleHistorial({ hist, periodo, etiqueta, anio, mes, hoja, emp, esRecepcion, afiliada, motor, egresosSinHoja });
+  const look = await mapaNombresLegales(ctx);
+  const legal = look(nombreApp, ced) || elegirNombreLegal(emp?.apellidos_y_nombres, hist.empleada);
+  return { d: snapConNombreLegal(out.d, legal), diferencias: out.diferencias };
 }
 
 /** Detalle congelado (beta_rol_hist_detalle) si existe; si no, se arma al vuelo. */
@@ -320,5 +324,8 @@ export async function detalleGuardadoDe(ctx: Ctx, periodo: string, cedula: strin
   const rows = await ctx.db.all("beta_rol_hist_detalle").catch(() => [] as Row[]);
   const ced = cedulaNorm(cedula);
   const hit = rows.find((r) => s(r.periodo).toUpperCase() === periodo.toUpperCase() && cedulaNorm(r.cedula) === ced);
-  return hit && hit.detalle && typeof hit.detalle === "object" ? hit.detalle as Row : null;
+  if (!(hit && hit.detalle && typeof hit.detalle === "object")) return null;
+  const d = hit.detalle as Row;
+  const look = await mapaNombresLegales(ctx);
+  return snapConNombreLegal(d, look(d.nombre, ced || d.cedula));
 }
