@@ -76,3 +76,24 @@ describe("DEV-31e etiquetas del rol", () => {
     assert.equal(out.dias, "Días trabajados 14 + Días feriado (trabajados) 3 + Día descanso (trabajado) 1 + Días asumidos 4 = Total 22 días");
   });
 });
+
+describe("DEV-31l asumir jornada sin marcajes (t941u)", () => {
+  const evH = { diasDescanso: [0, 2], jornadaMins: 540, etiqueta: "Lun, Mié-Sáb 9h" }; // like Evelyn
+  it("sin el flag, un día hábil pasado sin marca es falta; con el flag se asume la jornada", () => {
+    const base = { anio: 2026, mes: 11, hoy: "2026-11-25" as const, horario: evH, feriados: FER, ingreso: "2026-11-14", dias: { "2026-11-16": marca("2026-11-16", 540) } };
+    const sin = clasificarHorasRol(base);
+    const con = clasificarHorasRol({ ...base, asumirSinMarcajes: true });
+    assert.ok(sin.diasFalta > 0);
+    assert.equal(con.diasFalta, 0);
+    assert.ok(con.diasAsumidos > sin.diasAsumidos);
+    assert.equal(con.diasTrabajados, sin.diasTrabajados);
+    // Los días antes del ingreso no se inventan.
+    assert.equal(con.diasNoContratada, sin.diasNoContratada);
+    assert.ok((con.diasNoContratada || 0) >= 13);
+  });
+  it("sin el flag Andrea sigue igual (0 faltas en el caso con marcas)", () => {
+    const h = clasificarHorasRol({ anio: 2026, mes: 11, hoy: "2026-11-25", horario: andH, feriados: FER, dias: { "2026-11-24": marca("2026-11-24", 480) } });
+    const h2 = clasificarHorasRol({ anio: 2026, mes: 11, hoy: "2026-11-25", horario: andH, feriados: FER, dias: { "2026-11-24": marca("2026-11-24", 480) }, asumirSinMarcajes: false });
+    assert.equal(h.diasFalta, h2.diasFalta);
+  });
+});

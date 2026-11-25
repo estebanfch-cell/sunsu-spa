@@ -249,6 +249,7 @@
       + '<label>Fecha de ingreso <input data-f="fechaIngreso" type="date" value="' + esc(c.fechaIngreso || "") + '"></label>'
       + '<label>Cargo <input data-f="cargo" value="' + esc(c.cargo || "") + '"></label>'
       + '<label>Nota <input data-f="notas" maxlength="400" value="' + esc(c.notas || "") + '"></label>'
+      + '<label class="cfgrol-check"><input type="checkbox" data-f="asumirSinMarcajes"' + (c.asumirSinMarcajes ? " checked" : "") + '> Asumir jornada si no hay marcajes (sin Jibble): los días que le tocaba trabajar y no tiene marca se cuentan como trabajados, no como falta.</label>'
       + '<label>Motivo del cambio (opcional) <input data-f="motivo" maxlength="300"></label>'
       + "</div>"
       + '<p class="note">Décimos 13º y 14º: mensualizados. Fondo de reserva (8,33 %): mensualizado, ' + esc(c.fondoEstado ? c.fondoEstado.charAt(0).toLowerCase() + c.fondoEstado.slice(1) : "desde que cumple 1 año") + ". El mes en que cumple el año se prorratea por días.</p>"
@@ -291,9 +292,9 @@
         var prev = ((a.items || []).concat(a.inactivas || [])).find(function (x) { return x.persona === persona; }) || {};
         var activa = g.getAttribute("data-activa") === "1";
         if (!activa && !window.confirm("¿Marcar a " + persona + " como inactiva? Ya no saldrá en roles ni en el pre-rol. Sus datos se conservan.")) return;
-        body = { persona: persona, sueldoBase: prev.sueldoBase, bono: prev.bono, afiliada: prev.afiliada !== false ? "si" : "no", fechaIngreso: prev.fechaIngreso, cargo: prev.cargo, notas: prev.notas, activa: activa, motivo: activa ? "Reactivada" : "Marcada inactiva" };
+        body = { persona: persona, sueldoBase: prev.sueldoBase, bono: prev.bono, afiliada: prev.afiliada !== false ? "si" : "no", fechaIngreso: prev.fechaIngreso, cargo: prev.cargo, notas: prev.notas, asumirSinMarcajes: !!prev.asumirSinMarcajes, activa: activa, motivo: activa ? "Reactivada" : "Marcada inactiva" };
       } else {
-        body = { persona: persona, sueldoBase: Number(String(val("sueldoBase")).replace(",", ".")), bono: Number(String(val("bono")).replace(",", ".")), afiliada: val("afiliada"), fechaIngreso: val("fechaIngreso"), cargo: val("cargo"), notas: val("notas"), motivo: val("motivo"), activa: true };
+        body = { persona: persona, sueldoBase: Number(String(val("sueldoBase")).replace(",", ".")), bono: Number(String(val("bono")).replace(",", ".")), afiliada: val("afiliada"), fechaIngreso: val("fechaIngreso"), cargo: val("cargo"), notas: val("notas"), asumirSinMarcajes: !!(card.querySelector('[data-f="asumirSinMarcajes"]') && card.querySelector('[data-f="asumirSinMarcajes"]').checked), motivo: val("motivo"), activa: true };
       }
       var err = card.querySelector("[data-cfgrol-err]");
       if (err) err.textContent = "";
@@ -358,7 +359,7 @@
   }
   var CONTAB = { "": "Sin enviar", enviado: "Enviado a contabilidad", ok: "Ok de contabilidad" };
   function htmlPreRolCuerpo(pack, persona) {
-    var d = pack.data || {};
+    var d = pack.data || pack || {};
     var aprobado = pack.estado === "aprobado";
     var pa = d.aportesPatronal || {};
     var ccc = pa.ccc != null ? pa.ccc : d.ccc;
@@ -379,7 +380,8 @@
         + '<button class="btn rolx-aprobar" type="button" data-rolx-aprobar="' + esc(pack.id) + '">Aprobar rol y enviar a la empleada</button>'
         + '<p class="note rolx-aviso">La empleada no ve nada hasta que apruebes: entonces le aparece en su Rol para firmar.</p></div>';
     }
-    return cab + htmlKpis(d) + htmlRolDoc(pack, { pre: !aprobado }) + costo + acc
+    var aviso = pack.aviso ? '<p class="note">' + esc(pack.aviso) + "</p>" : "";
+    return cab + aviso + htmlKpis(d) + htmlRolDoc(pack, { pre: !aprobado }) + costo + acc
       + (aprobado ? "" : htmlMarcasBoxSafe(pack, persona));
   }
   function htmlMarcasBoxSafe(pack, persona) {
@@ -427,9 +429,11 @@
     var pack = await api("rol_pre_auto", { persona: persona });
     if (persona !== RX.persona) return;
     if (!pack || pack.error) { body.innerHTML = '<p class="err">' + esc((pack && pack.error) || "No se pudo calcular el pre-rol") + "</p>"; return; }
-    if (!pack.data || (pack.data.nombre == null && pack.data.nombreCompleto == null && pack.data.totalRecibir == null && pack.data.sueldo == null)) {
+    var d0 = pack.data || pack;
+    if (!d0 || (d0.nombre == null && d0.nombreCompleto == null && d0.totalRecibir == null && d0.sueldo == null && d0.etiqueta == null)) {
       body.innerHTML = '<p class="err">No se pudo calcular el pre-rol de ' + esc(persona) + ".</p>"; return;
     }
+    if (!pack.data) pack.data = d0;
     RX.pack = pack;
     body.innerHTML = htmlPreRolCuerpo(pack, persona);
     var det = body.querySelector("[data-mk-de]");
@@ -557,7 +561,7 @@
     return new Promise(function (ok, no) {
       if (window.XLSX) return ok(window.XLSX);
       var sc = document.createElement("script");
-      sc.src = "vendor-xlsx.js?v=20261125tk230";
+      sc.src = "vendor-xlsx.js?v=20261125tk231";
       sc.onload = function () { window.XLSX ? ok(window.XLSX) : no(new Error("No se pudo cargar el lector de Excel")); };
       sc.onerror = function () { no(new Error("No se pudo cargar el lector de Excel")); };
       document.head.appendChild(sc);
