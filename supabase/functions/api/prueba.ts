@@ -25,6 +25,8 @@ const TABLAS = [
   "erp_stock", "erp_oc_pagos", "erp_consignacion_cierre",
   "erp_conteo_secciones", "erp_conteo_items",
   "beta_empleados", "beta_iess_descuentos", "beta_empleado_docs",
+  // DEV-31: rol de pagos en simulación (filas origin=test que la simulación borra al salir).
+  "beta_roles", "beta_rol_descuentos", "beta_rol_firmas",
 ];
 
 function round4(x: number): number {

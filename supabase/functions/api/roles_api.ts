@@ -183,6 +183,7 @@ extend("roles_lista", "any", async (p, ctx, ses) => {
     }
   }
   const propios = await ctx.db.all("beta_roles").catch(() => [] as Row[]);
+  const firmasRol = await ctx.db.all("beta_rol_firmas").catch(() => [] as Row[]);
   for (const r of propios) {
     if (s(r.origin) === "test") continue;
     const persona = s(r.persona);
@@ -201,6 +202,7 @@ extend("roles_lista", "any", async (p, ctx, ses) => {
       totalIngresos: n(snap.totalIngresos), neto: n(snap.totalRecibir || snap.neto),
       publicado: pub, estado: s(r.estado) || "borrador",
       fuente: "beta", sheet: periodo, motivoRechazo: s(r.motivo_rechazo),
+      firmado: firmasRol.some((f) => s(f.rol_id) === s(r.id)),
     };
     if (ix >= 0) items[ix] = item;
     else items.push(item);
