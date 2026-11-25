@@ -550,7 +550,13 @@ export function esCanje(q: unknown, r: unknown): boolean {
 }
 export function esInterno(cosm: unknown, cedula: unknown): boolean {
   const c = s(cosm);
-  return !c || c.toUpperCase() === "SUNSU" || normCedula(cedula) === CEDULA_INTERNA;
+  return !c || c.toUpperCase() === "SUNSU" || normCedula(cedula) === normCedula(CEDULA_INTERNA);
+}
+
+/** Ticket de canje completo (sesión de paquete o forma de pago «Canje») sin cobro. Los extras no comisionan; el facial de la sesión sí. No aplica a pago directo ($0 sin canje). */
+export function esCanjeSinCobro(t: { paquete?: string; gift_card?: string; comp?: string; total?: number }): boolean {
+  const canje = esCanje(t.paquete, t.gift_card) || /^\s*canje\b/i.test(s(t.comp));
+  return canje && !(n(t.total) > 0);
 }
 
 /** Pagos mixtos: el monto de un método es el total del ticket, salvo desglose que cuadre. */
@@ -749,6 +755,13 @@ export interface PaqueteLinea { tipo: "pack3" | "pack6"; texto: string; neto?: n
 export interface TicketIn {
   fecha: string; cosm: string; cedula: string; facial: string;
   pack3: string; pack6: string; extras: string;
+  /** Columna «Paquete?» (SI, 1/3…) y Gift Card, para detectar canje sin cobro. */
+  paquete?: string;
+  gift_card?: string;
+  /** Forma de pago (comp). */
+  comp?: string;
+  /** Total cobrado (estimado o total beta). 0 = sin cobro. */
+  total?: number;
   exclFacial: boolean; exclPaquete: boolean; exclProducto: boolean; exclExtras: boolean;
   productos: { sku: string; qty: number; ventaNeta?: number; compraComision?: number; comision?: number }[];
   /** Precio neto de catálogo del paquete x3. */
@@ -1178,7 +1191,7 @@ export function calcularCiclo(
         else { r.paquetes += 1; r.netos.push(neto); r.factores.push(fx); }
       }
     }
-    if (!t.exclExtras) {
+    if (!t.exclExtras && !esCanjeSinCobro(t)) {
       const ex = contarExtras(t.extras);
       const pagados = ex.n - ex.cortesia;
       r.extras += pagados;
