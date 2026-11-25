@@ -349,7 +349,7 @@ function quitarContacto(v: unknown, tel: boolean, mail: boolean): unknown {
 }
 
 /** DEV-31b (Emilia t907u): el aporte patronal y el costo empresa los ve solo administración. */
-const PATRONAL = new Set(["aportespatronal", "aportepatronal", "aportepatronalpct", "iesspatronal", "iess_patronal_11_15", "secap", "iece", "costoempresa", "costo_empresa", "costototalempresa"]);
+const PATRONAL = new Set(["aportespatronal", "aportepatronal", "aportepatronalpct", "iesspatronal", "iess_patronal_11_15", "secap", "iece", "ccc", "cccpct", "costoempresa", "costo_empresa", "costototalempresa"]);
 function quitarPatronal(v: unknown): unknown {
   if (Array.isArray(v)) return v.map((x) => quitarPatronal(x));
   if (!v || typeof v !== "object") return v;

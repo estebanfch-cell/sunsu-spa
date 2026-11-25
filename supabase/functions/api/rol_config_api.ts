@@ -129,11 +129,13 @@ extend("rolcfg_guardar", "any", async (p, ctx, ses) => {
     if (JSON.stringify(antes) === JSON.stringify(despues)) return { ok: true, sinCambios: true, item: vistaCfg(despues, now.slice(0, 10)) };
     await ctx.db.write(actorOf(ses), "beta_rol_config", "update", { persona: s(prev.persona) }, fila);
     await logCfg(ctx, ses, s(prev.persona), antes.activa !== despues.activa ? (despues.activa ? "reactivar" : "desactivar") : "editar", antes as unknown as Row, despues as unknown as Row, motivo);
+    try { const { asegurarOverlay } = await import("./empleados_api.ts"); await asegurarOverlay(ctx, ses, s(fila.persona), { afiliada_iess: afiliada }); } catch { /* el rol ya usa esta fila */ }
     return { ok: true, item: vistaCfg(despues, now.slice(0, 10)) };
   }
   await ctx.db.write(actorOf(ses), "beta_rol_config", "insert", {}, { ...fila, created_at: now });
   const despues = configDeFila(fila);
   await logCfg(ctx, ses, despues.persona, "crear", null, despues as unknown as Row, motivo);
+  try { const { asegurarOverlay } = await import("./empleados_api.ts"); await asegurarOverlay(ctx, ses, despues.persona, { afiliada_iess: afiliada }); } catch { /* el rol ya usa esta fila */ }
   return { ok: true, item: vistaCfg(despues, now.slice(0, 10)) };
 });
 
