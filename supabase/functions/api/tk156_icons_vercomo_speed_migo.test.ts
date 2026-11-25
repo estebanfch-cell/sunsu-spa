@@ -156,8 +156,8 @@ describe("TK156 Tickets instantáneo (stale-while-revalidate)", () => {
 
 describe("TK156 versión", () => {
   it("caché y motor en TK156", () => {
-    assert.match(file("sw.js"), /const CACHE = "sunsu-2026-11-25-DEV34B"/);
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-25-DEV34B"/);
+    assert.match(file("sw.js"), /const CACHE = "sunsu-2026-11-25-DEV31K"/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-25-DEV31K"/);
     assert.match(file("supabase/functions/api/sunsu_version.ts"), /sunsu-engine-2026-11-19-TK157/);
   });
 });

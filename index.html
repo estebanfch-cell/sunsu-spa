@@ -1594,9 +1594,9 @@ b + p.mcpq-hist { margin-top: 8px; border-top: 0; }
   .rolx-estado { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:2px 0 6px; font-weight:800; color:var(--navy,#3D5A7A); }
   .rolx-estado small { font-weight:400; }
   .rolx-kpis { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:6px; margin:0 0 8px; }
-  .rolx-k { background:#fff; border:1px solid var(--cream-d,#E6DCCB); border-radius:8px; padding:5px 7px; display:grid; min-width:0; }
-  .rolx-k span { font-size:.66rem; color:#7a8594; text-transform:uppercase; letter-spacing:.03em; }
-  .rolx-k b { font-size:.92rem; color:var(--navy,#3D5A7A); font-variant-numeric:tabular-nums; }
+  .rolx-k { background:#fff; border:1px solid var(--cream-d,#E6DCCB); border-radius:8px; padding:5px 7px; display:grid; min-width:0; align-content:start; }
+  .rolx-k span { font-size:.62rem; color:#7a8594; text-transform:uppercase; letter-spacing:.03em; line-height:1.2; }
+  .rolx-k b { font-size:.95rem; color:var(--navy,#3D5A7A); font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .rolx-k.neto { background:#FDF7E6; border-color:#E8D49A; } .rolx-k.neto b { color:#8A6D1A; }
   .rolx-doc { background:#FBF8F0; border:1px solid var(--cream-d,#E6DCCB); border-radius:12px; padding:12px 14px 14px; font-size:.82rem; color:#4A5568; }
   .rolx-banda { background:#FDECD6; color:#B5651D; font-weight:800; text-align:center; border-radius:6px; padding:5px; font-size:.78rem; margin-bottom:8px; }
@@ -6474,6 +6474,7 @@ function htmlRolOficial(pack) {
       ${esc(typeof _rolDiasLinea === "function" ? _rolDiasLinea(d) : "")}${d.faltas ? " · faltas " + esc(d.faltas) : ""}<br>
       ${esc(d.fuenteHoras || "")}${d.reglaHoras ? " · " + esc(d.reglaHoras) : ""}</p>
     ${motivo}
+    ${typeof _htmlRolKpis === "function" ? _htmlRolKpis(d) : ""}
     ${editable ? htmlRolEditable(d, campo, linea, hrs) : htmlRolLineas(d)}
     ${window.SunsuRol ? SunsuRol.htmlFirma(pack) : ""}
     ${admin && d.aportesPatronal ? `<div class="rol-patronal">
@@ -8998,7 +8999,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-25-DEV34B"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-25-DEV31K"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -9180,7 +9181,7 @@ window.SunsuUpdate.init();
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk195"></script>
 <script src="beta-screens.js?v=20261125dev34b"></script>
-<script src="mc-rol.js?v=20261125tk229"></script>
+<script src="mc-rol.js?v=20261125tk230"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
 <script src="mc-nav.js?v=20261123tk216"></script>
