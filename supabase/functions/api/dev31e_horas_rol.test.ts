@@ -54,7 +54,7 @@ describe("DEV-31e horas del rol (t916u)", () => {
 });
 
 describe("DEV-31e etiquetas del rol", () => {
-  it("descanso = 'Horas extraordinarias descanso'; feriado = 'Horas extraordinarias periodo'; cabecera en horas", () => {
+  it("cabecera en días (trabajados + feriado + descanso + asumidos) y extras con sus horas", () => {
     const src = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
     const pick = (name: string) => {
       const i = src.indexOf("function " + name + "(");
@@ -62,9 +62,9 @@ describe("DEV-31e etiquetas del rol", () => {
       for (; j < src.length; j++) { if (src[j] === "{") depth++; else if (src[j] === "}" && --depth === 0) break; }
       return src.slice(i, j + 1);
     };
-    const fn = new Function(`${pick("_rolNum")}\n${pick("_rolHrs")}\n${pick("_lineasRol")}\nreturn _lineasRol;`)() as (d: unknown) => { ingresos: [string, number][]; horas: string; dias: string };
+    const fn = new Function(`${pick("_rolNum")}\n${pick("_rolHrs")}\n${pick("_rolDiasLinea")}\n${pick("_lineasRol")}\nreturn _lineasRol;`)() as (d: unknown) => { ingresos: [string, number][]; dias: string };
     const out = fn({
-      sueldo: 482, hrsOrdinarias: 144, hrsNomina: 183.5, jornadaMins: 480, diasTrabajados: 14, diasAsumidos: 4, diasFest: 3,
+      sueldo: 482, hrsOrdinarias: 144, hrsNomina: 183.5, jornadaMins: 480, diasTrabajados: 14, diasAsumidos: 4, diasFest: 3, diasDesc: 1,
       valSupl: 0, hrsSupl: 0, valExtr: 96.4, hrsExtr: 24, valDesc: 30.12, hrsDesc: 7.5,
       dec13: 40, dec14: 39.17, iess: 45,
     });
@@ -72,9 +72,6 @@ describe("DEV-31e etiquetas del rol", () => {
     assert.ok(lbl.some((l) => l.startsWith("Horas extraordinarias descanso (7,5 h)")));
     assert.ok(lbl.some((l) => l.startsWith("Horas extraordinarias periodo (24 h)")));
     assert.ok(!lbl.some((l) => l.includes("descanso/feriado") || l.startsWith("Horas extraordinarias 100%")));
-    assert.match(out.horas, /183,5 h/);
-    assert.match(out.horas, /32 h asumidas/);
-    assert.match(out.dias, /14 con asistencia/);
-    assert.match(out.dias, /4 proyectados/);
+    assert.equal(out.dias, "Días trabajados 14 + Días feriado (trabajados) 3 + Día descanso (trabajado) 1 + Días asumidos 4 = Total 22 días");
   });
 });

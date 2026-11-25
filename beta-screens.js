@@ -16904,14 +16904,24 @@ async function descargarRol(sheetName, cedula, btnEl) {
 // · Los totales salen de los mismos campos del rol (no se recalculan aquí).
 function _rolNum(v){ var x=parseFloat(v); return isFinite(x)?x:0; }
 function _rolHrs(h){ var x=_rolNum(h); return (Math.round(x*100)/100).toString().replace('.',','); }
+function _rolDiasLinea(d){
+  d=d||{};
+  var n=function(v){ var x=parseFloat(v); return isFinite(x)?Math.round(x):0; };
+  var dt=n(d.diasTrabajados), df=n(d.diasFest), dd=n(d.diasDesc), da=n(d.diasAsumidos);
+  var tot=dt+df+dd+da;
+  var parts=[
+    (dt===1?'Día trabajado ':'Días trabajados ')+dt,
+    (df===1?'Día feriado (trabajado) ':'Días feriado (trabajados) ')+df,
+    (dd===1?'Día descanso (trabajado) ':'Días descanso (trabajados) ')+dd,
+    (da===1?'Día asumido ':'Días asumidos ')+da
+  ];
+  return parts.join(' + ')+' = Total '+tot+' '+(tot===1?'día':'días');
+}
 function _lineasRol(d){
   d=d||{};
   var N=_rolNum, ing=[], egr=[], notas=[];
   var add=function(arr,l,v){ var m=Math.round(N(v)*100)/100; if(m!==0) arr.push([l,m]); };
   var normales=N(d.hrsOrdinarias);
-  var hrsTot=N(d.hrsNomina);
-  if(!hrsTot) hrsTot=normales+N(d.hrsSupl)+N(d.hrsExtr)+N(d.hrsDesc);
-  var asumHrs=N(d.diasAsumidos)*((N(d.jornadaMins)||480)/60);
   var lblSueldo='Sueldo'+(normales?(' ('+_rolHrs(normales)+' h normales)'):'');
   add(ing,lblSueldo,d.sueldo);
   add(ing,'Bono',d.bono);
@@ -16958,15 +16968,12 @@ function _lineasRol(d){
   var totalIng=d.totalIngresos!=null?N(d.totalIngresos):ing.reduce(function(a,x){return a+x[1];},0);
   var totalEgr=d.totalEgresos!=null?N(d.totalEgresos):(N(d.iess)+N(d.egresos));
   var neto=d.totalRecibir!=null?N(d.totalRecibir):(d.neto!=null?N(d.neto):totalIng-totalEgr);
-  var horasTxt=hrsTot?(_rolHrs(hrsTot)+' h'+(asumHrs?(' (incl. '+_rolHrs(asumHrs)+' h asumidas)'):'')):'—';
-  var dt=N(d.diasTrabajados), da=N(d.diasAsumidos), dfest=N(d.diasFest);
-  var diasRef='';
-  if(dt||da||dfest){
-    diasRef=dt+' con asistencia'+(da?(' + '+da+' proyectados'):'')+(dfest?(' · '+dfest+' feriado(s) trabajado(s) van en extraordinarias periodo'):'');
-  }
+  // DEV-31f (Emilia t918u/t919u): la cabecera del rol va en días, no en horas.
+  var diasTxt=_rolDiasLinea(d);
   return {
-    horas: horasTxt,
-    dias: diasRef||'—',
+    horas: '',
+    dias: diasTxt,
+    diasTotal: N(d.diasTrabajados)+N(d.diasFest)+N(d.diasDesc)+N(d.diasAsumidos),
     ingresos: ing, egresos: egr, multas: multas, notas: notas,
     totalIngresos: totalIng, totalEgresos: totalEgr, neto: neto
   };
@@ -17097,12 +17104,14 @@ function _pdfRolPagina(doc, d, sheetName, apro, fondo){
     fila('EMPLEADA:',d.nombre);
     fila('CÉDULA:',d.cedula);
     fila('CARGO:',d.cargo);
-    // DEV-31e (Emilia t916u): en el rol se muestran las HORAS (asistencia + proyectadas).
-    // Los días quedan solo como referencia legal, no como dato principal.
+    // DEV-31f (Emilia t918u/t919u): cabecera en días (desglose de asistencia). Las horas extra siguen en sus líneas.
     var rol=_lineasRol(d);
-    fila('HORAS TRABAJADAS:', rol.horas||'—');
-    if(rol.dias&&rol.dias!=='—') fila('DÍAS (REF. LEGAL):', rol.dias);
-    y+=6;
+    doc.setFont('helvetica','bold'); doc.setTextColor(NAVY); doc.text('DÍAS:',xI,y);
+    doc.setFont('helvetica','normal'); doc.setTextColor(TXT); doc.setFontSize(8.5);
+    var diasLines=doc.splitTextToSize(rol.dias||'—', ANCHO-50);
+    doc.text(diasLines,xI+50,y);
+    y+=Math.max(14, 12*diasLines.length)+6;
+    doc.setFontSize(9);
     var salto=function(need){ if(y+need>H-70){doc.addPage();pintar();y=140;} };
     var barra=function(titulo,cRGB){
       salto(60);

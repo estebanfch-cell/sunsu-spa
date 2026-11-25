@@ -138,7 +138,7 @@ describe("DEV-31 rol de pagos", () => {
     assert.match(js, /Anticipos y préstamos/);
     assert.match(js, /pointerdown/);
     assert.match(js, /rol_firmar/);
-    assert.match(html, /mc-rol\.js\?v=20261125tk225/);
+    assert.match(html, /mc-rol\.js\?v=20261125tk226/);
     assert.match(html, /touch-action:none/);
     assert.doesNotMatch(js, /ligar/i);
   });
