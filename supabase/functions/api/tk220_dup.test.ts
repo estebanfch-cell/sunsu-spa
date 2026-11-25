@@ -15,7 +15,7 @@ import {
 
 const root = new URL("../../../", import.meta.url);
 const file = (p: string) => readFileSync(new URL(p, root), "utf8");
-const CACHE = "sunsu-2026-11-25-DEV37";
+const CACHE = "sunsu-2026-11-25-DEV31L";
 
 describe("TK220 · dedupe más fuerte", () => {
   const nicole: Row = {

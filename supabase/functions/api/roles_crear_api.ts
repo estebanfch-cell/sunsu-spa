@@ -224,7 +224,7 @@ export async function horarioRolDe(ctx: Ctx, persona: string) {
   return horarioRrhhDe(persona);
 }
 
-export async function horasRolDe(ctx: Ctx, persona: string, anio: number, mes: number, opts: { ingreso?: string | null } = {}) {
+export async function horasRolDe(ctx: Ctx, persona: string, anio: number, mes: number, opts: { ingreso?: string | null; asumirSinMarcajes?: boolean } = {}) {
   const { horasDeEmpleada } = await import("./asistencia_api.ts");
   let nomina = { hayDatos: false, dias: [] as Row[], hrsSupl: 0, hrsExtr: 0, hrsDesc: 0, diasJibble: 0, diasPropios: 0, faltas: 0 };
   try { nomina = await horasDeEmpleada(ctx, persona, anio, mes) as unknown as typeof nomina; } catch { /* sin asistencia */ }
@@ -257,6 +257,7 @@ export async function horasRolDe(ctx: Ctx, persona: string, anio: number, mes: n
     horario: await horarioRolDe(ctx, persona),
     feriados: await feriadosDe(ctx),
     dias, permisos, ingreso: ingreso || null,
+    asumirSinMarcajes: !!opts.asumirSinMarcajes,
   });
   return { nomina, horas, asumidoDesde: hoy, ultimoDato: ultimo || null };
 }
@@ -291,7 +292,7 @@ export async function rolHorasMesDe(ctx: Ctx, nombre: string, anio: number, mes:
     .filter((r) => clavePeriodo(r.periodo) === clave && s(r.origin) !== "test" && normNombre(s(r.persona)) === normNombre(persona) && r.snapshot && typeof r.snapshot === "object")
     .sort((a, b) => s(b.updated_at).localeCompare(s(a.updated_at)));
   if (guardados[0]) return desdeSnap(guardados[0].snapshot as Row, s(guardados[0].estado) || "guardado");
-  const { horas } = await horasRolDe(ctx, persona, anio, mes, { ingreso: (cfgRolH && cfgRolH.fechaIngreso) || s(emp.fecha_ingreso).slice(0, 10) || null });
+  const { horas } = await horasRolDe(ctx, persona, anio, mes, { ingreso: (cfgRolH && cfgRolH.fechaIngreso) || s(emp.fecha_ingreso).slice(0, 10) || null, asumirSinMarcajes: !!(cfgRolH && cfgRolH.asumirSinMarcajes) });
   const last = new Date(Date.UTC(anio, mes, 0)).toISOString().slice(0, 10);
   const cfg = cfgRolH ? null : await pagoVigenteDe(ctx, persona, last);
   const sueldoBase = cfgRolH ? cfgRolH.sueldoBase : cfg ? n(cfg.sueldo) : dineroDe(emp, ["sueldo_base", "sueldo", "sueldo_mensual"]);
@@ -315,7 +316,7 @@ export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string,
   // TK170: sin afiliación también sale rol (sueldo + bonos + comisiones, sin IESS ni décimos/fondo) con el total a facturar.
   const afiliada = cfgRol ? cfgRol.afiliada : afiliadaSegunOverlay(overlays, persona);
   const iessFicha = await fichaIessDe(ctx, persona, per.cicloHasta);
-  const { nomina, horas, asumidoDesde, ultimoDato } = await horasRolDe(ctx, persona, per.anio, per.mes, { ingreso: ingresoCfg || null });
+  const { nomina, horas, asumidoDesde, ultimoDato } = await horasRolDe(ctx, persona, per.anio, per.mes, { ingreso: ingresoCfg || null, asumirSinMarcajes: !!(cfgRol && cfgRol.asumirSinMarcajes) });
   const { comisionesDeTablas } = await import("./handlers_extra.ts");
   const com = await comisionesDeTablas(ctx, persona, per.anio, per.mes);
   // DEV-31: las comisiones del rol son las MISMAS de la pantalla Comisiones (mismo ciclo 26→25); multas igual que antes.
@@ -326,8 +327,9 @@ export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string,
     com.comExtras = pant.comExtras; com.comRecepcion = pant.comRecepcion;
   } catch { /* si falla, queda el cálculo anterior */ }
   const { multasBetaRol, detalleMultasSistema } = await import("./multas_beta_api.ts");
-  const mBeta = await multasBetaRol(ctx.db, persona, per.cicloDesde, per.cicloHasta);
-  const mSis = await detalleMultasSistema(ctx.db, persona, per.cicloDesde, per.cicloHasta);
+  const mBeta = await multasBetaRol(ctx.db, persona, per.cicloDesde, per.cicloHasta).catch(() => ({ total: 0, detalle: [] as Row[] }));
+  let mSis: Row[] = [];
+  try { mSis = await detalleMultasSistema(ctx.db, persona, per.cicloDesde, per.cicloHasta); } catch { mSis = []; }
   com.multas = round2(n(com.multas) + mBeta.total);
   const finMes = `${per.anio}-${String(per.mes).padStart(2, "0")}-28`;
   const last = new Date(Date.UTC(per.anio, per.mes, 0)).toISOString().slice(0, 10);

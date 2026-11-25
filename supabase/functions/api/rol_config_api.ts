@@ -14,6 +14,8 @@ import { mismaPersonaRol } from "./roles_api.ts";
 export type ConfigRol = {
   persona: string; nombreCompleto: string; cedula: string; cargo: string;
   sueldoBase: number; bono: number; afiliada: boolean; fechaIngreso: string; activa: boolean; notas: string;
+  /** DEV-31l (t941u): sin Jibble/asistencia, asumir la jornada de los días hábiles sin marca. */
+  asumirSinMarcajes: boolean;
 };
 
 export function configDeFila(r: Row): ConfigRol {
@@ -21,6 +23,7 @@ export function configDeFila(r: Row): ConfigRol {
     persona: s(r.persona), nombreCompleto: s(r.nombre_completo), cedula: s(r.cedula), cargo: s(r.cargo),
     sueldoBase: round2(n(r.sueldo_base)), bono: round2(n(r.bono)), afiliada: r.afiliada_iess !== false,
     fechaIngreso: s(r.fecha_ingreso).slice(0, 10), activa: r.activa !== false, notas: s(r.notas),
+    asumirSinMarcajes: r.asumir_sin_marcajes === true,
   };
 }
 
@@ -112,6 +115,10 @@ extend("rolcfg_guardar", "any", async (p, ctx, ses) => {
   if (fecha && !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return { error: "La fecha de ingreso no es válida." };
   if (!fecha) return { error: "Escribe la fecha de ingreso: de ella depende el fondo de reserva." };
   const activa = !(p.activa === false || p.activa === "false" || p.activa === 0 || p.activa === "0");
+  const asumirDado = p.asumirSinMarcajes !== undefined || p.asumir_sin_marcajes !== undefined;
+  const asumirSinMarcajes = asumirDado
+    ? p.asumirSinMarcajes === true || p.asumirSinMarcajes === "true" || p.asumirSinMarcajes === 1 || p.asumirSinMarcajes === "1" || p.asumirSinMarcajes === "si" || p.asumir_sin_marcajes === true
+    : (prev ? prev.asumir_sin_marcajes === true : false);
   const now = ctx.now.toISOString();
   const fila: Row = {
     persona: prev ? s(prev.persona) : persona,
@@ -120,6 +127,7 @@ extend("rolcfg_guardar", "any", async (p, ctx, ses) => {
     cargo: s(p.cargo) || s(prev?.cargo) || s(rrhh?.cargo) || null,
     sueldo_base: sueldo, bono, afiliada_iess: afiliada, fecha_ingreso: fecha, activa,
     notas: s(p.notas).slice(0, 400) || null,
+    asumir_sin_marcajes: asumirSinMarcajes,
     origin: "beta", actualizado_por: actorOf(ses), updated_at: now,
   };
   const motivo = s(p.motivo).slice(0, 300);
