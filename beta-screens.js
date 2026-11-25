@@ -17095,23 +17095,21 @@ function _pdfRolPagina(doc, d, sheetName, apro, fondo){
     if(pre){ doc.setFontSize(8); doc.text('Generado el '+(apro.generado||'')+' (hora de Ecuador) - valores a la fecha, se recalculan hasta la aprobación',W/2,y,{align:'center'}); y+=21; doc.setFontSize(9.5); }
     doc.setFontSize(9);
     var n2=function(v){return '$'+(parseFloat(v)||0).toFixed(2);};
+    var xVal=xI+130; // misma columna de valor que el rol original (antes de los cambios de horas/días)
     var fila=function(l,v){
       if(v===undefined||v===null||v==='') return;
-      doc.setFont('helvetica','bold'); doc.setTextColor(NAVY); doc.text(l,xI,y);
+      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(NAVY); doc.text(l,xI,y);
       doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
-      doc.text(v.toString(),xI+130,y); y+=14;
+      var lines=doc.splitTextToSize(v.toString(), xD-xVal);
+      doc.text(lines,xVal,y);
+      y+=Math.max(14, 12*lines.length);
     };
+    var rol=_lineasRol(d);
     fila('EMPLEADA:',d.nombre);
     fila('CÉDULA:',d.cedula);
     fila('CARGO:',d.cargo);
-    // DEV-31f (Emilia t918u/t919u): cabecera en días (desglose de asistencia). Las horas extra siguen en sus líneas.
-    var rol=_lineasRol(d);
-    doc.setFont('helvetica','bold'); doc.setTextColor(NAVY); doc.text('DÍAS:',xI,y);
-    doc.setFont('helvetica','normal'); doc.setTextColor(TXT); doc.setFontSize(8.5);
-    var diasLines=doc.splitTextToSize(rol.dias||'—', ANCHO-50);
-    doc.text(diasLines,xI+50,y);
-    y+=Math.max(14, 12*diasLines.length)+6;
-    doc.setFontSize(9);
+    fila('DÍAS:', rol.dias||'—');
+    y+=6;
     var salto=function(need){ if(y+need>H-70){doc.addPage();pintar();y=140;} };
     var barra=function(titulo,cRGB){
       salto(60);
