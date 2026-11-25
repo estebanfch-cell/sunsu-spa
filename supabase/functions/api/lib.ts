@@ -254,18 +254,28 @@ export async function bajasDe(db: { all: (t: string) => Promise<Record<string, u
 export async function adminesDe(db: { all: (t: string) => Promise<Record<string, unknown>[]> }): Promise<(nombre: string) => boolean> {
   const norm = (x: unknown) => String(x ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
   const set = new Set<string>(["emi", "emilia", "efch", "esteban"]);
+  const visor = new Set<string>();
   for (const tabla of ["usuarios", "app_usuarios"]) {
     let rows: Record<string, unknown>[] = [];
     try { rows = await db.all(tabla); } catch { rows = []; }
     for (const r of rows) {
       const rol = String(r.rol ?? r.role ?? "");
+      if (rol === "visor") {
+        for (const k of [r.nombre, r.name, r.short, r.id, r.uid]) if (norm(k)) visor.add(norm(k));
+        continue;
+      }
       if (rol !== "admin" && rol !== "super_admin") continue;
       for (const k of [r.nombre, r.name, r.short, r.id, r.uid]) if (norm(k)) set.add(norm(k));
     }
   }
+  // "Skin Analysis" is the visor station, not a staff member. Keep it out of selectors even if the role row is missing.
+  for (const k of ["skin analysis", "visor", "skinanalysis"]) visor.add(k);
   return (nombre: string) => {
     const n = norm(nombre);
-    return !!n && (set.has(n) || set.has(n.split(" ")[0]));
+    if (!n) return false;
+    if (set.has(n) || set.has(n.split(" ")[0])) return true;
+    if (visor.has(n) || visor.has(n.split(" ")[0])) return true;
+    return false;
   };
 }
 

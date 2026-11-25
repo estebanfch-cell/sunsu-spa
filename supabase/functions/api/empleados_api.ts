@@ -55,7 +55,7 @@ async function overlayDe(ctx: Ctx, nombre: string): Promise<Row | undefined> {
   return rows.find((r) => mismoNombre(s(r.nombre_app), nombre));
 }
 
-async function asegurarOverlay(ctx: Ctx, ses: Ses, nombre: string, extra: Row = {}): Promise<Row> {
+export async function asegurarOverlay(ctx: Ctx, ses: Ses, nombre: string, extra: Row = {}): Promise<Row> {
   const prev = await overlayDe(ctx, nombre);
   if (prev) {
     if (Object.keys(extra).length) {
@@ -81,9 +81,20 @@ export function afiliadaSegunOverlay(overlays: Row[], nombre: string): boolean {
   return o ? o.afiliada_iess !== false : true;
 }
 
+/** DEV-31d (t915u): la afiliación IESS sale de «Configuración de rol» cuando hay fila; si no, del interruptor de Empleados. */
+export async function afiliadaDe(ctx: Ctx, nombre: string, overlays?: Row[]): Promise<boolean> {
+  try {
+    const { configRolDe } = await import("./rol_config_api.ts");
+    const cfg = await configRolDe(ctx, nombre);
+    if (cfg) return cfg.afiliada;
+  } catch { /* si falla, el overlay */ }
+  const ovs = overlays ?? await ctx.db.all("beta_empleados").catch(() => [] as Row[]);
+  return afiliadaSegunOverlay(ovs, nombre);
+}
+
 export async function fichaIessDe(ctx: Ctx, nombre: string, ymd?: string): Promise<{ afiliada: boolean; quir: number; hip: number; otros: number; items: Row[] }> {
   const overlay = await overlayDe(ctx, nombre);
-  const afiliada = overlay ? overlay.afiliada_iess !== false : true;
+  const afiliada = await afiliadaDe(ctx, nombre, overlay ? [overlay] : []);
   if (!afiliada) return { afiliada: false, quir: 0, hip: 0, otros: 0, items: [] };
   const fecha = ymd || ecuadorParts(ctx.now).ymd;
   const todos = overlay
@@ -181,6 +192,7 @@ extend("emp_list", "any", async (_p, ctx, ses) => {
     items.push(pubEmpleada(undefined, ov, user, horDe(s(ov.nombre_app))));
   }
   items.sort((a, b) => s(a.nombre).localeCompare(s(b.nombre), "es"));
+  for (const it of items) it.afiliadaIess = await afiliadaDe(ctx, s(it.nombre), overlays);
   const usuarios = users.map((u) => ({ id: s(u.id), nombre: s(u.nombre) || s(u.name), rol: s(u.rol || u.role) }));
   return { ok: true, items, usuarios };
 });
@@ -205,6 +217,7 @@ extend("emp_get", "any", async (p, ctx, ses) => {
   const user = users.find((u) => s(u.id) === s(ov?.usuario_id)) || users.find((u) => mismoNombre(s(u.nombre) || s(u.name), nombre));
   const hor = await horarioAsignadoNombre(ctx, nombre);
   const ficha = pubEmpleada(r, ov, user, hor);
+  ficha.afiliadaIess = await afiliadaDe(ctx, nombre, overlays);
   const desc = ov ? (await ctx.db.all("beta_iess_descuentos").catch(() => [] as Row[])).filter((d) => s(d.empleado_id) === s(ov.id) && d.activo !== false) : [];
   const docs = ov && esAdmin(ses.rol)
     ? (await ctx.db.all("beta_empleado_docs").catch(() => [] as Row[])).filter((d) => s(d.empleado_id) === s(ov.id)).map((d) => ({
@@ -256,6 +269,21 @@ extend("emp_guardar", "any", async (p, ctx, ses) => {
   }
   const extra: Row = { nombre_jibble: s(p.nombre_jibble) || s(rrhh?.nombre_jibble) || null };
   if (p.afiliada_iess != null) extra.afiliada_iess = p.afiliada_iess === true || p.afiliada_iess === "1" || p.afiliada_iess === "si" || p.afiliada_iess === "sí";
+  // DEV-31d: si ya hay fila en Configuración de rol, ese es el dato que manda; lo actualizamos aquí para que no queden dos verdades.
+  if (p.afiliada_iess != null) {
+    try {
+      const { configRolDe } = await import("./rol_config_api.ts");
+      const { handle } = await import("./handlers.ts");
+      const cfg = await configRolDe(ctx, nombre);
+      if (cfg) {
+        await handle("rolcfg_guardar", {
+          token: ses.token, persona: cfg.persona, sueldoBase: cfg.sueldoBase, bono: cfg.bono,
+          afiliada: extra.afiliada_iess ? "si" : "no", fechaIngreso: cfg.fechaIngreso, cargo: cfg.cargo,
+          notas: cfg.notas, activa: cfg.activa, motivo: "Afiliación IESS cambiada desde Empleados",
+        }, ctx);
+      }
+    } catch { /* el overlay ya quedó; el rol usa config si existe */ }
+  }
   if (p.tiene_usuario === false || p.tiene_usuario === "0" || p.tiene_usuario === "no") extra.usuario_id = null;
   else if (p.usuario_id != null) extra.usuario_id = s(p.usuario_id) || null;
   if (p.notas != null) extra.notas = s(p.notas);

@@ -268,9 +268,8 @@ extend("rol_prerol_resumen", "any", async (p, ctx, ses) => {
       decimosFondo: round2(n(d.dec13) + n(d.dec14) + n(d.fondoReserva)),
       dec13: round2(n(d.dec13)), dec14: round2(n(d.dec14)), fondoReserva: round2(n(d.fondoReserva)),
       fondoFactor: n(d.fondoFactor), fondoDesde: s(d.fondoDesde),
-      // DEV-31b (t907u/t908u): solo administración. Costo total empresa = ingresos (sueldo, bono, comisiones, horas extra,
-      // décimos y fondo) + aporte patronal (IESS 11,15 % + SECAP 0,5 % + IECE 0,5 %).
-      patronal: round2(n(d.aportePatronal)), costoEmpresa: round2(n(d.costoEmpresa)),
+      // DEV-31d (t915u): costo empresa = ingresos + patronal + CCC 1 % (la CCC no se descuenta a la empleada).
+      patronal: round2(n(d.aportePatronal)), ccc: round2(n(d.ccc)), costoEmpresa: round2(n(d.costoEmpresa)),
       totalIngresos: n(d.totalIngresos), iess: n(d.iess),
       anticipos: n(d.anticipoSueldo), prestamos: n(d.prestamoEmpresa),
       prestamosIess: round2(n(d.prestQuir) + n(d.prestHip) + n(d.prestOtro)), multas: n(d.multas),
@@ -282,7 +281,7 @@ extend("rol_prerol_resumen", "any", async (p, ctx, ses) => {
   const tot = (k: string) => round2(filas.reduce((acc, x) => acc + n(x[k]), 0));
   return {
     ok: true, periodo, etiqueta: etiquetaPeriodo(periodo), hoy, filas,
-    totales: { totalIngresos: tot("totalIngresos"), iess: tot("iess"), totalEgresos: tot("totalEgresos"), neto: tot("neto"), comisiones: tot("comisiones"), patronal: tot("patronal"), costoEmpresa: tot("costoEmpresa") },
+    totales: { totalIngresos: tot("totalIngresos"), iess: tot("iess"), totalEgresos: tot("totalEgresos"), neto: tot("neto"), comisiones: tot("comisiones"), patronal: tot("patronal"), ccc: tot("ccc"), costoEmpresa: tot("costoEmpresa") },
     nota: "Días y horas: solo la asistencia de la app (Mi asistencia). Desde hoy hasta fin de mes se asume la jornada del horario. Comisiones y multas del ciclo 26→25.",
   };
 });

@@ -79,7 +79,8 @@ describe("DEV-31b fondo de reserva y décimos", () => {
     assert.ok(Math.abs(despues.fondoReserva - 612 * 0.0833) < 0.001);
     const parcial = rolCalcularOficial({ ...base, fechaIngreso: "2025-11-25", mes: 11 });
     assert.ok(Math.abs(parcial.fondoReserva - 612 * 0.0833 * (6 / 30)) < 0.001); // 25..30 = 6 días
-    assert.ok(Math.abs(despues.costoEmpresa - (despues.totalIngresos + despues.aportePatronal)) < 0.011);
+    assert.ok(Math.abs(despues.costoEmpresa - (despues.totalIngresos + despues.aportePatronal + despues.ccc)) < 0.011);
+    assert.ok(Math.abs(despues.ccc - despues.ingresoAportable * 0.01) < 0.011);
   });
 });
 
@@ -171,18 +172,18 @@ describe("DEV-31b aporte patronal y costo empresa", () => {
     const suya = await handle("rol_get", { token: "t-andrea", id: rol.id }, c) as Row;
     assert.equal(suya.ok, true, String(suya.error || ""));
     const txt = JSON.stringify(suya);
-    for (const k of ["aportesPatronal", "aportePatronal", "iessPatronal", "secap", "iece", "costoEmpresa"]) assert.equal(txt.includes('"' + k + '"'), false, k);
+    for (const k of ["aportesPatronal", "aportePatronal", "iessPatronal", "secap", "iece", "ccc", "costoEmpresa"]) assert.equal(txt.includes('"' + k + '"'), false, k);
     const lista = JSON.stringify(await handle("roles_lista", { token: "t-andrea" }, c));
     assert.equal(/atronal|costoEmpresa/.test(lista), false);
     const adm = await handle("rol_get", { token: "t-emi", id: rol.id }, c) as Row;
     const d = adm.data as Row;
     assert.ok(Number((d.aportesPatronal as Row).total) > 0);
-    assert.ok(Math.abs(Number(d.costoEmpresa) - (Number(d.totalIngresos) + Number(d.aportePatronal))) < 0.011);
+    assert.ok(Math.abs(Number(d.costoEmpresa) - (Number(d.totalIngresos) + Number(d.aportePatronal) + Number(d.ccc))) < 0.011);
     const pre = await handle("rol_prerol_resumen", { token: "t-emi" }, c) as Row;
     const fil = pre.filas as Row[];
     const suma = fil.reduce((a, x) => a + Number(x.costoEmpresa), 0);
     assert.ok(Math.abs(suma - Number((pre.totales as Row).costoEmpresa)) < 0.011);
-    for (const x of fil) assert.ok(Math.abs(Number(x.costoEmpresa) - (Number(x.totalIngresos) + Number(x.patronal))) < 0.011, String(x.nombre));
+    for (const x of fil) assert.ok(Math.abs(Number(x.costoEmpresa) - (Number(x.totalIngresos) + Number(x.patronal) + Number(x.ccc))) < 0.011, String(x.nombre));
     // El visor y el personal no ven el pre-rol.
     assert.ok(((await handle("rol_prerol_resumen", { token: "t-andrea" }, c)) as Row).error);
     assert.ok(((await handle("rol_prerol_resumen", { token: "t-visor" }, c)) as Row).error);
