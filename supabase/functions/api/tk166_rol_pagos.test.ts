@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { rolCalcularOficial } from "./domain.ts";
 import { clasificarHorasRol } from "./horas_rol.ts";
@@ -43,14 +44,14 @@ describe("TK166 rol de pagos", () => {
   });
 
   it("_lineasRol oculta las líneas en $0 y no deja NaN", () => {
-    const src = Deno.readTextFileSync(new URL("../../../beta-screens.js", import.meta.url));
+    const src = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
     const pick = (name: string) => {
       const i = src.indexOf("function " + name + "(");
       let depth = 0, j = src.indexOf("{", i);
       for (; j < src.length; j++) { if (src[j] === "{") depth++; else if (src[j] === "}" && --depth === 0) break; }
       return src.slice(i, j + 1);
     };
-    const fn = new Function(`${pick("_rolNum")}\n${pick("_rolHrs")}\n${pick("_lineasRol")}\nreturn _lineasRol;`)() as (d: unknown) => { ingresos: [string, number][]; egresos: [string, number][]; notas: string[] };
+    const fn = new Function(`${pick("_rolNum")}\n${pick("_rolHrs")}\n${pick("_rolDiasLinea")}\n${pick("_lineasRol")}\nreturn _lineasRol;`)() as (d: unknown) => { ingresos: [string, number][]; egresos: [string, number][]; notas: string[] };
     const out = fn({ sueldo: 482, comFacialesSolo: 12.5, comExtras: "NaN", comRecepcion: 0, comPaquetes: null, comProductos: 0,
       valSupl: 7.53, hrsSupl: 2.5, valExtr: 0, valDesc: 0, dec13: 40.17, dec14: 0, fondoReserva: 0, iess: 45.55, anticipo: 0, dec14Acumulado: 40.17 });
     const lbl = out.ingresos.map((x) => x[0]);
@@ -60,5 +61,27 @@ describe("TK166 rol de pagos", () => {
     assert.ok(out.ingresos.every((x) => Number.isFinite(x[1]) && x[1] !== 0));
     assert.deepEqual(out.egresos.map((x) => x[0]), ["Aporte IESS personal (9,45%)"]);
     assert.equal(out.notas.length, 1);
+  });
+
+  it("_lineasRol muestra Descuento: motivo aparte de las multas", () => {
+    const src = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
+    const pick = (name: string) => {
+      const i = src.indexOf("function " + name + "(");
+      let depth = 0, j = src.indexOf("{", i);
+      for (; j < src.length; j++) { if (src[j] === "{") depth++; else if (src[j] === "}" && --depth === 0) break; }
+      return src.slice(i, j + 1);
+    };
+    const fn = new Function(`${pick("_rolNum")}\n${pick("_rolHrs")}\n${pick("_rolDiasLinea")}\n${pick("_lineasRol")}\nreturn _lineasRol;`)() as (d: unknown) => { egresos: [string, number][] };
+    const out = fn({
+      iess: 45.55, anticipo: 0, multas: 42.5,
+      multasDetalle: [
+        { tipo: "DESCUENTO", motivo: "Crema Aroms", monto: 32.5, fecha: "2026-11-25" },
+        { tipo: "MULTA", motivo: "Clienta insatisfecha", monto: 10, fecha: "2026-11-20" },
+      ],
+    });
+    const lbl = out.egresos.map((x) => x[0]);
+    assert.ok(lbl.includes("Descuento: Crema Aroms"), JSON.stringify(lbl));
+    assert.ok(lbl.some((l) => l.startsWith("MULTA") && l.includes("2026-11-20")), JSON.stringify(lbl));
+    assert.equal(out.egresos.find((x) => x[0] === "Descuento: Crema Aroms")?.[1], 32.5);
   });
 });

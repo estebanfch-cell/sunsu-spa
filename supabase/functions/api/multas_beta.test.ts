@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { MemoryDb } from "./db.ts";
 import { handle } from "./handlers.ts";
 import "./multas_beta_api.ts";
-import { mismaPersonaMulta, multasBetaRol } from "./multas_beta_api.ts";
+import { mismaPersonaMulta, multasBetaRol, esTipoDescuento, detalleMultasSistema } from "./multas_beta_api.ts";
 import type { Row } from "./domain.ts";
 
 function semilla() {
@@ -57,5 +57,34 @@ describe("Multas beta", () => {
     assert.equal((r.tipos as Row[]).length, 3);
     assert.match(String((await h("mt_tipo_guardar", "adm", { nombre: "llegó tarde", monto: 4 })).error), /existe/);
     assert.match(String((await h("mt_tipo_guardar", "cos", { nombre: "X", monto: 4 })).error), /admin/);
+  });
+  it("descuento con monto libre entra al rol y se puede editar", async () => {
+    const { db, h } = semilla();
+    assert.equal(esTipoDescuento("DESCUENTO"), true);
+    assert.equal(esTipoDescuento("Descuento (producto / otro)"), true);
+    assert.equal(esTipoDescuento("Clienta insatisfecha"), false);
+    const c = await h("mt_crear", "adm", { persona: "Andrea Robles", tipo: "Descuento", monto: 32.5, motivo: "Crema Aroms que se descuenta", fecha: "2026-11-25" });
+    assert.equal(c.ok, true, String(c.error));
+    assert.equal(Number(db.tables.get("beta_multas")![0].monto), 32.5);
+    assert.equal(String(db.tables.get("beta_multas")![0].tipo), "Descuento");
+    const l = await h("mt_lista", "adm", { persona: "Andrea Robles", tipo: "DESCUENTO" });
+    const beta = (l.items as Row[]).filter((m) => m.fuente === "beta");
+    assert.equal(beta.length, 1);
+    assert.equal(beta[0].clase, "DESCUENTO");
+    const r = await multasBetaRol(db, "Andrea Robles", "2026-10-26", "2026-11-25");
+    assert.equal(r.total, 32.5);
+    assert.equal(r.detalle[0].tipo, "DESCUENTO");
+    assert.equal(r.detalle[0].motivo, "Crema Aroms que se descuenta");
+    assert.equal((await h("mt_editar", "adm", { id: c.id, monto: 40, motivo: "Crema Aroms ajustada" })).ok, true);
+    const r2 = await multasBetaRol(db, "Andrea Robles", "2026-10-26", "2026-11-25");
+    assert.equal(r2.total, 40);
+    assert.equal(r2.detalle[0].motivo, "Crema Aroms ajustada");
+    const antes = await multasBetaRol(db, "Andrea Robles", "2026-09-26", "2026-10-25");
+    assert.equal(antes.total, 0);
+    db.tables.get("multas_descuentos")!.push({ id: 11, fecha: "2026-11-01T00:00:00Z", cosmetologa: "Andrea Robles", tipo: "DESCUENTO", monto: 25, motivo: "7/8 Sandalo" });
+    const sis = await detalleMultasSistema(db, "Andrea", "2026-10-26", "2026-11-25");
+    assert.equal(sis.length, 1);
+    assert.equal(sis[0].tipo, "DESCUENTO");
+    assert.equal(sis[0].motivo, "7/8 Sandalo");
   });
 });

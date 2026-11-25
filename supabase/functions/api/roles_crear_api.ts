@@ -325,8 +325,9 @@ export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string,
     com.comFaciales = pant.comFaciales; com.comPaquetes = pant.comPaquetes; com.comProductos = pant.comProductos;
     com.comExtras = pant.comExtras; com.comRecepcion = pant.comRecepcion;
   } catch { /* si falla, queda el cálculo anterior */ }
-  const { multasBetaRol } = await import("./multas_beta_api.ts");
+  const { multasBetaRol, detalleMultasSistema } = await import("./multas_beta_api.ts");
   const mBeta = await multasBetaRol(ctx.db, persona, per.cicloDesde, per.cicloHasta);
+  const mSis = await detalleMultasSistema(ctx.db, persona, per.cicloDesde, per.cicloHasta);
   com.multas = round2(n(com.multas) + mBeta.total);
   const finMes = `${per.anio}-${String(per.mes).padStart(2, "0")}-28`;
   const last = new Date(Date.UTC(per.anio, per.mes, 0)).toISOString().slice(0, 10);
@@ -347,7 +348,7 @@ export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string,
     anio: per.anio, mes: per.mes, cicloDesde: per.cicloDesde, cicloHasta: per.cicloHasta,
     sueldoBase, bono, fondo, fechaIngreso: ingresoCfg || "2020-01-01",
     horas, com, iess: { quir: iessFicha.quir, hip: iessFicha.hip, otros: iessFicha.otros },
-    anticipo: desc.total, multasDetalle: mBeta.detalle || [], fuenteHoras,
+    anticipo: desc.total, multasDetalle: [...mSis, ...(mBeta.detalle || [])], fuenteHoras,
     descInternos: desc,
     mensual: { dec13: true, dec14: true, fondo: true }, // DEV-31b: décimos y fondo siempre mensualizados (t907u)
     afiliada,

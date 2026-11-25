@@ -1,6 +1,6 @@
-// Multas de la beta (Emilia 17/11). Catálogo editable de tipos con monto por defecto (beta_multa_tipos),
-// multas aplicadas desde un ticket o desde Personal › Multas (beta_multas), editar/anular con historial.
-// El rol de pago las suma a las del sistema central (multas_descuentos) en el corte 26→25: multasRol().
+// Multas de la beta (Emilia 17/11, DEV-37). Catálogo editable de tipos con monto por defecto (beta_multa_tipos),
+// tipo fijo «Descuento» (monto libre, p. ej. un producto), aplicadas desde un ticket o Personal › Multas (beta_multas),
+// editar/anular con historial. El rol las suma a las del sistema central (multas_descuentos) en el corte 26→25.
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, logAccion } from "./lib.ts";
@@ -10,6 +10,11 @@ import type { Db } from "./db.ts";
 
 async function todas(db: Db, t: string): Promise<Row[]> { try { return await db.all(t); } catch { return []; } }
 const ymdRe = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Tipo libre «Descuento» (producto u otro), con o sin mayúsculas; no vive en el catálogo de multas. */
+export function esTipoDescuento(tipo: unknown): boolean {
+  return normNombre(tipo) === "descuento" || normNombre(tipo).startsWith("descuento ");
+}
 
 /** Misma persona por nombre (primer nombre o nombre completo), como el rol. */
 export function mismaPersonaMulta(a: string, b: string): boolean {
@@ -34,7 +39,7 @@ export async function multasUnificadas(db: Db, conAnuladas = false): Promise<Row
   for (const r of await todas(db, "beta_multas")) {
     if (s(r.estado) === "anulada" && !conAnuladas) continue;
     out.push({
-      id: s(r.id), fuente: "beta", fecha: s(r.fecha).slice(0, 10), persona: s(r.persona), tipo: s(r.tipo) || "Multa", clase: "MULTA", tipoId: s(r.tipo_id),
+      id: s(r.id), fuente: "beta", fecha: s(r.fecha).slice(0, 10), persona: s(r.persona), tipo: s(r.tipo) || "Multa", clase: esTipoDescuento(r.tipo) ? "DESCUENTO" : "MULTA", tipoId: s(r.tipo_id),
       monto: n(r.monto), motivo: s(r.motivo), ticket: s(r.ticket_so), ticketId: r.ticket_id ?? null, estado: s(r.estado) || "activa",
       anuladaMotivo: s(r.anulada_motivo), anuladaPor: s(r.anulada_por), creadoPor: s(r.creado_por), historial: Array.isArray(r.historial) ? r.historial : [], editable: true,
     });
@@ -42,11 +47,34 @@ export async function multasUnificadas(db: Db, conAnuladas = false): Promise<Row
   return out.sort((a, b) => s(b.fecha).localeCompare(s(a.fecha)));
 }
 
-/** Multas de la beta de una persona en el corte [desde, hasta] (las del sistema ya las suma el rol). */
+/** Fila de detalle para el pre-rol / PDF (multa o descuento). */
+function filaDetalle(r: Row, fuente: "beta" | "sistema"): Row {
+  const tipoNom = fuente === "sistema" ? (s(r.tipo) || "MULTA") : (s(r.tipo) || "Multa");
+  return {
+    tipo: esTipoDescuento(tipoNom) ? "DESCUENTO" : "MULTA",
+    concepto: tipoNom,
+    fecha: (fuente === "sistema" ? (ymdUtc(r.fecha) || s(r.fecha).slice(0, 10)) : s(r.fecha).slice(0, 10)),
+    monto: n(r.monto),
+    motivo: s(r.motivo) + (s(r.ticket_so) ? " (" + s(r.ticket_so) + ")" : ""),
+    fuente,
+  };
+}
+
+/** Multas/descuentos de la beta de una persona en el corte [desde, hasta] (las del sistema ya las suma el rol). */
 export async function multasBetaRol(db: Db, persona: string, desde: string, hasta: string): Promise<{ total: number; detalle: Row[] }> {
   const detalle = (await todas(db, "beta_multas")).filter((r) => s(r.estado) !== "anulada" && s(r.fecha) >= desde && s(r.fecha).slice(0, 10) <= hasta && mismaPersonaMulta(s(r.persona), persona))
-    .map((r) => ({ tipo: "MULTA", concepto: s(r.tipo), fecha: s(r.fecha).slice(0, 10), monto: n(r.monto), motivo: s(r.motivo) + (s(r.ticket_so) ? " (" + s(r.ticket_so) + ")" : ""), fuente: "beta" }));
+    .map((r) => filaDetalle(r, "beta"));
   return { total: round2(detalle.reduce((a, x) => a + x.monto, 0)), detalle };
+}
+
+/** Detalle de la hoja anterior (multas_descuentos) en el mismo corte: para pintar líneas en el pre-rol, sin sumar de nuevo. */
+export async function detalleMultasSistema(db: Db, persona: string, desde: string, hasta: string): Promise<Row[]> {
+  return (await todas(db, "multas_descuentos")).filter((r) => {
+    if (r.borrado_at) return false;
+    const f = ymdUtc(r.fecha) || s(r.fecha).slice(0, 10);
+    if (!f || f < desde || f > hasta) return false;
+    return mismaPersonaMulta(s(r.cosmetologa) || s(r.empleada) || s(r.nombre), persona);
+  }).map((r) => filaDetalle(r, "sistema"));
 }
 
 async function tipos(db: Db): Promise<Row[]> {
@@ -102,9 +130,10 @@ extend("mt_crear", "any", async (p, ctx, ses) => {
   const persona = s(p.persona).trim();
   if (!persona) return { error: "Elige la persona" };
   const T = await tipos(ctx.db);
-  const tp = T.find((t) => t.id === s(p.tipoId)) || T.find((t) => normNombre(s(t.nombre)) === normNombre(s(p.tipo)));
-  const tipo = tp ? s(tp.nombre) : s(p.tipo).trim();
-  if (!tipo) return { error: "Elige el tipo de multa" };
+  const tipoLibre = esTipoDescuento(p.tipoId) || esTipoDescuento(p.tipo) ? "Descuento" : "";
+  const tp = tipoLibre ? undefined : (T.find((t) => t.id === s(p.tipoId)) || T.find((t) => normNombre(s(t.nombre)) === normNombre(s(p.tipo))));
+  const tipo = tp ? s(tp.nombre) : (s(p.tipo).trim() || tipoLibre);
+  if (!tipo) return { error: "Elige el tipo de multa o descuento" };
   const monto = round2(p.monto != null && s(p.monto) !== "" ? n(p.monto) : n(tp?.monto));
   if (!(monto > 0)) return { error: "El monto tiene que ser mayor a 0" };
   const motivo = s(p.motivo).trim().slice(0, 500);
@@ -132,8 +161,9 @@ extend("mt_editar", "any", async (p, ctx, ses) => {
   const patch: Row = {}, cambios: string[] = [];
   if (p.persona != null && s(p.persona).trim() && s(p.persona).trim() !== s(r.persona)) { patch.persona = s(p.persona).trim(); cambios.push("persona: " + s(r.persona) + " → " + patch.persona); }
   if (p.tipo != null && s(p.tipo).trim() && s(p.tipo).trim() !== s(r.tipo)) {
-    const tp = (await tipos(ctx.db)).find((t) => normNombre(s(t.nombre)) === normNombre(s(p.tipo)));
-    patch.tipo = s(p.tipo).trim(); patch.tipo_id = tp ? tp.id : null; cambios.push("tipo: " + s(r.tipo) + " → " + patch.tipo);
+    const nom = esTipoDescuento(p.tipo) ? "Descuento" : s(p.tipo).trim();
+    const tp = esTipoDescuento(nom) ? undefined : (await tipos(ctx.db)).find((t) => normNombre(s(t.nombre)) === normNombre(nom));
+    patch.tipo = tp ? s(tp.nombre) : nom; patch.tipo_id = tp ? tp.id : null; cambios.push("tipo: " + s(r.tipo) + " → " + patch.tipo);
   }
   if (p.monto != null && s(p.monto) !== "" && round2(n(p.monto)) !== round2(n(r.monto))) {
     if (!(n(p.monto) > 0)) return { error: "El monto tiene que ser mayor a 0" };

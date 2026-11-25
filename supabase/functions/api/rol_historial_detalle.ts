@@ -304,10 +304,14 @@ export async function detalleHistorialDe(ctx: Ctx, hist: Row, periodo: string, e
     try {
       const { cicloInicio, cicloFin } = await import("./domain.ts");
       const ini = cicloInicio(`${anio}-${String(mes).padStart(2, "0")}-25`), fin = cicloFin(ini);
-      const { multasBetaRol } = await import("./multas_beta_api.ts");
+      const { multasBetaRol, esTipoDescuento } = await import("./multas_beta_api.ts");
       const mb = await multasBetaRol(ctx.db, nombreApp, ini, fin);
       multas = round2(multas + n(mb.total));
-      for (const x of mb.detalle || []) multasDetalle.push({ ...x, tipo: "MULTA " + s((x as Row).concepto) });
+      for (const x of mb.detalle || []) {
+        const clase = esTipoDescuento((x as Row).tipo) || esTipoDescuento((x as Row).concepto) ? "DESCUENTO" : "MULTA";
+        const conc = s((x as Row).concepto);
+        multasDetalle.push({ ...x, tipo: clase + (conc && !esTipoDescuento(conc) ? " " + conc : "") });
+      }
     } catch { /* sin multas beta */ }
     let ficha = { hip: 0, quir: 0, otros: 0 };
     try { ficha = await fichaIessDe(ctx, nombreApp, `${anio}-${String(mes).padStart(2, "0")}-25`); } catch { /* sin ficha */ }
