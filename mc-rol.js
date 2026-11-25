@@ -336,8 +336,10 @@
       + (pre ? '<div class="rolx-banda">PRE-ROL / Borrador para revisión</div>' : "")
       + '<div class="rolx-titulo">' + (pre ? "PRE-ROL DE PAGOS" : "ROL DE PAGOS") + "</div>"
       + '<div class="rolx-sub">Sunsu Spa · Quito · Período: ' + esc(String(d.etiqueta || pack.etiqueta || pack.periodo || "").toUpperCase()) + "</div>"
-      + '<div class="rolx-datos"><span><b>EMPLEADA</b> ' + esc(d.nombre || pack.persona || "") + "</span>" + (d.cedula ? "<span><b>CÉDULA</b> " + esc(d.cedula) + "</span>" : "")
-      + (d.cargo ? "<span><b>CARGO</b> " + esc(d.cargo) + "</span>" : "") + "<span><b>DÍAS</b> " + esc(r.dias || (typeof _rolDiasLinea === "function" ? _rolDiasLinea(d) : "")) + "</span></div>"
+      + '<div class="rolx-datos"><b>EMPLEADA</b><span>' + esc(d.nombre || pack.persona || "") + "</span>"
+      + (d.cedula ? "<b>CÉDULA</b><span>" + esc(d.cedula) + "</span>" : "")
+      + (d.cargo ? "<b>CARGO</b><span>" + esc(d.cargo) + "</span>" : "")
+      + "<b>DÍAS</b><span>" + esc(r.dias || (typeof _rolDiasLinea === "function" ? _rolDiasLinea(d) : "")) + "</span></div>"
       + '<div class="rolx-bar ing">INGRESOS</div>' + ing + '<div class="rolx-tot v">TOTAL INGRESOS: $' + m2(r.totalIngresos) + "</div>" + egr
       + '<div class="rolx-neto"><span>NETO A RECIBIR:</span><b>$' + m2(r.neto) + "</b></div>" + notas + pie + "</div>";
   }
@@ -547,7 +549,7 @@
     return new Promise(function (ok, no) {
       if (window.XLSX) return ok(window.XLSX);
       var sc = document.createElement("script");
-      sc.src = "vendor-xlsx.js?v=20261125tk226";
+      sc.src = "vendor-xlsx.js?v=20261125tk227";
       sc.onload = function () { window.XLSX ? ok(window.XLSX) : no(new Error("No se pudo cargar el lector de Excel")); };
       sc.onerror = function () { no(new Error("No se pudo cargar el lector de Excel")); };
       document.head.appendChild(sc);
