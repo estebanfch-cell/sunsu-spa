@@ -14,6 +14,7 @@ import { BOD_CABINA, BOD_CASA, BOD_VENTA, GRUPO_NOMBRE, SUBS_CABINA } from "./pr
 import { listaProductos } from "./productos_api.ts";
 import { aplicarConteoAStock } from "./conteo_aplica_stock.ts";
 import { consigEfectiva, famsConsig } from "./consig_config.ts";
+import { resolverAvisosObsoletos } from "./avisos_auto.ts";
 
 export const BODEGAS_CONTEO = ["CONSIGNACION", "CABINA", "OFICINA"] as const;
 export const ESTADOS_CONTEO: Record<string, string> = {
@@ -400,6 +401,7 @@ extend("cf_revisar", "any", async (p, ctx, ses) => {
   if (que === "cancelar") {
     if (["aprobado", "cancelado"].includes(s(r.c.estado))) return { error: "Ya está " + s(r.c.estado) };
     await ctx.db.write(actor, "beta_conteos", "update", { id: r.c.id }, { estado: "cancelado", cancelado_at: now, cancelado_por: actor, revision_nota: s(p.nota) || null, updated_at: now });
+    try { await resolverAvisosObsoletos(ctx, actor); } catch { /* el aviso no frena */ }
     return { ok: true };
   }
   if (que === "devolver") {
@@ -408,6 +410,7 @@ extend("cf_revisar", "any", async (p, ctx, ses) => {
     if (nota.length < 3) return { error: "Escribe qué hay que revisar" };
     await ctx.db.write(actor, "beta_conteos", "update", { id: r.c.id }, { estado: "en_conteo", revision_nota: nota.slice(0, 500), enviado_at: null, updated_at: now });
     await notificar(ctx, ses, s(r.c.asignado_a), "Conteo devuelto: " + s(r.c.numero), nota, "#/m/conteos/cf/" + s(r.c.id), s(r.c.id), "conteo_devuelto");
+    try { await resolverAvisosObsoletos(ctx, actor); } catch { /* el aviso no frena */ }
     return { ok: true };
   }
   if (que === "aprobar" || que === "aplicar") {
@@ -416,6 +419,7 @@ extend("cf_revisar", "any", async (p, ctx, ses) => {
     if (s(r.c.estado) === "en_revision") {
       await ctx.db.write(actor, "beta_conteos", "update", { id: r.c.id }, { estado: "aprobado", aprobado_at: now, aprobado_por: actor, revision_nota: s(p.nota) || null, updated_at: now });
       await notificar(ctx, ses, s(r.c.asignado_a), "Conteo aprobado: " + s(r.c.numero), "Gracias. El inventario de " + bodegaNombre(s(r.c.bodega), s(r.c.sububicacion)) + " quedó actualizado.", "#/m/conteos/cf/" + s(r.c.id), s(r.c.id), "conteo_aprobado");
+      try { await resolverAvisosObsoletos(ctx, actor); } catch { /* el aviso no frena */ }
       const rec = await cargar(ctx, s(r.c.id));
       if (rec) r = rec;
     } else if (s(r.c.estado) !== "aprobado") {
@@ -429,6 +433,8 @@ extend("cf_revisar", "any", async (p, ctx, ses) => {
 
 // Avisos dentro de la app (tarjeta «Asignado a ti» del inicio y campana).
 extend("notif_mias", "any", async (_p, ctx, ses) => {
+  // TK223: apaga avisos cuya condición ya se resolvió (solicitud, permiso, conteo).
+  try { await resolverAvisosObsoletos(ctx, actorOf(ses)); } catch { /* la lista igual se sirve */ }
   const rows = (await todas(ctx, "beta_notificaciones")).filter((x) => s(x.usuario) === yo(ses)).sort((a, b) => s(b.created_at).localeCompare(s(a.created_at))).slice(0, 30);
   const items = rows.map((x) => ({ id: x.id, tipo: s(x.tipo), titulo: s(x.titulo), cuerpo: s(x.cuerpo || x.texto), link: s(x.link || x.ruta), leida: !!s(x.leida_at), fecha: s(x.created_at) }));
   if (esAdmin(ses.rol)) {

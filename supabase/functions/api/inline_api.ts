@@ -4,6 +4,7 @@
 import { extend, crearTicket } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, kvGet, kvSet, logAccion, nextSheet } from "./lib.ts";
+import { resolverAvisosObsoletos } from "./avisos_auto.ts";
 import { acceso, esAdmin, esPropio, matrizDe, MODULOS, normalizarRol, puedeVerContacto, ROLES } from "./permisos.ts";
 import { runErp } from "./erp.ts";
 import { compraParaComision, ecuadorParts, IVA, n, normCedula, normNombre, PCT_COMISION_PRODUCTO, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
@@ -1801,5 +1802,6 @@ extend("solicitud_resolver", "any", async (p, ctx, ses) => {
       });
     } catch { /* el aviso no frena la resolución */ }
   }
+  try { await resolverAvisosObsoletos(ctx, actorOf(ses)); } catch { /* el aviso no frena */ }
   return { ok: true, estado: patch.estado, ...(row.prueba === true ? { prueba: true, aviso: "Solicitud de simulación: no se cambió ningún dato real" } : {}) };
 });

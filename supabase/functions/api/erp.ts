@@ -456,8 +456,8 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     const dbMap = now.toISOString() >= CORTE_ERP ? await cortesVenta(db) : null;
     const ventaB = bodegaVentaDe(bodegas);
     const mins = await db.all("erp_producto_bodega");
-    const avisos = (await db.all("erp_avisos")).filter((a) => s(a.estado) !== "cerrado");
     const bajos = [];
+    const refsBajos = new Set<string>();
     for (const m of mins) {
       let q = stock.filter((r) => r.producto_id === m.producto_id && r.bodega_id === m.bodega_id).reduce((a, r) => a + n(r.cantidad), 0);
       if (ventaB && String(m.bodega_id) === String(ventaB.id) && now.toISOString() >= CORTE_ERP) {
@@ -465,11 +465,14 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
         q = saldoTrasCorte(skuCode(s(p?.sku)), String(m.producto_id), String(ventaB.id), movs, dbMap).saldo;
       } else if (q < 0 && now.toISOString() >= CORTE_ERP) q = 0;
       if (q <= n(m.stock_min)) {
+        refsBajos.add(String(m.producto_id) + "|" + String(m.bodega_id));
         const p = porId.get(String(m.producto_id));
         const b = bod.get(String(m.bodega_id));
         bajos.push({ sku: s(p?.sku), nombre: s(p?.nombre), bodega: s(b?.nombre), stock: round4(q), stock_min: n(m.stock_min) });
       }
     }
+    await cerrarAvisosMinimoResueltos(db, actor, refsBajos, now);
+    const avisos = (await db.all("erp_avisos")).filter((a) => s(a.estado) !== "cerrado");
     const ocs = (await db.all("erp_oc")).filter((o) => ["abierta", "parcial"].includes(s(o.estado)));
     return { ok: true, avisos, bajos, ocAbiertas: ocs.length };
   }
@@ -1245,12 +1248,38 @@ async function vender(db: Db, actor: string, body: Row, now: Date, porId: Map<st
   return { ok: true, id: ovId, numero: numeroFinal, ticket_ref: refFinal, total, subtotal: round2(sub), iva, ticketCols };
 }
 
+/** TK223: cierra avisos de bajo mínimo cuando el stock ya volvió a estar por encima. */
+export async function cerrarAvisosMinimoResueltos(db: Db, actor: string, refsBajos: Set<string>, now = new Date()): Promise<number> {
+  let avisos: Row[] = [];
+  try { avisos = await db.all("erp_avisos"); } catch { return 0; }
+  let nCerrados = 0;
+  const cerrado = now.toISOString();
+  for (const a of avisos) {
+    if (s(a.estado) === "cerrado") continue;
+    if (s(a.tipo) && s(a.tipo) !== "bajo_minimo") continue;
+    if (refsBajos.has(s(a.ref))) continue;
+    const patch = { estado: "cerrado", cerrado };
+    try {
+      if (a.id != null) await db.write(actor, "erp_avisos", "update", { id: a.id }, patch);
+      else await db.write(actor, "erp_avisos", "update", { ref: a.ref }, patch);
+      nCerrados++;
+    } catch { /* no frena el home */ }
+  }
+  return nCerrados;
+}
+
 async function alertarMinimos(db: Db, actor: string): Promise<void> {
   const stock = await db.all("erp_stock");
   const mins = await db.all("erp_producto_bodega");
-  const avisos = await db.all("erp_avisos");
   const prods = await db.all("erp_productos");
   const bods = await db.all("erp_bodegas");
+  const refsBajos = new Set<string>();
+  for (const m of mins) {
+    const q = stock.filter((r) => r.producto_id === m.producto_id && r.bodega_id === m.bodega_id).reduce((a, r) => a + n(r.cantidad), 0);
+    if (q <= n(m.stock_min)) refsBajos.add(String(m.producto_id) + "|" + String(m.bodega_id));
+  }
+  await cerrarAvisosMinimoResueltos(db, actor, refsBajos);
+  const avisos = await db.all("erp_avisos");
   for (const m of mins) {
     const q = stock.filter((r) => r.producto_id === m.producto_id && r.bodega_id === m.bodega_id).reduce((a, r) => a + n(r.cantidad), 0);
     if (q > n(m.stock_min)) continue;
