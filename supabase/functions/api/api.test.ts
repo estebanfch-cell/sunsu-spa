@@ -2034,7 +2034,7 @@ describe("personal bajas", () => {
     const personas = (await handle("personal_personas", { token: adminC.token }, adminC) as Row).personas as Row[];
     const nombres = personas.map((p) => p.nombre);
     assert.ok(nombres.includes("Andrea Robles"));
-    assert.ok(nombres.includes("Emi"));
+    assert.equal(nombres.includes("Emi"), false); // DEV-31b (t908u): las administradoras no son empleadas
     for (const fuera of ["María López", "Luisa Cedula", "Ana Actual", "Carla Salio"]) assert.equal(nombres.includes(fuera), false, fuera);
 
     const periodo = (await handle("asis_periodo", { token: adminC.token, anio: 2026, mes: 10 }, adminC) as Row).personas as Row[];
@@ -2276,7 +2276,7 @@ describe("series, comisiones y rol", () => {
       ],
       catalogo: [{ sku: "SUNSU-60", producto_servicio: "Pack", subtotal: 200, tipo: "PAQUETE", orig: {} }],
       rrhh_empleadas: [{ cedula: "1711", nombre_app: "Andrea", apellidos_y_nombres: "Andrea Robles", sueldo: 460, bono: 40, fondo_reserva: "NO", fecha_ingreso: "2024-01-01", cargo: "Cosmetologa" }],
-      jibble_historial: [{ nombre: "Andrea Robles", fecha: "2026-10-27", payroll_minutes: 480, supplementary_minutes: 60 }],
+      asistencia_historico: [{ nombre: "Andrea Robles", fecha: "2026-10-27", payroll_minutes: 480, supplementary_minutes: 60 }],
     });
     const c = ctx(db, "admin", "emi", "Emi");
     const tabla = await handle("getComisionesTabla", { token: c.token, desde: "2026-10-26", hasta: "2026-10-26", persona: "Emi" }, c) as Row;
@@ -2361,7 +2361,7 @@ describe("series, comisiones y rol", () => {
         { persona: "Andrea Robles", horario_id: "h-and" },
         { persona: "Daniela Mora", horario_id: "h-dan" },
       ],
-      jibble_historial: jibble,
+      asistencia_historico: jibble,
       tickets: [{ sheet_row: 30, atendido_por: "Daniela Mora", timestamp: "2026-06-30T15:00:00Z", nombre: "Ana", apellido: "Paz" }],
       asistencia_feriados: [{ fecha: "2026-07-07", nombre: "Feriado" }],
       permisos: [{ empleada: "Daniela Mora", tipo: "VACACIONES", estado: "APROBADO", fecha_inicio: "2026-07-14", fecha_fin: "2026-07-14" }],

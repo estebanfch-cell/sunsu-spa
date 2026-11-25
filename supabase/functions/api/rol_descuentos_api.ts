@@ -115,15 +115,9 @@ async function logDesc(ctx: Ctx, ses: Ses, id: string, accion: string, antes: Ro
 
 type EmpRol = { nombre: string; cargo: string; afiliada: boolean };
 async function empleadasActivas(ctx: Ctx): Promise<EmpRol[]> {
-  const { esFilaNotasRrhh, afiliadaSegunOverlay } = await import("./empleados_api.ts");
-  const overlays = await ctx.db.all("beta_empleados").catch(() => [] as Row[]);
-  return (await ctx.db.all("rrhh_empleadas").catch(() => [] as Row[]))
-    .filter((r) => !esFilaNotasRrhh(r) && (s(r.nombre_app) || s(r.apellidos_y_nombres)))
-    .map((e) => {
-      const nombre = s(e.nombre_app) || s(e.apellidos_y_nombres);
-      return { nombre, cargo: s(e.cargo), afiliada: afiliadaSegunOverlay(overlays, nombre) };
-    })
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  // DEV-31b: sin administradoras, sin bajas, sin inactivas; datos de «Configuración de rol».
+  const { empleadasDelRol } = await import("./rol_config_api.ts");
+  return (await empleadasDelRol(ctx)).map((e) => ({ nombre: e.nombre, cargo: e.cargo, afiliada: e.afiliada }));
 }
 
 extend("rol_desc_lista", "any", async (p, ctx, ses) => {
@@ -272,6 +266,11 @@ extend("rol_prerol_resumen", "any", async (p, ctx, ses) => {
       comFaciales: n(d.comFacialesSolo), comExtras: n(d.comExtras), comRecepcion: n(d.comRecepcion), comPaquetes: n(d.comPaquetes), comProductos: n(d.comProductos),
       horasExtra: round2(n(d.valSupl) + n(d.valExtr) + n(d.valDesc)),
       decimosFondo: round2(n(d.dec13) + n(d.dec14) + n(d.fondoReserva)),
+      dec13: round2(n(d.dec13)), dec14: round2(n(d.dec14)), fondoReserva: round2(n(d.fondoReserva)),
+      fondoFactor: n(d.fondoFactor), fondoDesde: s(d.fondoDesde),
+      // DEV-31b (t907u/t908u): solo administración. Costo total empresa = ingresos (sueldo, bono, comisiones, horas extra,
+      // décimos y fondo) + aporte patronal (IESS 11,15 % + SECAP 0,5 % + IECE 0,5 %).
+      patronal: round2(n(d.aportePatronal)), costoEmpresa: round2(n(d.costoEmpresa)),
       totalIngresos: n(d.totalIngresos), iess: n(d.iess),
       anticipos: n(d.anticipoSueldo), prestamos: n(d.prestamoEmpresa),
       prestamosIess: round2(n(d.prestQuir) + n(d.prestHip) + n(d.prestOtro)), multas: n(d.multas),
@@ -283,8 +282,8 @@ extend("rol_prerol_resumen", "any", async (p, ctx, ses) => {
   const tot = (k: string) => round2(filas.reduce((acc, x) => acc + n(x[k]), 0));
   return {
     ok: true, periodo, etiqueta: etiquetaPeriodo(periodo), hoy, filas,
-    totales: { totalIngresos: tot("totalIngresos"), iess: tot("iess"), totalEgresos: tot("totalEgresos"), neto: tot("neto"), comisiones: tot("comisiones") },
-    nota: "Días y horas: solo la asistencia de Sunsu (Mi asistencia); hasta el 25 nov 2026 los días sin marcas usan Jibble importado. Desde hoy hasta fin de mes se asume la jornada del horario. Comisiones y multas del ciclo 26→25.",
+    totales: { totalIngresos: tot("totalIngresos"), iess: tot("iess"), totalEgresos: tot("totalEgresos"), neto: tot("neto"), comisiones: tot("comisiones"), patronal: tot("patronal"), costoEmpresa: tot("costoEmpresa") },
+    nota: "Días y horas: solo la asistencia de la app (Mi asistencia). Desde hoy hasta fin de mes se asume la jornada del horario. Comisiones y multas del ciclo 26→25.",
   };
 });
 
@@ -302,7 +301,7 @@ extend("rol_resumen_periodo", "any", async (p, ctx, ses) => {
     return {
       id: r.id, persona: r.persona, cedula: r.cedula, cargo: r.cargo, estado: r.estado, afiliada: d.afiliada !== false,
       totalIngresos: n(d.totalIngresos), iess: n(d.iess), totalEgresos: n(d.totalEgresos), neto: n(d.totalRecibir),
-      aportePatronal: n(((d.aportesPatronal || {}) as Row).total), firma: vistaFirma(f, false),
+      aportePatronal: n(((d.aportesPatronal || {}) as Row).total), costoEmpresa: n(d.costoEmpresa), firma: vistaFirma(f, false),
     };
   }).sort((a, b) => s(a.persona).localeCompare(s(b.persona), "es"));
   return { ok: true, periodo, etiqueta: etiquetaPeriodo(periodo), items };

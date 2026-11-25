@@ -1,7 +1,7 @@
 // Marcajes, permisos/vacaciones sobre la tabla permisos, y horas para el rol.
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
-import { actorOf, bajasDe, nextSheet } from "./lib.ts";
+import { actorOf, adminesDe, bajasDe, nextSheet } from "./lib.ts";
 import { ecuadorParts, n, s, normNombre, type Row } from "./domain.ts";
 import { acceso, esAdmin, esPropio, matrizDe } from "./permisos.ts";
 import {
@@ -74,13 +74,17 @@ function marcajesDe(rows: Row[], nombre: string): MarcajeIn[] {
 }
 
 /**
- * DEV-31 (Emilia t901u): las horas y los días del rol salen SOLO de la asistencia de Sunsu (Mi asistencia).
- * Jibble queda como respaldo histórico únicamente hasta el corte del 25 nov 2026; desde el 26 nov 2026 una fila de
- * jibble_historial se ignora en Mi asistencia, el pre-rol y el rol (aunque alguien la importe).
+ * DEV-31b (Emilia t907u): las horas y los días salen SOLO de la asistencia de la app: marcas (asistencia_marcajes)
+ * más el histórico propio de la app para los días anteriores al 20/11/2026, cuando empezaron las marcas
+ * (tabla asistencia_historico, copiada y congelada: nadie importa nada nuevo). Jibble ya no es fuente de nada.
  */
-export const JIBBLE_ULTIMO_DIA = "2026-11-25";
-export function jibbleVigente(rows: Row[]): Row[] {
-  return (rows || []).filter((r) => { const f = s(r.fecha).slice(0, 10); return !!f && f <= JIBBLE_ULTIMO_DIA; });
+export const HISTORICO_ULTIMO_DIA = "2026-11-19";
+export function historicoVigente(rows: Row[]): Row[] {
+  return (rows || []).filter((r) => { const f = s(r.fecha).slice(0, 10); return !!f && f <= HISTORICO_ULTIMO_DIA; });
+}
+/** Histórico de asistencia de la app (días < 20/11/2026). */
+export async function historicoApp(ctx: Ctx): Promise<Row[]> {
+  return historicoVigente(await ctx.db.all("asistencia_historico").catch(() => [] as Row[]));
 }
 function personaJibble(r: Row): string {
   return s(r.persona) || s(r.nombre) || s(r.member) || s(r.empleada) || s(r.nombre_app);
@@ -98,7 +102,7 @@ function jibbleDe(rows: Row[], nombre: string): JibbleIn[] {
 async function nominaDe(ctx: Ctx, nombre: string, anio: number, mes: number, desde?: string, hasta?: string): Promise<NominaHoras> {
   const [marcajes, jibble, permisos, feriados, config] = await Promise.all([
     ctx.db.all("asistencia_marcajes").catch(() => []),
-    ctx.db.all("jibble_historial").then(jibbleVigente).catch(() => []),
+    historicoApp(ctx).catch(() => []),
     ctx.db.all("permisos").catch(() => []),
     feriadosDe(ctx),
     configDe(ctx).catch(() => configDesde(undefined)),
@@ -289,6 +293,8 @@ extend("asis_marcar", "any", async (p, ctx, ses) => {
   const tipo = s(p.tipo);
   if (!["entrada", "salida", "almuerzo_inicio", "almuerzo_fin"].includes(tipo)) return { error: "Tipo de marca desconocido." };
   const nombre = esAdmin(ses.rol) && s(p.nombre) ? s(p.nombre) : ses.name;
+  // En la simulación (modo prueba, filas origin=test que se borran al salir) la administradora sí puede probar el reloj.
+  if (!ses.prueba && (await adminesDe(ctx.db))(nombre)) return { error: "EFCH y Emi son administradoras, no empleadas: no registran asistencia." };
   const cfg = await configDe(ctx);
   const ts = ctx.now.toISOString();
   const fecha = ymdDeTs(ts);
@@ -354,8 +360,9 @@ extend("asis_hoy", "any", async (p, ctx, ses) => {
   let equipo: R[] | undefined;
   let feriados: R[] | undefined;
   if (esAdmin(ses.rol)) {
+    const esAdm = await adminesDe(ctx.db);
     equipo = (await ctx.db.all("asistencia_marcajes"))
-      .filter((r) => ymdDeTs(s(r.ts)) === fecha)
+      .filter((r) => ymdDeTs(s(r.ts)) === fecha && !esAdm(s(r.nombre)))
       .map(marcaPub);
     try {
       feriados = (await ctx.db.all("asistencia_feriados")).map((r) => ({
@@ -400,13 +407,14 @@ extend("asis_periodo", "any", async (p, ctx, ses) => {
   else if (s(p.nombre)) nombres = [s(p.nombre)];
   else {
     const baja = await bajasDe(ctx.db);
+    const esAdm = await adminesDe(ctx.db);
     const set = new Set<string>();
     for (const r of await ctx.db.all("rrhh_empleadas")) {
       if (baja(s(r.nombre_app)) || baja(s(r.nombre_jibble))) continue;
       if (s(r.nombre_app)) set.add(s(r.nombre_app));
     }
     for (const r of await ctx.db.all("asistencia_marcajes")) if (s(r.nombre)) set.add(s(r.nombre));
-    nombres = [...set];
+    nombres = [...set].filter((x) => !esAdm(x));
     if (!nombres.length) nombres = [ses.name];
   }
   const personas = [];
@@ -527,7 +535,8 @@ extend("asis_vacaciones", "any", async (p, ctx, ses) => {
   if (acceso(ses.rol, "asistencia", matriz) === "no") return { error: "No tienes permiso" };
   if (!esAdmin(ses.rol)) return { ok: true, personas: [{ nombre: ses.name, ...saldoPub(await saldoDe(ctx, ses.name), true) }] };
   const baja = await bajasDe(ctx.db);
-  const nombres = s(p.nombre) ? [s(p.nombre)] : (await ctx.db.all("rrhh_empleadas")).filter((r) => !baja(s(r.nombre_app)) && !baja(s(r.nombre_jibble))).map((r) => s(r.nombre_app)).filter(Boolean);
+  const esAdm = await adminesDe(ctx.db);
+  const nombres = s(p.nombre) ? [s(p.nombre)].filter((x) => !esAdm(x)) : (await ctx.db.all("rrhh_empleadas")).filter((r) => !baja(s(r.nombre_app)) && !baja(s(r.nombre_jibble))).map((r) => s(r.nombre_app)).filter((x) => x && !esAdm(x));
   const personas = [];
   for (const nombre of nombres) personas.push({ nombre, ...(await saldoDe(ctx, nombre)) });
   return { ok: true, personas };
@@ -579,6 +588,7 @@ extend("asis_marca_manual", "any", async (p, ctx, ses) => {
   if (!["entrada", "salida", "almuerzo_inicio", "almuerzo_fin"].includes(tipo)) return { error: "Tipo de marca desconocido." };
   const nombre = s(p.nombre);
   if (!nombre) return { error: "Falta la empleada" };
+  if ((await adminesDe(ctx.db))(nombre)) return { error: "EFCH y Emi son administradoras, no empleadas: no registran asistencia." };
   const d = new Date(s(p.ts));
   if (!/[+-]\d{2}:?\d{2}$|Z$/.test(s(p.ts)) || Number.isNaN(d.getTime())) return { error: "Hora inválida (usa 2026-10-21T09:05:00-05:00)" };
   if (d.getTime() > ctx.now.getTime()) return { error: "No se agrega una marca en el futuro." };
@@ -598,6 +608,7 @@ extend("asis_marcas_admin", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo admin edita las marcas del equipo" };
   const nombre = s(p.nombre);
   if (!nombre) return { error: "Falta la empleada" };
+  if ((await adminesDe(ctx.db))(nombre)) return { error: "EFCH y Emi son administradoras, no empleadas: no registran asistencia." };
   const hoy = ecuadorParts(ctx.now).ymd;
   const fecha = /^\d{4}-\d{2}-\d{2}$/.test(s(p.fecha)) ? s(p.fecha) : hoy;
   if (fecha.slice(0, 7) !== hoy.slice(0, 7) || fecha > hoy) return { error: "Solo se editan marcas del período abierto, hasta hoy." };
@@ -605,7 +616,7 @@ extend("asis_marcas_admin", "any", async (p, ctx, ses) => {
     ctx.db.all("asistencia_marcajes"), ctx.db.all("permisos").catch(() => [] as Row[]), feriadosDe(ctx), configDe(ctx),
     ctx.db.all("asistencia_auditoria").catch(() => [] as Row[]),
   ]);
-  const jib = await ctx.db.all("jibble_historial").then(jibbleVigente).catch(() => [] as Row[]);
+  const jib = await historicoApp(ctx).catch(() => [] as Row[]);
   const delDia = marc.filter((r) => mismo(s(r.nombre), nombre) && ymdDeTs(s(r.ts)) === fecha).sort((a, b) => s(a.ts).localeCompare(s(b.ts)));
   const ids = new Set(delDia.map((r) => s(r.id)));
   const j = jibbleDe(jib, nombre).find((x) => x.fecha === fecha) || null;
@@ -635,7 +646,8 @@ extend("asis_tablero", "any", async (_p, ctx, ses) => {
       return h && !h.esDefault ? jornadaDe(h, fecha) : null;
     };
   } catch { /* sin horarios */ }
-  const activas = emps.filter((r) => s(r.nombre_app) && !esFila(r) && !baja(s(r.nombre_app)) && !baja(s(r.nombre_jibble)));
+  const esAdmT = await adminesDe(ctx.db);
+  const activas = emps.filter((r) => s(r.nombre_app) && !esFila(r) && !baja(s(r.nombre_app)) && !baja(s(r.nombre_jibble)) && !esAdmT(s(r.nombre_app)));
   const personas = activas.map((e) => {
     const nombre = s(e.nombre_app);
     const marcas = marc.filter((r) => mismo(s(r.nombre), nombre) && ymdDeTs(s(r.ts)) === fecha && r.anulado !== true)
@@ -652,10 +664,11 @@ extend("asis_dia", "any", async (p, ctx, ses) => {
   const [marc, perms, fer, cfg, emps] = await Promise.all([
     ctx.db.all("asistencia_marcajes"), ctx.db.all("permisos"), feriadosDe(ctx), configDe(ctx), ctx.db.all("rrhh_empleadas"),
   ]);
-  const jib = await ctx.db.all("jibble_historial").then(jibbleVigente).catch(() => [] as Row[]);
+  const jib = await historicoApp(ctx).catch(() => [] as Row[]);
   const baja = await bajasDe(ctx.db);
-  const nombres = new Set(emps.filter((r) => !baja(s(r.nombre_app)) && !baja(s(r.nombre_jibble))).map((r) => s(r.nombre_app)).filter(Boolean));
-  for (const r of marc) if (ymdDeTs(s(r.ts)) === fecha && s(r.nombre)) nombres.add(s(r.nombre));
+  const esAdmD = await adminesDe(ctx.db);
+  const nombres = new Set(emps.filter((r) => !baja(s(r.nombre_app)) && !baja(s(r.nombre_jibble))).map((r) => s(r.nombre_app)).filter((x) => x && !esAdmD(x)));
+  for (const r of marc) if (ymdDeTs(s(r.ts)) === fecha && s(r.nombre) && !esAdmD(s(r.nombre))) nombres.add(s(r.nombre));
   const filas = [];
   for (const nombre of nombres) {
     const mm = marcajesDe(marc, nombre);
@@ -796,6 +809,7 @@ extend("asis_calendario", "any", async (p, ctx, ses) => {
   const matriz = await matrizDe(ctx.db);
   if (acceso(ses.rol, "asistencia", matriz) === "no") return { error: "No tienes permiso" };
   const nombre = (!esAdmin(ses.rol) || propio(ses, matriz)) ? ses.name : (s(p.nombre) || ses.name);
+  if (esAdmin(ses.rol) && (await adminesDe(ctx.db))(nombre)) return { error: "Elige a una empleada: EFCH y Emi son administradoras y no registran asistencia." };
   const hoyYmd = ecuadorParts(ctx.now).ymd;
   const ingresoCal = s((await empleadaDe(ctx, nombre).catch(() => undefined))?.fecha_ingreso).slice(0, 10);
   const ancla = s(p.fecha) || hoyYmd;
@@ -933,9 +947,10 @@ extend("asis_cierre_automatico", "any", async (_p, ctx, ses) => {
   const cfg = await configDe(ctx);
   const todos = (await ctx.db.all("asistencia_marcajes").catch(() => [] as Row[])).filter((r) => r.anulado !== true);
   const porPersona = new Map<string, Row[]>();
+  const esAdmC = await adminesDe(ctx.db);
   for (const r of todos) {
     const nomb = s(r.nombre);
-    if (!nomb) continue;
+    if (!nomb || esAdmC(nomb)) continue;
     const arr = porPersona.get(nomb) || [];
     arr.push(r);
     porPersona.set(nomb, arr);
@@ -1020,7 +1035,7 @@ export function recalcularDiaJibble(raw: Row, fecha: string, config: ReturnType<
 
 export async function correccionesJibble(ctx: Ctx, nombre: string, desde: string, hasta: string): Promise<{ dias: Row[]; resumen: Row; importadoHasta: string | null }> {
   const [jib, feriados, config] = await Promise.all([
-    ctx.db.all("jibble_historial").then(jibbleVigente).catch(() => [] as Row[]),
+    historicoApp(ctx).catch(() => [] as Row[]),
     feriadosDe(ctx),
     configDe(ctx).catch(() => configDesde(undefined)),
   ]);

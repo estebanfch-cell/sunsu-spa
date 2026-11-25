@@ -179,7 +179,7 @@ export async function guardarHorario(ctx: Ctx, ses: Ses, h: Horario): Promise<vo
 
 async function personasDe(ctx: Ctx): Promise<{ nombre: string; rol: string }[]> {
   const { personasUnicas } = await import("./personas_unir.ts");
-  return (await personasUnicas(ctx, { incluirAdmin: true })).map((p) => ({
+  return (await personasUnicas(ctx, { incluirAdmin: false })).map((p) => ({
     nombre: p.nombre, rol: normalizarRol(p.rol || ""),
   }));
 }
