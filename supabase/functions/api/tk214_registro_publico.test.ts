@@ -150,7 +150,7 @@ describe("TK214 · registro público de clientas a Supabase", () => {
   it("el cache quedó en TK214", () => {
     const idx = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     const sw = readFileSync(new URL("../../../sw.js", import.meta.url), "utf8");
-    assert.match(idx, /window\.SUNSU_CACHE = "sunsu-2026-11-25-DEV31"/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-25-DEV31"/);
+    assert.match(idx, /window\.SUNSU_CACHE = "sunsu-2026-11-25-TK221"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-25-TK221"/);
   });
 });

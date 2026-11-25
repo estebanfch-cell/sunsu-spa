@@ -14,7 +14,7 @@ import { claveRegistro } from "./ventas.ts";
 import { autorizaDe, autorizaFotosCorregidas } from "./consent_override.ts";
 import { leerSerie } from "./series.ts";
 import { claveDe } from "./ticket_beta.ts";
-import { aplicarPlantilla, digitosWa, mezclarPlantillas, plantillasDefault, respuestaWa, telefonoDeFuentes } from "./wa_lib.ts";
+import { aplicarPlantilla, aislarLinkRegistro, conSaltoTrasRegistro, digitosWa, mezclarPlantillas, plantillasDefault, respuestaWa, telefonoDeFuentes } from "./wa_lib.ts";
 
 async function todas(ctx: Ctx, t: string): Promise<Row[]> { try { return await ctx.db.all(t); } catch { return []; } }
 const hoyEc = (ctx: Ctx) => new Date(ctx.now.getTime() - 5 * 3600000).toISOString().slice(0, 10);
@@ -326,8 +326,9 @@ extend("ag_wa", "any", async (p, ctx, ses) => {
   const plantillas = await plantillasWa(ctx);
   const nom = (s(a.firstName).split(" ")[0] || s(a.firstName)).trim();
   const fh = fmtCitaWa(a.datetime);
-  const bloqueReg = nueva ? aplicarPlantilla(plantillas["MENSAJE REGISTRO PRIMERA VISITA"] || plantillasDefault()["MENSAJE REGISTRO PRIMERA VISITA"], { link: linkRegistro(plantillas) }) : "";
-  const texto = aplicarPlantilla(plantillas["MENSAJE CONFIRMACION CITA"] || plantillasDefault()["MENSAJE CONFIRMACION CITA"], { nombre: nom, dia: fh.dia, hora: fh.hora, registro: bloqueReg });
+  // TK221: aplicarPlantilla hace trim() del bloque y, si la plantilla sigue con «Nota:», el URL queda pegado (registro.htmlNota:).
+  const bloqueReg = nueva ? conSaltoTrasRegistro(aplicarPlantilla(plantillas["MENSAJE REGISTRO PRIMERA VISITA"] || plantillasDefault()["MENSAJE REGISTRO PRIMERA VISITA"], { link: linkRegistro(plantillas) })) : "";
+  const texto = aislarLinkRegistro(aplicarPlantilla(plantillas["MENSAJE CONFIRMACION CITA"] || plantillasDefault()["MENSAJE CONFIRMACION CITA"], { nombre: nom, dia: fh.dia, hora: fh.hora, registro: bloqueReg }));
   const out = sinTelefono(respuestaWa({ digitos: tel, texto, tipos: ["cita"], tipoMensaje: "cita_confirmacion" }));
   if (out.tiene_tel === true) {
     const clave = claveWaCita(id);
