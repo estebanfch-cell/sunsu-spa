@@ -73,6 +73,15 @@ function marcajesDe(rows: Row[], nombre: string): MarcajeIn[] {
   }));
 }
 
+/**
+ * DEV-31 (Emilia t901u): las horas y los días del rol salen SOLO de la asistencia de Sunsu (Mi asistencia).
+ * Jibble queda como respaldo histórico únicamente hasta el corte del 25 nov 2026; desde el 26 nov 2026 una fila de
+ * jibble_historial se ignora en Mi asistencia, el pre-rol y el rol (aunque alguien la importe).
+ */
+export const JIBBLE_ULTIMO_DIA = "2026-11-25";
+export function jibbleVigente(rows: Row[]): Row[] {
+  return (rows || []).filter((r) => { const f = s(r.fecha).slice(0, 10); return !!f && f <= JIBBLE_ULTIMO_DIA; });
+}
 function personaJibble(r: Row): string {
   return s(r.persona) || s(r.nombre) || s(r.member) || s(r.empleada) || s(r.nombre_app);
 }
@@ -89,7 +98,7 @@ function jibbleDe(rows: Row[], nombre: string): JibbleIn[] {
 async function nominaDe(ctx: Ctx, nombre: string, anio: number, mes: number, desde?: string, hasta?: string): Promise<NominaHoras> {
   const [marcajes, jibble, permisos, feriados, config] = await Promise.all([
     ctx.db.all("asistencia_marcajes").catch(() => []),
-    ctx.db.all("jibble_historial").catch(() => []),
+    ctx.db.all("jibble_historial").then(jibbleVigente).catch(() => []),
     ctx.db.all("permisos").catch(() => []),
     feriadosDe(ctx),
     configDe(ctx).catch(() => configDesde(undefined)),
@@ -596,7 +605,7 @@ extend("asis_marcas_admin", "any", async (p, ctx, ses) => {
     ctx.db.all("asistencia_marcajes"), ctx.db.all("permisos").catch(() => [] as Row[]), feriadosDe(ctx), configDe(ctx),
     ctx.db.all("asistencia_auditoria").catch(() => [] as Row[]),
   ]);
-  const jib = await ctx.db.all("jibble_historial").catch(() => [] as Row[]);
+  const jib = await ctx.db.all("jibble_historial").then(jibbleVigente).catch(() => [] as Row[]);
   const delDia = marc.filter((r) => mismo(s(r.nombre), nombre) && ymdDeTs(s(r.ts)) === fecha).sort((a, b) => s(a.ts).localeCompare(s(b.ts)));
   const ids = new Set(delDia.map((r) => s(r.id)));
   const j = jibbleDe(jib, nombre).find((x) => x.fecha === fecha) || null;
@@ -643,7 +652,7 @@ extend("asis_dia", "any", async (p, ctx, ses) => {
   const [marc, perms, fer, cfg, emps] = await Promise.all([
     ctx.db.all("asistencia_marcajes"), ctx.db.all("permisos"), feriadosDe(ctx), configDe(ctx), ctx.db.all("rrhh_empleadas"),
   ]);
-  const jib = await ctx.db.all("jibble_historial").catch(() => [] as Row[]);
+  const jib = await ctx.db.all("jibble_historial").then(jibbleVigente).catch(() => [] as Row[]);
   const baja = await bajasDe(ctx.db);
   const nombres = new Set(emps.filter((r) => !baja(s(r.nombre_app)) && !baja(s(r.nombre_jibble))).map((r) => s(r.nombre_app)).filter(Boolean));
   for (const r of marc) if (ymdDeTs(s(r.ts)) === fecha && s(r.nombre)) nombres.add(s(r.nombre));
@@ -1011,7 +1020,7 @@ export function recalcularDiaJibble(raw: Row, fecha: string, config: ReturnType<
 
 export async function correccionesJibble(ctx: Ctx, nombre: string, desde: string, hasta: string): Promise<{ dias: Row[]; resumen: Row; importadoHasta: string | null }> {
   const [jib, feriados, config] = await Promise.all([
-    ctx.db.all("jibble_historial").catch(() => [] as Row[]),
+    ctx.db.all("jibble_historial").then(jibbleVigente).catch(() => [] as Row[]),
     feriadosDe(ctx),
     configDe(ctx).catch(() => configDesde(undefined)),
   ]);

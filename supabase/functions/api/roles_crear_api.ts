@@ -6,8 +6,8 @@ import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, logAccion } from "./lib.ts";
 import { cicloFin, cicloInicio, ecuadorParts, n, normNombre, rolCalcularOficial, round2, s, type Row } from "./domain.ts";
-import { esAdmin } from "./permisos.ts";
-import { clavePeriodo, etiquetaPeriodo, estaPublicado } from "./roles_api.ts";
+import { esAdmin, esPropio } from "./permisos.ts";
+import { clavePeriodo, etiquetaPeriodo, estaPublicado, mismaPersonaRol } from "./roles_api.ts";
 import { clasificarHorasRol, enMapaRrhh, horarioRolDeTabla, horarioRrhhDe, type DiaHorasRol } from "./horas_rol.ts";
 
 const MESES: Record<string, number> = {
@@ -99,6 +99,8 @@ export function snapshotDe(opts: {
   mensual?: { dec13?: boolean; dec14?: boolean; fondo?: boolean };
   /** TK170: false = sin afiliación IESS (factura sus servicios). */
   afiliada?: boolean;
+  /** DEV-31: anticipos y cuotas de préstamos internos de este rol (ya sumados en «anticipo»). */
+  descInternos?: { anticipo: number; prestamo: number; detalle: Row[] } | null;
 }): Row {
   const afiliada = opts.afiliada !== false;
   const calc0 = rolCalcularOficial({
@@ -145,6 +147,9 @@ export function snapshotDe(opts: {
     facturar: afiliada ? 0 : netoR,
     mensajeFactura: afiliada ? "" : `Debes facturarnos $${netoR.toFixed(2)} por este período.`,
     multasDetalle: opts.multasDetalle || [],
+    anticipoSueldo: opts.descInternos ? round2(opts.descInternos.anticipo) : round2(calc.anticipo),
+    prestamoEmpresa: opts.descInternos ? round2(opts.descInternos.prestamo) : 0,
+    descuentosInternos: opts.descInternos ? opts.descInternos.detalle : [],
     fuenteHoras: opts.fuenteHoras,
     aportesPatronal: {
       iess: calc.iessPatronal, secap: calc.secap, iece: calc.iece,
@@ -193,6 +198,10 @@ export function aplicarAjustes(base: Row, aj: Row): Row {
     fuenteHoras: s(base.fuenteHoras),
     mensual: { dec13: base.dec13Mensual !== false, dec14: base.dec14Mensual !== false, fondo: base.fondoMensual !== false },
     afiliada: base.afiliada !== false,
+    // DEV-31: si el anticipo total no se tocó a mano, se conserva el detalle (anticipos + cuotas de préstamo).
+    descInternos: (aj.anticipo == null || Math.abs(n(aj.anticipo) - n(base.anticipo)) < 0.005) && Array.isArray(base.descuentosInternos)
+      ? { anticipo: n(base.anticipoSueldo), prestamo: n(base.prestamoEmpresa), detalle: base.descuentosInternos as Row[] }
+      : null,
   });
 }
 
@@ -288,7 +297,7 @@ export async function rolHorasMesDe(ctx: Ctx, nombre: string, anio: number, mes:
   return desdeSnap({ ...horas, valSupl: calc.valSupl, valExtr: calc.valExtr, valDesc: calc.valDesc, faltas: horas.diasFalta }, "calculado");
 }
 
-export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string, anio?: number, mes?: number): Promise<Row> {
+export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string, anio?: number, mes?: number, opts: { origin?: string } = {}): Promise<Row> {
   const per = parsePeriodo(periodoRaw, anio, mes);
   const emp = await empleadaDe(ctx, nombre);
   if (!emp) return { error: "No encuentro a esa persona en Personal › Empleados / RRHH." };
@@ -301,6 +310,13 @@ export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string,
   const { nomina, horas, asumidoDesde, ultimoDato } = await horasRolDe(ctx, persona, per.anio, per.mes, { ingreso: s(emp.fecha_ingreso).slice(0, 10) || null });
   const { comisionesDeTablas } = await import("./handlers_extra.ts");
   const com = await comisionesDeTablas(ctx, persona, per.anio, per.mes);
+  // DEV-31: las comisiones del rol son las MISMAS de la pantalla Comisiones (mismo ciclo 26→25); multas igual que antes.
+  try {
+    const { comisionesComoPantalla } = await import("./handlers.ts");
+    const pant = await comisionesComoPantalla(ctx, persona, per.cicloDesde);
+    com.comFaciales = pant.comFaciales; com.comPaquetes = pant.comPaquetes; com.comProductos = pant.comProductos;
+    com.comExtras = pant.comExtras; com.comRecepcion = pant.comRecepcion;
+  } catch { /* si falla, queda el cálculo anterior */ }
   const { multasBetaRol } = await import("./multas_beta_api.ts");
   const mBeta = await multasBetaRol(ctx.db, persona, per.cicloDesde, per.cicloHasta);
   com.multas = round2(n(com.multas) + mBeta.total);
@@ -310,6 +326,9 @@ export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string,
   const sueldoBase = cfg ? n(cfg.sueldo) : dineroDe(emp, ["sueldo_base", "sueldo", "sueldo_mensual"]);
   const bono = cfg ? n(cfg.bono) : dineroDe(emp, ["bono_fijo", "bono"]);
   const fondo = cfg ? cfg.fondo === true || s(cfg.fondo).toUpperCase() === "SI" : s(emp.fondo_reserva).toUpperCase() === "SI";
+  // DEV-31: anticipos (mes siguiente) y cuotas de préstamos internos que caen en este rol.
+  const { descuentosDelPeriodo } = await import("./rol_descuentos_api.ts");
+  const desc = await descuentosDelPeriodo(ctx, persona, per.periodo, opts.origin || "beta").catch(() => ({ anticipo: 0, prestamo: 0, total: 0, detalle: [] as Row[] }));
   const fuenteHoras = !nomina.hayDatos && horas.diasTrabajados === 0
     ? (horas.diasAsumidos ? "asumidas" : "sin_marcajes")
     : (nomina.diasPropios ? "asistencia+jibble" : "jibble+asumidas");
@@ -318,7 +337,8 @@ export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string,
     anio: per.anio, mes: per.mes, cicloDesde: per.cicloDesde, cicloHasta: per.cicloHasta,
     sueldoBase, bono, fondo, fechaIngreso: s(emp.fecha_ingreso) || "2020-01-01",
     horas, com, iess: { quir: iessFicha.quir, hip: iessFicha.hip, otros: iessFicha.otros },
-    anticipo: 0, multasDetalle: mBeta.detalle || [], fuenteHoras,
+    anticipo: desc.total, multasDetalle: mBeta.detalle || [], fuenteHoras,
+    descInternos: desc,
     mensual: mensualDe(overlays, persona),
     afiliada,
   });
@@ -377,7 +397,7 @@ extend("rol_crear", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo administración crea un rol de pagos." };
   const nombre = s(p.persona || p.nombre);
   if (!nombre) return { error: "Elige a la persona." };
-  const armado = await armarEntrada(ctx, nombre, s(p.periodo || p.sheet || p.ciclo), n(p.anio) || undefined, n(p.mes) || undefined);
+  const armado = await armarEntrada(ctx, nombre, s(p.periodo || p.sheet || p.ciclo), n(p.anio) || undefined, n(p.mes) || undefined, { origin: esTest(ses) ? "test" : "beta" });
   if (armado.error) return armado;
   const origin = esTest(ses) ? "test" : "beta";
   const rows = await ctx.db.all("beta_roles").catch(() => [] as Row[]);
@@ -416,9 +436,15 @@ extend("rol_get", "any", async (p, ctx, ses) => {
   if (!row) return { error: "No encuentro ese rol." };
   const admin = esAdmin(ses.rol);
   if (!admin && s(row.estado) !== "aprobado") return { error: "Este rol todavía no está publicado." };
-  if (!admin && s(row.origin) === "test") return { error: "Este rol todavía no está publicado." };
+  if (!admin && s(row.origin) === "test" && !ses.prueba) return { error: "Este rol todavía no está publicado." };
+  // DEV-31: cada empleada ve solo su propio rol (el backend lo exige, no solo la pantalla).
+  if (!admin && !(esPropio(s(row.persona), ses) || mismaPersonaRol(s(row.persona), ses.name || "") || mismaPersonaRol(s(row.persona), ses.short || ""))) {
+    return { error: "Solo puedes ver tu propio rol." };
+  }
   const snap = (row.snapshot && typeof row.snapshot === "object") ? row.snapshot as Row : {};
-  return vista(row, snap, admin);
+  const { firmaDeRol, vistaFirma } = await import("./rol_descuentos_api.ts");
+  const firma = vistaFirma(await firmaDeRol(ctx, s(row.id)), true);
+  return { ...vista(row, snap, admin), firma, puedeFirmar: !admin && s(row.estado) === "aprobado" && !firma && !!s(ses.token) };
 });
 
 extend("rol_ajustar", "any", async (p, ctx, ses) => {
