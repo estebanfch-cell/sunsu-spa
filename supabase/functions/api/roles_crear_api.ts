@@ -122,7 +122,7 @@ export function snapshotDe(opts: {
       ...calc0, dec13: 0, dec14: 0, fondoReserva: 0, dec13Acumulado: 0, dec14Acumulado: 0, fondoReservaIess: 0,
       iess: 0, prestHip: 0, prestQuir: 0, prestOtro: 0,
       totalIngresos: ing, egresos: egr, totalEgresos: egr, totalRecibir: round2(ing - egr),
-      iessPatronal: 0, secap: 0, iece: 0, aportePatronal: 0, costoEmpresa: ing,
+      iessPatronal: 0, secap: 0, iece: 0, aportePatronal: 0, ccc: 0, costoEmpresa: ing,
     };
   })();
   const ingR = round2(calc.totalIngresos), egrR = round2(calc.totalEgresos), netoR = round2(ingR - egrR);
@@ -154,7 +154,8 @@ export function snapshotDe(opts: {
     fuenteHoras: opts.fuenteHoras,
     aportesPatronal: {
       iess: calc.iessPatronal, secap: calc.secap, iece: calc.iece,
-      total: calc.aportePatronal, pct: 0.1215, costoEmpresa: calc.costoEmpresa,
+      total: calc.aportePatronal, pct: 0.1215,
+      ccc: calc.ccc, cccPct: 0.01, costoEmpresa: calc.costoEmpresa,
     },
   };
 }
@@ -357,7 +358,7 @@ export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string,
 }
 
 /** DEV-31b (t907u/t908u): el aporte patronal y el costo empresa los ve solo administración, nunca la empleada. */
-export const CLAVES_PATRONAL = ["aportesPatronal", "aportePatronal", "aportePatronalPct", "iessPatronal", "secap", "iece", "costoEmpresa", "costoTotalEmpresa"];
+export const CLAVES_PATRONAL = ["aportesPatronal", "aportePatronal", "aportePatronalPct", "iessPatronal", "secap", "iece", "ccc", "cccPct", "costoEmpresa", "costoTotalEmpresa"];
 export function sinPatronal(snap: Row): Row {
   const o: Row = { ...snap };
   for (const k of CLAVES_PATRONAL) delete o[k];

@@ -172,7 +172,7 @@
       doc.line(x0, y - 11, W - 40, y - 11);
       fila(["TOTAL", "", "", "$" + m2(tot.i), "$" + m2(tot.s), "$" + m2(tot.e), "$" + m2(tot.n), "$" + m2(tot.p), "$" + m2(tot.c), ""], true);
       y += 10; doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-      doc.text("Costo empresa = ingresos (con décimos y fondo) + aporte patronal. Descuentos = aporte IESS personal + anticipos + cuotas de préstamos + préstamos IESS + multas. El rol individual de cada empleada (con su firma) se descarga desde su rol.", x0, y);
+      doc.text("Costo empresa = ingresos (con décimos y fondo) + aporte patronal + CCC 1% (no se descuenta a la empleada). Descuentos = aporte IESS personal + anticipos + cuotas de préstamos + préstamos IESS + multas.", x0, y);
       if (typeof _entregarPDF === "function") _entregarPDF(doc, "ROLES " + String(r.etiqueta || periodo).toUpperCase() + " resumen.pdf");
       else doc.save("roles-resumen.pdf");
       toast("📄 Resumen listo");
@@ -355,7 +355,8 @@
     var d = pack.data || {};
     var aprobado = pack.estado === "aprobado";
     var pa = d.aportesPatronal || {};
-    var costo = '<div class="rolx-costo"><span>Aporte patronal <b>$' + m2(pa.total) + '</b></span><span>Costo total empresa <b>$' + m2(pa.costoEmpresa != null ? pa.costoEmpresa : Number(d.totalIngresos || 0) + Number(pa.total || 0)) + '</b></span><small>solo administración</small></div>';
+    var ccc = pa.ccc != null ? pa.ccc : d.ccc;
+    var costo = '<div class="rolx-costo"><span>Aporte patronal <b>$' + m2(pa.total) + '</b></span><span>CCC 1% <b>$' + m2(ccc) + '</b></span><span>Costo total empresa <b>$' + m2(pa.costoEmpresa != null ? pa.costoEmpresa : Number(d.totalIngresos || 0) + Number(pa.total || 0) + Number(ccc || 0)) + '</b></span><small>solo administración · la CCC no se descuenta a la empleada</small></div>';
     var cab = '<div class="rolx-estado"><span>' + (aprobado ? "Rol de " : "Pre-rol de ") + esc(pack.etiqueta || d.etiqueta || "") + "</span> " + pillsRol(pack)
       + (aprobado ? "" : ' <small class="note">se actualiza solo (marcas, comisiones, anticipos…) · actualizado hoy ' + esc(ahoraEc()) + "</small>") + "</div>";
     var acc;
@@ -546,7 +547,7 @@
     return new Promise(function (ok, no) {
       if (window.XLSX) return ok(window.XLSX);
       var sc = document.createElement("script");
-      sc.src = "vendor-xlsx.js?v=20261125tk223";
+      sc.src = "vendor-xlsx.js?v=20261125tk224";
       sc.onload = function () { window.XLSX ? ok(window.XLSX) : no(new Error("No se pudo cargar el lector de Excel")); };
       sc.onerror = function () { no(new Error("No se pudo cargar el lector de Excel")); };
       document.head.appendChild(sc);
