@@ -4107,6 +4107,7 @@ function bindAprobaciones(main) {
       const comentario = aprobar ? "" : (prompt("Comentario (opcional)") || "");
       const res = await api("solicitud_resolver", { id, aprobar, comentario });
       if (res.error) { toast(res.error); return; }
+      if (typeof pintarBadgeNotif === "function") pintarBadgeNotif();
       recargar();
     };
   });
@@ -4122,7 +4123,7 @@ function alertasKeyLS() {
 function alertasOcultas() {
   try { const v = JSON.parse(localStorage.getItem(alertasKeyLS()) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; }
 }
-/** Une solicitudes pendientes + avisos sin leer en una lista corta, sin las que ya se descartaron con ×. */
+/** Une solicitudes pendientes + avisos sin leer en una lista corta, sin las que ya se descartaron con ×. TK223: notif_mias ya apaga los avisos cuya condición se resolvió. */
 function alertasDashboard(apr, notif, ocultas, vouchers) {
   const fuera = new Set((ocultas || []).map(String));
   const out = [], vistos = new Set();
@@ -8413,6 +8414,7 @@ function wireAsistencia(main) {
       const data = await api("asis_permiso_resolver", { id: b.getAttribute("data-aprobar"), estado: "APROBADO" });
       const err = main.querySelector("#f-err-perm");
       if (data.error) { if (err) err.textContent = data.error; return; }
+      if (typeof pintarBadgeNotif === "function") pintarBadgeNotif();
       recargarAsis();
     };
   });
@@ -8424,6 +8426,7 @@ function wireAsistencia(main) {
       const data = await api("asis_permiso_resolver", { id: b.getAttribute("data-rechazar"), estado: "RECHAZADO", motivo });
       const err = main.querySelector("#f-err-perm");
       if (data.error) { if (err) err.textContent = data.error; return; }
+      if (typeof pintarBadgeNotif === "function") pintarBadgeNotif();
       recargarAsis();
     };
   });
@@ -8434,6 +8437,7 @@ function wireAsistencia(main) {
       const data = await api("asis_permiso_cancelar", { id: b.getAttribute("data-cancelar"), motivo: "cancelada por la solicitante" });
       const err = main.querySelector("#f-err-perm");
       if (data.error) { if (err) err.textContent = data.error; return; }
+      if (typeof pintarBadgeNotif === "function") pintarBadgeNotif();
       recargarAsis();
     };
   });
@@ -8971,7 +8975,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-25-DEV31H"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-25-TK223"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
