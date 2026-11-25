@@ -950,8 +950,8 @@ export function comisionPaquetesTramo(unidades: number, tramos: TramoPaquete[] =
   return { monto: round2(monto), etiqueta: etiquetaTramo(u, ultimo) };
 }
 
-/** Cuántos paquetes caen en cada tramo y cuánto suman. La suma de montos es la de comisionPaquetesTramo. */
-export function desglosePaquetesTramo(unidades: number, tramos: TramoPaquete[] = TRAMOS_PAQUETE, netos: number[] = []): { desde: number; hasta: number; pct: number | null; n: number; monto: number }[] {
+/** Cuántos paquetes caen en cada tramo y cuánto suman. Con factores (TK210), la suma es la de comisionPaquetesTramoFactor; si no, la de comisionPaquetesTramo. */
+export function desglosePaquetesTramo(unidades: number, tramos: TramoPaquete[] = TRAMOS_PAQUETE, netos: number[] = [], factores: number[] = []): { desde: number; hasta: number; pct: number | null; n: number; monto: number }[] {
   const u = Math.max(0, Math.floor(Number(unidades) || 0));
   const tarifas = normalizarTramos(tramos);
   const orden: { desde: number; hasta: number; modo: "fijo" | "pct"; valor: number; n: number; monto: number }[] = [];
@@ -966,18 +966,27 @@ export function desglosePaquetesTramo(unidades: number, tramos: TramoPaquete[] =
       orden.push(b);
     }
     b.n++;
+    let add = 0;
     if (tier.modo === "pct") {
       const neto = netos[i - 1] != null ? netos[i - 1] : (netos.length ? netos[netos.length - 1] : 0);
-      b.monto += Math.floor(round2(tier.valor * (neto || 0)) + 1e-9);
-    } else b.monto += tier.valor;
+      add = Math.floor(round2(tier.valor * (neto || 0)) + 1e-9);
+    } else add = tier.valor;
+    const fx = factores[i - 1] == null ? 1 : factores[i - 1];
+    b.monto += add * fx;
   }
-  return orden.map((b) => ({
+  const out = orden.map((b) => ({
     desde: b.desde,
     hasta: b.hasta,
     pct: b.modo === "pct" ? Math.round(b.valor * 1000) / 10 : null,
     n: b.n,
     monto: round2(b.monto),
   }));
+  const objetivo = factores.some((f) => f < 1)
+    ? comisionPaquetesTramoFactor(netos.slice(0, u), factores.slice(0, u), tarifas).monto
+    : comisionPaquetesTramo(u, tarifas, netos).monto;
+  const suma = round2(out.reduce((a, t) => a + t.monto, 0));
+  if (out.length && suma !== objetivo) out[out.length - 1].monto = round2(out[out.length - 1].monto + (objetivo - suma));
+  return out;
 }
 
 export function nombreEsAdmin(nombre: string, admins: { nombre?: string; short?: string; id?: string }[]): boolean {

@@ -2716,7 +2716,7 @@ function detallePersona(nombre: string, packs: Awaited<ReturnType<typeof cicloDe
       out.paquetesDet = juntarLineas(out.paquetesDet, extra.paquetes || []);
     }
     if (pack.calc.regimen === "tramo" && p.es) {
-      for (const t of desglosePaquetesTramo(p.paquetes, pack.tramos, p.netos || [])) {
+      for (const t of desglosePaquetesTramo(p.paquetes, pack.tramos, p.netos || [], p.factores || [])) {
         const etiqueta = t.hasta >= 100000 ? `${t.desde}+` : `${t.desde}–${t.hasta}`;
         const pct = t.pct == null ? "" : `${t.pct}%`;
         const id = etiqueta + "|" + pct;
@@ -2725,6 +2725,12 @@ function detallePersona(nombre: string, packs: Awaited<ReturnType<typeof cicloDe
         prev.monto = round2(prev.monto + t.monto);
         tramos.set(id, prev);
       }
+    } else if (pack.calc.regimen === "nivel" && p.es && (p.paquetes || p.comPaquetes)) {
+      const etiqueta = p.nivel && p.nivel !== "—" ? p.nivel : "Nivel";
+      const prev = tramos.get("nivel|" + etiqueta) || { etiqueta, pct: "", n: 0, monto: 0 };
+      prev.n += p.paquetes || 0;
+      prev.monto = round2(prev.monto + (p.comPaquetes || 0));
+      tramos.set("nivel|" + etiqueta, prev);
     }
   }
   out.tramos = [...tramos.values()];

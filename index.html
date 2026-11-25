@@ -764,6 +764,10 @@
   .ctotal.com-sum .num { font-weight: 800; }
   .com-det { padding: 2px 0 8px; font-size: 0.68rem; color: var(--navy); min-width: 0; max-width: 100%; overflow: hidden; }
   .com-det .com-sumario { font-size: 0.68rem; color: var(--gray); padding: 0 0 4px; }
+  .com-niveles { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--gray-ll, #E8E4DA); }
+  .com-niveles > .com-sumario { font-weight: 800; color: var(--navy); text-transform: uppercase; letter-spacing: 0.03em; font-size: 0.62rem; }
+  .com-nivel { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; padding: 3px 0; font-size: 0.72rem; color: var(--navy); font-variant-numeric: tabular-nums; }
+  .com-nivel .num { font-weight: 700; white-space: nowrap; }
   .com-grid { display: grid; grid-template-columns: 2.85rem minmax(0, 1fr) 2.15rem 3.55rem; column-gap: 4px; width: 100%; max-width: 100%; overflow: hidden; }
   .com-grid .hd { font-size: 0.55rem; line-height: 1.2; text-transform: uppercase; letter-spacing: 0.02em; color: var(--gray); padding: 2px 0 3px; }
   .com-grid .cel { display: flex; align-items: center; min-width: 0; min-height: 1.5em; padding: 2px 0; }
@@ -7803,6 +7807,25 @@ function htmlComGrid(lineas, vacio) {
   const rows = filas.map((p) => `<div class="cel sku">${esc(codigoCom(p.sku))}</div><div class="cel nom">${esc(p.nombre || "—")}</div><div class="cel num">${esc(p.qty == null ? "—" : String(p.qty))}</div><div class="cel num">${money(p.monto)}</div>`).join("");
   return `<div class="com-grid"><div class="cel hd">Código</div><div class="cel hd">Producto</div><div class="cel hd num">Cant.</div><div class="cel hd num">Comisión</div>${rows}</div>`;
 }
+function htmlComNiveles(d, total) {
+  const tramos = (d && d.tramos) || [];
+  if (tramos.length) {
+    const filas = tramos.map((t) => {
+      const n = Number(t.n) || 0;
+      const uni = n === 1 ? "paquete" : "paquetes";
+      const nivel = (t.pct ? " al " + t.pct : (t.etiqueta ? " · Nivel " + t.etiqueta : ""));
+      return `<div class="com-nivel"><span>${n} ${uni}${esc(nivel)}</span><span class="num">${money(t.monto)}</span></div>`;
+    }).join("");
+    return `<div class="com-niveles"><div class="com-sumario">Niveles</div>${filas}</div>`;
+  }
+  if (d && d.regimen === "nivel" && (d.paquetes || total)) {
+    const n = Number(d.paquetes) || 0;
+    const uni = n === 1 ? "paquete" : "paquetes";
+    const nivel = d.nivel && d.nivel !== "—" ? " · Nivel " + d.nivel : "";
+    return `<div class="com-niveles"><div class="com-sumario">Niveles</div><div class="com-nivel"><span>${n} ${uni}${esc(nivel)}</span><span class="num">${money(total)}</span></div></div>`;
+  }
+  return "";
+}
 function htmlComDet(concepto, d, total) {
   const nFacial = Number(d.faciales) || 0;
   const nPaq = Number(d.paquetes) || 0;
@@ -7814,13 +7837,8 @@ function htmlComDet(concepto, d, total) {
     return `<div class="com-det"><div class="com-sumario">${nFacial} ${nFacial === 1 ? "facial" : "faciales"}${nota ? " · " + nota : ""}</div>${htmlComGrid(items, "Sin faciales en el ciclo.")}</div>`;
   }
   if (concepto === "Paquetes") {
-    let items = d.paquetesDet || [];
-    if (!items.length && (d.tramos || []).length) {
-      items = (d.tramos || []).map((t) => ({ sku: "", nombre: (t.etiqueta || "") + (t.pct ? " al " + t.pct : ""), qty: t.n, monto: t.monto }));
-    } else if (!items.length && d.regimen === "nivel") {
-      items = [{ sku: "", nombre: "Nivel " + (d.nivel || "—"), qty: nPaq, monto: total }];
-    }
-    return `<div class="com-det"><div class="com-sumario">${nPaq} ${nPaq === 1 ? "paquete" : "paquetes"}</div>${htmlComGrid(items, "Sin paquetes en el ciclo.")}</div>`;
+    const items = d.paquetesDet || [];
+    return `<div class="com-det"><div class="com-sumario">${nPaq} ${nPaq === 1 ? "paquete" : "paquetes"}</div>${htmlComGrid(items, "Sin paquetes en el ciclo.")}${htmlComNiveles(d, total)}</div>`;
   }
   if (concepto === "Productos") {
     return `<div class="com-det"><div class="com-sumario">${nProd} ${nProd === 1 ? "unidad" : "unidades"}</div>${htmlComGrid(d.productos, "Sin productos en el ciclo.")}</div>`;
@@ -8998,7 +9016,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-25-DEV34C"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-25-DEV35"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
