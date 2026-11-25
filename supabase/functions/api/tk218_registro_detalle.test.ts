@@ -8,7 +8,7 @@ import "./clientes_beta_api.ts";
 import type { Row } from "./domain.ts";
 
 const CONTACTO_RE = /0998887777|monica@test|Quito Norte/i;
-const CACHE = "sunsu-2026-11-25-DEV35";
+const CACHE = "sunsu-2026-11-25-DEV36";
 
 function sesion() {
   const db = new MemoryDb();

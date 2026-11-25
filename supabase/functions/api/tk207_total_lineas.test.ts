@@ -68,6 +68,6 @@ describe("TK207 · el valor del ticket es la suma de las líneas, nunca lo cobra
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     const enSw = (sw.match(/const CACHE = "([^"]+)"/) || [])[1];
     assert.equal(enHtml, enSw);
-    assert.equal(enSw, "sunsu-2026-11-25-DEV35");
+    assert.equal(enSw, "sunsu-2026-11-25-DEV36");
   });
 });

@@ -435,7 +435,7 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
     }
     const productos = cuadrarLineas(agruparProductos(items, cfg.pctProd, cfg.productoSku, (sku) => catNombre(cmap, sku)), p.comProductos);
     p.tardeProductos = round2(comisionProductos(items.map((it) => ({ ...it, factor: 1 })), cfg.pctProd, cfg.productoSku) - p.comProductos);
-    const extras = cuadrarLineas(agruparExtras(nombres, cfg.extra), p.comExtras);
+    const extras = cuadrarLineas(agruparExtras(nombres, cfg.extra, (sku) => catNombre(cmap, sku)), p.comExtras);
     const faciales = cuadrarLineas([...facMap.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)), p.comFaciales);
     const packMap = new Map<string, LineaCom>();
     const esPack = !!(marcaDePersona(marcas, p.cosm)?.es);
@@ -589,10 +589,25 @@ function agruparProductos(
     vendido: round2(its.reduce((a, it) => a + (it.excluido ? 0 : (it.venta || 0) * (it.qty || 0)), 0)),
   })).filter((l) => l.qty > 0).sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
-function agruparExtras(nombres: string[], tarifa: number): LineaCom[] {
-  const map = new Map<string, number>();
-  for (const nombre of nombres) map.set(nombre, (map.get(nombre) || 0) + 1);
-  return [...map.entries()].map(([nombre, qty]) => ({ sku: "", nombre, qty, monto: round2(qty * tarifa * (nombre.endsWith(ETIQUETA_TARDE) ? 0.5 : 1)), vendido: 0 })).sort((a, b) => a.nombre.localeCompare(b.nombre));
+/** DEV-36: código de catálogo de un extra («SUNSU-31 PDRN Serum», «31 PDRN SERUM», «31 SUNSU-31 PDRN Serum» → SUNSU-31). */
+export function codigoExtra(nombre: string): string {
+  const m = s(nombre).trim().match(/^(?:SUNSU-)?(\d{1,3})(?!\d)/i);
+  return m ? "SUNSU-" + m[1].padStart(2, "0") : "";
+}
+/** Una fila por código de catálogo (y una aparte para lo «Subido tarde»). Mismas cantidades y montos que antes. */
+function agruparExtras(nombres: string[], tarifa: number, nombreDe: (sku: string) => string = () => ""): LineaCom[] {
+  const map = new Map<string, { sku: string; nombre: string; qty: number; tarde: boolean }>();
+  for (const nombre of nombres) {
+    const tarde = nombre.endsWith(ETIQUETA_TARDE);
+    const sku = codigoExtra(nombre);
+    const bruto = nombre.split(" · ")[0].trim();
+    const base = (sku && nombreDe(sku) !== sku ? nombreDe(sku) : "") || (sku ? bruto.replace(/^(?:SUNSU-)?\d{1,3}\s+(?:SUNSU-\d{1,3}\s+)?/i, "") : nombre.replace(" · " + ETIQUETA_TARDE, ""));
+    const k = (sku || "n:" + base.toLowerCase()) + (tarde ? "|tarde" : "");
+    const prev = map.get(k) || { sku, nombre: base + (tarde ? " · " + ETIQUETA_TARDE : ""), qty: 0, tarde };
+    prev.qty += 1;
+    map.set(k, prev);
+  }
+  return [...map.values()].map((l) => ({ sku: l.sku, nombre: l.nombre, qty: l.qty, monto: round2(l.qty * tarifa * (l.tarde ? 0.5 : 1)), vendido: 0 })).sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
 function multasDe(nombre: string, ciclo: string, fin: string, rows: R[]) {
   let mlt = 0, desc = 0;
