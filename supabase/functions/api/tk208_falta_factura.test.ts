@@ -163,6 +163,6 @@ describe("TK208 · pantallas", () => {
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     const enSw = (sw.match(/const CACHE = "([^"]+)"/) || [])[1];
     assert.equal(enHtml, enSw);
-    assert.equal(enSw, "sunsu-2026-11-25-DEV31L");
+    assert.equal(enSw, "sunsu-2026-11-25-DEV31M");
   });
 });
