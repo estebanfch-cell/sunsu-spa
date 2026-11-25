@@ -10,6 +10,7 @@ import {
   type JibbleIn, type MarcajeIn, type NominaHoras, type PermisoIn,
 } from "./asistencia.ts";
 import { enPrueba } from "./db.ts";
+import { resolverAvisosObsoletos } from "./avisos_auto.ts";
 
 type R = Record<string, unknown>;
 
@@ -509,7 +510,7 @@ extend("asis_permiso_solicitar", "any", async (p, ctx, ses) => {
         id: crypto.randomUUID(), usuario: uid,
         titulo: "Solicitud de permiso",
         cuerpo: `${nombre} pidió ${tipo.toLowerCase()} del ${desde} al ${hasta}.`,
-        tipo: "permiso", link: "#/m/personal/permisos", created_at: ctx.now.toISOString(),
+        tipo: "permiso", link: "#/m/personal/permisos", ref_id: String(fila.id_1), created_at: ctx.now.toISOString(),
       });
     }
   } catch { /* la notificación no debe tumbar la solicitud */ }
@@ -527,6 +528,7 @@ extend("asis_permiso_cancelar", "any", async (p, ctx, ses) => {
     estado: "CANCELADO", resuelto_por: ses.name, resuelto_ts: ctx.now.toISOString(), motivo_resolucion: s(p.motivo) || "cancelada",
   });
   await auditar(ctx, ses, "permiso_cancelado", { nombre: s(row.empleada), permiso_sheet_row: row.sheet_row, antes: { estado: row.estado }, despues: { estado: "CANCELADO" }, motivo: s(p.motivo) || "cancelada" });
+  try { await resolverAvisosObsoletos(ctx, actorOf(ses)); } catch { /* el aviso no frena */ }
   return { ok: true };
 });
 
@@ -578,6 +580,7 @@ extend("asis_permiso_resolver", "any", async (p, ctx, ses) => {
       });
     }
   } catch { /* el aviso no frena la resolución */ }
+  try { await resolverAvisosObsoletos(ctx, actorOf(ses)); } catch { /* el aviso no frena */ }
   return { ok: true, estado };
 });
 
