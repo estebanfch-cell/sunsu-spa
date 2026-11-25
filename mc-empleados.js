@@ -97,6 +97,7 @@
       + '<div class="emp-field" id="emp-user-wrap"' + (it.tieneUsuario ? "" : " hidden") + '><span class="emp-k">Usuario vinculado</span>'
       + '<select class="emp-in" id="emp-usuario">' + uopts + "</select></div>"
       + '<div class="emp-field"><span class="emp-k">¿Afiliada al IESS?</span>' + siNo("afiliada_iess", it.afiliadaIess !== false, "Sí", "No") + "</div>"
+      + '<p class="note">Es el mismo dato de Configuración de rol: si lo cambias aquí, también se actualiza allá (y al revés).</p>'
       + (it.afiliadaIess !== false
         ? '<div class="emp-field"><span class="emp-k">Décimo tercero</span>' + siNo("dec13_mensual", it.dec13Mensual !== false, "Mensual", "Acumulado") + "</div>"
           + '<div class="emp-field"><span class="emp-k">Décimo cuarto</span>' + siNo("dec14_mensual", it.dec14Mensual !== false, "Mensual", "Acumulado") + "</div>"

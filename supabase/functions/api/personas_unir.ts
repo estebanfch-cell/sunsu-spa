@@ -116,7 +116,7 @@ export async function personasUnicas(ctx: Ctx, opts?: { incluirAdmin?: boolean; 
     if (u.bloqueado === true || u.activo === false) continue;
     const nombre = s(u.nombre || u.name);
     if (!nombre || baja(nombre)) continue;
-    if (!opts?.incluirAdmin && esAdmin(s(u.rol))) continue;
+    if (!opts?.incluirAdmin && (esAdmin(s(u.rol)) || s(u.rol) === "visor")) continue;
     cands.push({
       nombre, uid: s(u.id || u.uid), short: s(u.short), rol: s(u.rol),
       fuente: "usuario", mostrar: porUid.get(s(u.id || u.uid)) || nombre,

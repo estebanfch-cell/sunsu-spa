@@ -210,6 +210,6 @@ extend("iess_comparar", "any", async (p, ctx, ses) => {
       cccIess: round2(aggs.reduce((a, g) => a + g.ccc, 0)),
       planillaCompleta: { sueldo: round2(aggs.reduce((a, g) => a + g.sueldo, 0)), patronal: round2(aggs.reduce((a, g) => a + g.patronal, 0)), individual: round2(aggs.reduce((a, g) => a + g.individual, 0)) },
     },
-    nota: "La app compara el sueldo aportable (sueldo + bono + comisiones + horas extra) con la suma de las filas de la planilla del IESS (normal + ajuste INS). La planilla incluye además la contribución CCC (1 % del aportable), que no está en el rol ni en el costo empresa de la app: confirma con Contabilidad quién la asume.",
+    nota: "La app compara el sueldo aportable (sueldo + bono + comisiones + horas extra) con la suma de las filas de la planilla del IESS (normal + ajuste INS). La planilla incluye la contribución CCC (1 % del aportable). En la app la CCC suma al costo empresa (solo administración) y no se descuenta a la empleada.",
   };
 });

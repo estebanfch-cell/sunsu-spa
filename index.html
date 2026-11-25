@@ -6454,7 +6454,8 @@ function htmlRolOficial(pack) {
     ${admin && d.aportesPatronal ? `<div class="rol-patronal">
       <strong>Aporte patronal a pagar: ${money(patron.total)}</strong>
       IESS 11.15%: ${money(patron.iess)} · SECAP 0.5%: ${money(patron.secap)} · IECE 0.5%: ${money(patron.iece)} · Total 12.15%<br>
-      Costo total empresa (ingresos ${money(d.totalIngresos)} + patronal ${money(patron.total)}): <strong style="display:inline">${money(patron.costoEmpresa)}</strong>
+      CCC 1%: ${money(patron.ccc != null ? patron.ccc : d.ccc)} (contribución, no se descuenta a la empleada)<br>
+      Costo total empresa (ingresos ${money(d.totalIngresos)} + patronal ${money(patron.total)} + CCC ${money(patron.ccc != null ? patron.ccc : d.ccc)}): <strong style="display:inline">${money(patron.costoEmpresa)}</strong>
     </div>` : ""}
     <div class="rol-dirty-bar"><button class="btn small" type="button" data-rol-guardar="${esc(pack.id || "")}">Guardar</button><button class="btn ghost small" type="button" data-rol-descartar="${esc(pack.id || "")}">Descartar</button></div>
     ${acciones}
@@ -8954,7 +8955,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-25-DEV31C"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-25-DEV31D"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -9135,8 +9136,8 @@ window.SunsuUpdate.init();
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk195"></script>
-<script src="beta-screens.js?v=20261125tk223"></script>
-<script src="mc-rol.js?v=20261125tk223"></script>
+<script src="beta-screens.js?v=20261125tk224"></script>
+<script src="mc-rol.js?v=20261125tk224"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
 <script src="mc-nav.js?v=20261123tk216"></script>

@@ -1280,6 +1280,8 @@ export const IESS_PATRONAL_PCT = 0.1115;
 export const SECAP_PCT = 0.005;
 export const IECE_PCT = 0.005;
 export const FONDO_RESERVA_PCT = 0.0833;
+/** Contribución CCC (Ley: Código Orgánico Monetario y Financiero): 1 % del aportable. La paga la empresa, no se descuenta a la empleada. */
+export const CCC_PCT = 0.01;
 
 export type RolOficialIn = {
   sueldoBase: number; bono: number; faltas: number;
@@ -1302,6 +1304,7 @@ export type RolOficialOut = {
   totalIngresos: number; iess: number; anticipo: number; prestHip: number; prestQuir: number;
   prestOtro: number; multas: number; egresos: number; totalEgresos: number; totalRecibir: number;
   iessPatronal: number; secap: number; iece: number; aportePatronal: number; aportePatronalPct: number;
+  ccc: number; cccPct: number;
   costoEmpresa: number;
   fondoFactor: number; fondoDesde: string;
 };
@@ -1371,6 +1374,7 @@ export function rolCalcularOficial(input: RolOficialIn): RolOficialOut {
   const secap = round2(A * SECAP_PCT);
   const iece = round2(A * IECE_PCT);
   const aportePatronal = round2(iessPatronal + secap + iece);
+  const ccc = round2(A * CCC_PCT);
   return {
     sueldo, bono, comFaciales, comExtras, comRecepcion, comFacialesExtrasRecep, comPaquetes, comProductos, comisiones,
     hrsSupl, valSupl, hrsExtr, valExtr, hrsDesc, valDesc,
@@ -1380,7 +1384,8 @@ export function rolCalcularOficial(input: RolOficialIn): RolOficialOut {
     fondoReservaIess: fondoMensual ? 0 : round2(fondoCalc),
     totalIngresos, iess, anticipo, prestHip, prestQuir, prestOtro, multas, egresos, totalEgresos, totalRecibir,
     iessPatronal, secap, iece, aportePatronal, aportePatronalPct: 0.1215,
-    costoEmpresa: round2(totalIngresos + aportePatronal),
+    ccc, cccPct: CCC_PCT,
+    costoEmpresa: round2(totalIngresos + aportePatronal + ccc),
     fondoFactor, fondoDesde,
   };
 }
