@@ -101,10 +101,10 @@ describe("TK144 tarjetas compactas de la lista", () => {
     assert.match(html, /white-space: nowrap; overflow: hidden; text-overflow: ellipsis/);
     assert.match(html, /\.tab-plus \{[^}]*width: 48px; height: 48px/);
     assert.doesNotMatch(html, /width: 66px; height: 66px/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-25-DEV31K"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-25-DEV34C"/);
   });
 
-  it("fila 1 es el número; la factura completa va en la línea 2; las acciones en la 3.ª", () => {
+  it("fila 1 es el número · Fac. corta; la fecha y el monto van en la línea 2; las acciones en la 3.ª", () => {
     const card = screens.slice(screens.indexOf("function _histCardHTML"), screens.indexOf("function _tkFotoTipo"));
     assert.match(card, /_histFacTag\(t,facn,anul,true\)/);
     assert.match(card, /mob-l1r/);
