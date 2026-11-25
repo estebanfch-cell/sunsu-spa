@@ -361,8 +361,9 @@ async function marks(ctx: Ctx) {
   return rows.map(toCosmMark);
 }
 async function adminsDe(ctx: Ctx) {
+  // DEV-31d / t920u: el visor (Skin Analysis) no es personal ni gana comisión; no sale en el selector.
   const users = await ctx.db.all("usuarios");
-  return users.filter((u) => s(u.rol) === "admin" || s(u.rol) === "super_admin").map((u) => ({
+  return users.filter((u) => s(u.rol) === "admin" || s(u.rol) === "super_admin" || s(u.rol) === "visor").map((u) => ({
     nombre: s(u.nombre), short: s(u.short), id: s(u.id),
   }));
 }
