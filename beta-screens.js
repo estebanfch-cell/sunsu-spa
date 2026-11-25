@@ -16941,6 +16941,11 @@ function _rolDiasLinea(d){
   ];
   return parts.join(' + ')+' = Total '+tot+' '+(tot===1?'día':'días');
 }
+function _rolNombre(d){
+  d=d||{};
+  var n=(d.nombreCompleto||d.nombreLegal||d.apellidos_y_nombres||'').toString().trim();
+  return n||((d.nombre||'')+'').trim();
+}
 function _lineasRol(d){
   d=d||{};
   var N=_rolNum, ing=[], egr=[], notas=[];
@@ -16961,8 +16966,17 @@ function _lineasRol(d){
   if(!tieneSplit && d.comPaquetes==null && d.comProductos==null && d.comFaciales==null) add(ing,'Comisiones',d.comisiones);
   var horasDet=(d.valSupl!=null||d.valExtr!=null||d.valDesc!=null);
   add(ing,'Horas suplementarias 50% ('+_rolHrs(d.hrsSupl)+' h)',d.valSupl);
-  add(ing,'Horas extraordinarias descanso ('+_rolHrs(d.hrsDesc)+' h)',d.valDesc);
-  add(ing,'Horas extraordinarias periodo ('+_rolHrs(d.hrsExtr)+' h)',d.valExtr);
+  // DEV-31j (Emilia t927u): una sola línea de extraordinarias (descanso + feriado), montos sumados.
+  var hDesc=N(d.hrsDesc), hExt=N(d.hrsExtr), vExtTot=Math.round((N(d.valDesc)+N(d.valExtr))*100)/100;
+  var hExtTot=hDesc+hExt;
+  if(vExtTot!==0){
+    var partes=[];
+    if(hDesc) partes.push(_rolHrs(hDesc)+' h descanso');
+    if(hExt) partes.push(_rolHrs(hExt)+' h feriado');
+    var lblExt='Horas extraordinarias';
+    if(partes.length) lblExt+=' ('+partes.join(' + ')+') · Total '+_rolHrs(hExtTot)+' h';
+    add(ing,lblExt,vExtTot);
+  }
   if(!horasDet) add(ing,'Horas extras',d.extras);
   var decDet=(d.dec13!=null||d.dec14!=null||d.fondoReserva!=null);
   add(ing,'Décimo tercero',d.dec13);
@@ -17067,7 +17081,7 @@ function _pdfPreRolResumenHoja(doc,items,mes,apro,fondo){
     if(idx%2===1){doc.setFillColor(246,243,234);doc.rect(xI,y,ANCHO,18,'F');}
     else{doc.setFillColor(255,255,255);doc.rect(xI,y,ANCHO,18,'F');}
     doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(TXT);
-    doc.text((it.d.nombre||'').toString(),xI+6,y+12.5);
+    doc.text(_rolNombre(it.d),xI+6,y+12.5);
     doc.text(n2(r.totalIngresos),cols[1][1],y+12.5,{align:'right'});
     doc.text(n2(iess),cols[2][1],y+12.5,{align:'right'});
     doc.text(n2(egr),cols[3][1],y+12.5,{align:'right'});
@@ -17135,7 +17149,7 @@ function _pdfRolPagina(doc, d, sheetName, apro, fondo){
       doc.setFontSize(9);
     };
     var rol=_lineasRol(d);
-    fila('EMPLEADA:',d.nombre);
+    fila('EMPLEADA:',_rolNombre(d));
     fila('CÉDULA:',d.cedula);
     fila('CARGO:',d.cargo);
     fila('DÍAS:', rol.dias||'—');
@@ -17285,7 +17299,7 @@ function _pdfRolPagina(doc, d, sheetName, apro, fondo){
       doc.setDrawColor(90,110,140); doc.setLineWidth(0.8);
       doc.line(W/2-110,y+78,W/2+110,y+78);
       doc.setFont('helvetica','normal'); doc.setFontSize(7.8); doc.setTextColor(TXT);
-      doc.text('Recibí conforme - '+(d.nombre||'')+(d.cedula?' - C.I. '+d.cedula:''),W/2,y+89,{align:'center'});
+      doc.text('Recibí conforme - '+_rolNombre(d)+(d.cedula?' - C.I. '+d.cedula:''),W/2,y+89,{align:'center'});
       doc.text('Firmado con el dedo en el app SUNSU el '+(apro.fechaLocal||apro.fecha||'')+' (hora de Ecuador)',W/2,y+99,{align:'center'});
       y+=116;
     } else if(apro&&apro.fecha){
@@ -17294,14 +17308,14 @@ function _pdfRolPagina(doc, d, sheetName, apro, fondo){
       doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(VERDE);
       doc.text('ROL APROBADO DIGITALMENTE',xI+12,y+16);
       doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(TXT);
-      doc.text('Por '+(d.nombre||'')+' el '+apro.fecha+' desde el app SUNSU - constancia de recepción y aceptación',xI+12,y+30);
+      doc.text('Por '+_rolNombre(d)+' el '+apro.fecha+' desde el app SUNSU - constancia de recepción y aceptación',xI+12,y+30);
       y+=54;
     } else {
       var yF=y+30;
       doc.setDrawColor(90,110,140); doc.setLineWidth(0.8);
       doc.line(xI+130,yF,xD-130,yF);
       doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(TXT);
-      doc.text('Recibí conforme - '+(d.nombre||''),W/2,yF+11,{align:'center'});
+      doc.text('Recibí conforme - '+_rolNombre(d),W/2,yF+11,{align:'center'});
       y=yF+20;
     }
     return mesLabel;
@@ -17410,7 +17424,7 @@ function generarHtmlRol(d, mes, multas) {
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Rol de Pagos - ${d.nombre} - ${mes}</title>
+  <title>Rol de Pagos - ${_rolNombre(d)} - ${mes}</title>
   <style>
     body { font-family: Arial, sans-serif; font-size: 11px; margin: 20px; color: #222; }
     .header { text-align: center; background: #3D5A7A; color: white; padding: 12px; border-radius: 6px; margin-bottom: 16px; }
@@ -17437,7 +17451,7 @@ function generarHtmlRol(d, mes, multas) {
   </div>
 
   <div class="info-grid">
-    <div class="info-row"><span class="info-label">Empleado:</span> ${esc(d.nombre)}</div>
+    <div class="info-row"><span class="info-label">Empleado:</span> ${esc(_rolNombre(d))}</div>
     <div class="info-row"><span class="info-label">C.I.:</span> ${esc(d.cedula)}</div>
     <div class="info-row"><span class="info-label">Cargo:</span> ${esc(d.cargo)}</div>
     <div class="info-row"><span class="info-label">Período:</span> ${esc(mes)}</div>
@@ -17463,7 +17477,7 @@ function generarHtmlRol(d, mes, multas) {
   </div>
 
   <div style="margin-top:40px">
-    <div class="firma">${d.nombre.toUpperCase()}</div>
+    <div class="firma">${esc(_rolNombre(d).toUpperCase())}</div>
     <p style="margin-top:4px;font-size:10px;color:#888">Recibí conforme</p>
   </div>
 
