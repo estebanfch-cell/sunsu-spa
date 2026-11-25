@@ -71,6 +71,32 @@ describe("TK149 candidatos: solo facial hecho real", () => {
     assert.equal(esCandidatoRecep({ nombre: "Ana", facial: "SUNSU-02", anulado: true, cosm: "Andrea Robles" }), false);
     assert.equal(esCandidatoRecep({ nombre: "Ana", facial: "SUNSU-02", borrado: true, cosm: "Andrea Robles" }), false);
     assert.equal(esCandidatoRecep({ nombre: "Sunsu", facial: "SUNSU-02", cosm: "SUNSU", cedula: "1793219469001" }), false);
+    assert.equal(esCandidatoRecep({ nombre: "Esteban", apellido: "Ferlito", facial: "SUNSU-01", cosm: "EFCH", origin: "test", so: "TEST-TK-SO-0001" }), false);
+    assert.equal(esCandidatoRecep({ nombre: "Emilia", apellido: "Gallegos", facial: "SUNSU-57", cosm: "EFCH", so: "TEST-TK-SO-0002" }), false);
+  });
+});
+
+describe("DEV-31m tickets de prueba no inflan el umbral de recepción (t946u)", () => {
+  it("9 clientas reales un miércoles quedan en $0 aunque haya 2 tickets TEST que subirían a 11", () => {
+    const reales: TicketRecep[] = [];
+    for (let i = 1; i <= 9; i++) {
+      reales.push({
+        so: "TK-SO-" + String(1700 + i), timestamp: "2026-10-29T12:00:00+00:00",
+        nombre: "Clienta", apellido: "Real" + i, cedula: "175000000" + String(i),
+        cosm: "Andrea Robles", facial: "SUNSU-02 Facial Reparación", origin: "beta",
+      });
+    }
+    const pruebas: TicketRecep[] = [
+      { so: "TEST-TK-SO-0001", timestamp: "2026-10-29T09:50:46+00:00", nombre: "Esteban", apellido: "Ferlito", cedula: "1712218344001", cosm: "EFCH", facial: "SUNSU-01 Facial S.O.S", origin: "test" },
+      { so: "TEST-TK-SO-0002", timestamp: "2026-10-29T10:36:46+00:00", nombre: "Emilia", apellido: "Gallegos", cedula: "1713922092", cosm: "EFCH", facial: "SUNSU-57 Facial K-Lift", origin: "test" },
+    ];
+    const sin = calcularRecepcion({ tickets: reales, citas: [], desde: "2026-10-29", hasta: "2026-10-29" });
+    const con = calcularRecepcion({ tickets: [...reales, ...pruebas], citas: [], desde: "2026-10-29", hasta: "2026-10-29" });
+    assert.equal(sin.dias[0]?.clientas, 9);
+    assert.equal(sin.dias[0]?.comision, 0);
+    assert.equal(con.dias[0]?.clientas, 9);
+    assert.equal(con.dias[0]?.comision, 0);
+    assert.equal(con.total, 0);
   });
 });
 
@@ -264,8 +290,8 @@ describe("TK149 Control de Agenda en el frontend", () => {
   it("cache TK149", () => {
     const sw = readFileSync(join(root, "sw.js"), "utf8");
     const html = readFileSync(join(root, "index.html"), "utf8");
-    assert.match(sw, /const CACHE = "sunsu-2026-11-20-TK191"/);
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-20-TK191"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-25-DEV31M"/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-25-DEV31M"/);
     assert.match(readFileSync(join(root, "supabase/functions/api/sunsu_version.ts"), "utf8"), /sunsu-engine-2026-11-19-TK157/);
   });
 });
