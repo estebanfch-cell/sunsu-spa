@@ -41,6 +41,8 @@ export async function asegurarPreRol(ctx: Ctx, ses: Ses, nombre: string): Promis
   if (armado.error) return armado;
   const rows = await ctx.db.all("beta_roles").catch(() => [] as Row[]);
   const existing = rows.find((r) => s(r.persona) === s(armado.persona) && clavePeriodo(r.periodo) === clavePeriodo(armado.periodo) && s(r.origin || "beta") === origin);
+
+  try {
   const extra = { hoy, actualizado: ctx.now.toISOString(), etiqueta: etiquetaPeriodo(periodo) };
   if (existing && s(existing.estado) === "aprobado") {
     const snap = (existing.snapshot && typeof existing.snapshot === "object") ? existing.snapshot as Row : {};
@@ -76,7 +78,22 @@ export async function asegurarPreRol(ctx: Ctx, ses: Ses, nombre: string): Promis
   await ctx.db.write(actorOf(ses), "beta_roles", "insert", {}, row);
   await logRol(ctx, ses, id, "crear", null, row, "pre-rol automático");
   return { ...vista(row, snap, true), ...extra, firmado: false, nuevo: true };
+
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const snap = armado.snap as Row;
+    return {
+      ...vista({
+        id: existing && s(existing.id) || "", persona: armado.persona, cedula: snap.cedula, cargo: snap.cargo,
+        periodo: armado.periodo, anio: armado.anio, mes: armado.mes, estado: "borrador",
+      }, snap, true),
+      hoy, actualizado: ctx.now.toISOString(), etiqueta: etiquetaPeriodo(periodo),
+      firmado: false, nuevo: false,
+      aviso: "Se calculó el pre-rol, pero no se pudo guardar el borrador" + (msg ? ": " + msg : "."),
+    };
+  }
 }
+
 
 extend("rol_pre_auto", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo administración ve el pre-rol." };

@@ -101,6 +101,8 @@ export function clasificarHorasRol(opts: {
   permisos?: string[];
   /** TK170: fecha de ingreso; los días anteriores del mes no cuentan. */
   ingreso?: string | null;
+  /** DEV-31l (Emilia t941u): sin asistencia/Jibble, los días hábiles ya pasados sin marca se asumen como jornada, no como falta. */
+  asumirSinMarcajes?: boolean;
 }): HorasRolOut {
   const fer = new Set((opts.feriados || []).map((f) => String(f).slice(0, 10)));
   const perm = new Set((opts.permisos || []).map((f) => String(f).slice(0, 10)));
@@ -169,6 +171,11 @@ export function clasificarHorasRol(opts: {
     }
     if (perm.has(fecha)) {
       diasPermiso++;
+      continue;
+    }
+    if (opts.asumirSinMarcajes) {
+      diasAsumidos++;
+      minsNomina += jornada;
       continue;
     }
     diasFalta++;
