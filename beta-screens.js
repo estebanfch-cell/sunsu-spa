@@ -17033,7 +17033,12 @@ function _lineasRol(d){
   var multas=(d.multasDetalle||[]).filter(function(m){return N(m.monto)>0;});
   var sumM=multas.reduce(function(a,m){return a+N(m.monto);},0);
   if(multas.length && Math.abs(sumM-N(d.multas))<0.02){
-    multas.forEach(function(m){ add(egr,(m.tipo||'MULTA').toString().toUpperCase()+(m.fecha?' - '+m.fecha:''),m.monto); });
+    multas.forEach(function(m){
+      var tipo=String(m.tipo||'MULTA'), mot=String(m.motivo||'').trim(), lbl;
+      if(/descuento/i.test(tipo)) lbl='Descuento'+(mot?(': '+mot):'');
+      else lbl=tipo.toUpperCase()+(m.fecha?' - '+m.fecha:'');
+      add(egr,lbl,m.monto);
+    });
   } else add(egr,'Multas y descuentos',d.multas);
   var totalIng=d.totalIngresos!=null?N(d.totalIngresos):ing.reduce(function(a,x){return a+x[1];},0);
   var totalEgr=d.totalEgresos!=null?N(d.totalEgresos):(N(d.iess)+N(d.egresos));

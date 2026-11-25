@@ -1,5 +1,5 @@
-// ⚠️ Multas (Emilia 17/11): Personal › Multas con filtros (persona / mes / tipo), alta/edición/anulación inline,
-// catálogo de tipos con monto por defecto, y «⚠️ Aplicar multa» desde un ticket. Se descuentan solas en el rol.
+// ⚠️ Multas (Emilia 17/11, DEV-37): Personal › Multas con filtros (persona / mes / tipo), alta/edición/anulación inline,
+// catálogo de tipos con monto por defecto, tipo fijo «Descuento» (monto libre) y «⚠️ Aplicar multa» desde un ticket. Se descuentan solas en el rol.
 (function () {
   "use strict";
   function e(v) { return typeof esc === "function" ? esc(v) : String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -41,29 +41,45 @@
     return L;
   }
   function selPersona(cur, attr) { var L = listaPersonas(); if (cur && L.indexOf(cur) < 0) L.unshift(cur); return "<select " + attr + ">" + opt("", "Persona…", cur) + L.map(function (p) { return opt(p, p, cur); }).join("") + "</select>"; }
-  function selTipo(cur, attr, conVacio) { return "<select " + attr + ">" + (conVacio ? opt("", conVacio, cur) : "") + (K.d.tipos || []).filter(function (t) { return t.activo || t.nombre === cur; }).map(function (t) { return '<option value="' + e(t.nombre) + '" data-monto="' + e(t.monto) + '"' + (t.nombre === cur ? " selected" : "") + ">" + e(t.nombre) + " (" + $m(t.monto) + ")</option>"; }).join("") + "</select>"; }
+  function esTipoDesc(n) { return String(n || "").toLowerCase().replace(/\s+/g, " ").trim() === "descuento"; }
+  function selTipo(cur, attr, conVacio) {
+    var opts = conVacio ? opt("", conVacio, cur) : "";
+    opts += '<option value="Descuento" data-libre="1"' + (esTipoDesc(cur) ? " selected" : "") + ">Descuento (producto / otro) – monto libre</option>";
+    (K.d.tipos || []).filter(function (t) { return (t.activo || t.nombre === cur) && !esTipoDesc(t.nombre); }).forEach(function (t) {
+      opts += '<option value="' + e(t.nombre) + '" data-monto="' + e(t.monto) + '"' + (t.nombre === cur ? " selected" : "") + ">" + e(t.nombre) + " (" + $m(t.monto) + ")</option>";
+    });
+    if (cur && !esTipoDesc(cur) && !(K.d.tipos || []).some(function (t) { return t.nombre === cur; })) opts += opt(cur, cur, cur);
+    return "<select " + attr + ">" + opts + "</select>";
+  }
   function filaEdit(m) {
-    return '<tr data-row="' + e(m ? m.id : "nueva") + '"><td><input type="date" data-k="fecha" value="' + e(m ? m.fecha : K.d.hoy) + '"></td><td>' + selPersona(m ? m.persona : K.F.persona, 'data-k="persona"') + "</td><td>" + selTipo(m ? m.tipo : "", 'data-k="tipo"') +
-      '</td><td><input type="text" inputmode="decimal" data-k="monto" style="width:80px;text-align:right" value="' + e(m ? m.monto : (K.d.tipos[0] ? K.d.tipos[0].monto : "")) + '"></td><td><input type="text" data-k="motivo" style="width:100%" value="' + e(m ? m.motivo : "") + '" placeholder="Motivo"></td><td>' + e(m && m.ticket || "") + '</td><td style="white-space:nowrap">' + (m ? '<span data-solo-cambio hidden><button class="btn small" type="button" data-save>💾 Guardar</button> <button class="btn ghost small" type="button" data-cancel>Descartar</button></span><button class="btn ghost small" type="button" data-cancel data-sin-cambio title="Cerrar">✕</button>' : '<button class="btn small" type="button" data-save>💾</button> <button class="btn ghost small" type="button" data-cancel>✕</button>') + "</td></tr>";
+    return '<tr data-row="' + e(m ? m.id : "nueva") + '"><td><input type="date" data-k="fecha" value="' + e(m ? m.fecha : K.d.hoy) + '"></td><td>' + selPersona(m ? m.persona : K.F.persona, 'data-k="persona"') + "</td><td>" + selTipo(m ? m.tipo : "", 'data-k="tipo"', m ? "" : "Tipo…") +
+      '</td><td><input type="text" inputmode="decimal" data-k="monto" style="width:80px;text-align:right" value="' + e(m ? m.monto : "") + '" placeholder="Monto"></td><td><input type="text" data-k="motivo" style="width:100%" value="' + e(m ? m.motivo : "") + '" placeholder="' + (m ? "Motivo" : "Qué producto o motivo") + '"></td><td>' + e(m && m.ticket || "") + '</td><td style="white-space:nowrap">' + (m ? '<span data-solo-cambio hidden><button class="btn small" type="button" data-save>💾 Guardar</button> <button class="btn ghost small" type="button" data-cancel>Descartar</button></span><button class="btn ghost small" type="button" data-cancel data-sin-cambio title="Cerrar">✕</button>' : '<button class="btn small" type="button" data-save>💾</button> <button class="btn ghost small" type="button" data-cancel>✕</button>') + "</td></tr>";
   }
   function filaVer(m) {
     var acts = K.d.admin && m.editable ? (m.estado === "anulada" ? '<button class="btn ghost small" type="button" data-react="' + e(m.id) + '">Reactivar</button>' : '<button class="btn ghost small mcmu-red" type="button" data-anular="' + e(m.id) + '">Anular</button>') : (m.editable ? "" : '<span class="mcmu-src" title="Registrada en el sistema anterior (hoja)">sistema</span>');
     var toca = K.d.admin && m.editable && m.estado !== "anulada";
-    return '<tr class="' + (m.estado === "anulada" ? "an" : "") + (toca ? " mcmu-toca" : "") + '"' + (toca ? ' data-edit="' + e(m.id) + '"' : "") + ' title="' + e(toca ? "Toca para cambiar · " : "") + e(m.estado === "anulada" ? "Anulada" + (m.anuladaPor ? " por " + m.anuladaPor : "") + (m.anuladaMotivo ? ": " + m.anuladaMotivo : "") : (m.creadoPor ? "Aplicada por " + m.creadoPor : "")) + '"><td>' + e(f(m.fecha)) + "</td><td>" + pill(m.persona) + "</td><td>" + e(m.tipo) + '</td><td class="num"><b>' + $m(m.monto) + "</b></td><td>" + e(m.motivo) + "</td><td>" + (m.ticket ? '<a href="#/m/tickets/t/' + encodeURIComponent(m.ticket) + '">' + e(m.ticket) + "</a>" : "") + '</td><td style="white-space:nowrap">' + acts + "</td></tr>";
+    return '<tr class="' + (m.estado === "anulada" ? "an" : "") + (toca ? " mcmu-toca" : "") + '"' + (toca ? ' data-edit="' + e(m.id) + '"' : "") + ' title="' + e(toca ? "Toca para cambiar · " : "") + e(m.estado === "anulada" ? "Anulada" + (m.anuladaPor ? " por " + m.anuladaPor : "") + (m.anuladaMotivo ? ": " + m.anuladaMotivo : "") : (m.creadoPor ? "Aplicada por " + m.creadoPor : "")) + '"><td>' + e(f(m.fecha)) + "</td><td>" + pill(m.persona) + "</td><td>" + e(esTipoDesc(m.tipo) ? "Descuento" : m.tipo) + '</td><td class="num"><b>' + $m(m.monto) + "</b></td><td>" + e(m.motivo) + "</td><td>" + (m.ticket ? '<a href="#/m/tickets/t/' + encodeURIComponent(m.ticket) + '">' + e(m.ticket) + "</a>" : "") + '</td><td style="white-space:nowrap">' + acts + "</td></tr>";
   }
   function html() {
     var d = K.d, F = K.F;
     var tabs = d.admin ? '<div class="mcmu-tabs"><button type="button" data-tab="multas" class="' + (K.tab === "multas" ? "on" : "") + '">⚠️ Multas</button><button type="button" data-tab="tipos" class="' + (K.tab === "tipos" ? "on" : "") + '">🗂️ Tipos de multa</button></div>' : "";
     if (K.tab === "tipos" && d.admin) {
-      return '<div id="mcmu-root"><div class="mcmu-h"><h2>⚠️ Multas</h2></div>' + tabs + '<div class="mccf-card"><p class="mccf-sub">El monto es el sugerido al aplicar; se puede cambiar en cada multa.</p><table class="mccf-t mcmu-t"><thead><tr><th>Tipo</th><th class="num">Monto</th><th>Activo</th><th></th></tr></thead><tbody>' +
+      return '<div id="mcmu-root"><div class="mcmu-h"><h2>⚠️ Multas</h2></div>' + tabs + '<div class="mccf-card"><p class="mccf-sub">El monto es el sugerido al aplicar; se puede cambiar en cada multa. El tipo Descuento (producto / otro) está siempre disponible en «Nueva multa o descuento», con monto libre: no hace falta crearlo aquí.</p><table class="mccf-t mcmu-t"><thead><tr><th>Tipo</th><th class="num">Monto</th><th>Activo</th><th></th></tr></thead><tbody>' +
         (d.tipos || []).map(function (t) { return '<tr data-tipo="' + e(t.id) + '"><td><input type="text" data-tk="nombre" value="' + e(t.nombre) + '" style="width:100%"></td><td><input type="text" inputmode="decimal" data-tk="monto" value="' + e(t.monto) + '" style="width:80px;text-align:right"></td><td><input type="checkbox" data-tk="activo"' + (t.activo ? " checked" : "") + '></td><td><button class="btn small" type="button" data-tsave>💾</button></td></tr>'; }).join("") +
         '<tr data-tipo=""><td><input type="text" data-tk="nombre" placeholder="+ Nuevo tipo" style="width:100%"></td><td><input type="text" inputmode="decimal" data-tk="monto" placeholder="5" style="width:80px;text-align:right"></td><td><input type="checkbox" data-tk="activo" checked></td><td><button class="btn small" type="button" data-tsave>➕</button></td></tr></tbody></table></div></div>';
     }
-    var tiposF = [];
-    (d.tipos || []).forEach(function (t) { tiposF.push(t.nombre); });
-    (d.items || []).forEach(function (m) { if (tiposF.indexOf(m.tipo) < 0) tiposF.push(m.tipo); });
+    var tiposF = [], seenT = {};
+    function addTipoF(n) {
+      var k = String(n || "").toLowerCase().replace(/\s+/g, " ").trim();
+      if (!k || seenT[k]) return;
+      seenT[k] = 1;
+      tiposF.push(k === "descuento" ? "Descuento" : n);
+    }
+    addTipoF("Descuento");
+    (d.tipos || []).forEach(function (t) { addTipoF(t.nombre); });
+    (d.items || []).forEach(function (m) { addTipoF(m.tipo); });
     var resumen = Object.keys(d.porPersona || {}).map(function (p) { return "<span>" + e(p) + " · " + $m(d.porPersona[p]) + "</span>"; }).join("");
-    return '<div id="mcmu-root"><div class="mcmu-h"><h2>⚠️ Multas</h2>' + (d.admin ? '<button class="btn small" type="button" id="mcmu-nueva">+ Nueva multa</button>' : "") + "</div>" + tabs +
+    return '<div id="mcmu-root"><div class="mcmu-h"><h2>⚠️ Multas</h2>' + (d.admin ? '<button class="btn small" type="button" id="mcmu-nueva">+ Nueva multa o descuento</button>' : "") + "</div>" + tabs +
       '<div class="mcmu-f">' + selPersona(F.persona, 'id="mcmu-fp"').replace("Persona…", "Todas las personas") + '<input type="month" id="mcmu-fm" value="' + e(F.mes) + '" title="Mes">' +
       '<select id="mcmu-ft">' + opt("", "Todos los tipos", F.tipo) + tiposF.map(function (t) { return opt(t, t, F.tipo); }).join("") + "</select>" +
       '<label class="mccf-sub"><input type="checkbox" id="mcmu-fa"' + (F.anuladas ? " checked" : "") + "> Ver anuladas</label></div>" +
@@ -83,7 +99,7 @@
     var ft = root.querySelector("#mcmu-ft"); if (ft) ft.onchange = function () { K.F.tipo = ft.value; recargar(main); };
     var fa = root.querySelector("#mcmu-fa"); if (fa) fa.onchange = function () { K.F.anuladas = fa.checked; recargar(main); };
     var nv = root.querySelector("#mcmu-nueva"); if (nv) nv.onclick = function () { K.nueva = true; K.edit = ""; rep(main); };
-    root.querySelectorAll("select[data-k='tipo']").forEach(function (sel) { sel.onchange = function () { var o = sel.selectedOptions[0], tr = sel.closest("tr"), mi = tr && tr.querySelector("[data-k='monto']"); if (o && mi) mi.value = o.getAttribute("data-monto") || mi.value; }; });
+    root.querySelectorAll("select[data-k='tipo']").forEach(function (sel) { sel.onchange = function () { var o = sel.selectedOptions[0], tr = sel.closest("tr"), mi = tr && tr.querySelector("[data-k='monto']"); if (!o || !mi || o.getAttribute("data-libre") === "1") return; var def = o.getAttribute("data-monto"); if (def) mi.value = def; }; });
     root.querySelectorAll("tr[data-row]").forEach(function (tr) {
       if (tr.getAttribute("data-row") === "nueva") return;
       var ini = JSON.stringify(leerFila(tr));
@@ -97,7 +113,7 @@
         var tr = b.closest("tr"), id = tr.getAttribute("data-row"), o = leerFila(tr); b.disabled = true;
         var r = id === "nueva" ? await api("mt_crear", o) : await api("mt_editar", Object.assign({ id: id }, o));
         if (!r || r.error) { toast2((r && r.error) || "No se pudo guardar", true); b.disabled = false; return; }
-        toast2(id === "nueva" ? "Multa aplicada" : (r.sinCambios ? "Sin cambios" : "Multa actualizada")); K.edit = ""; K.nueva = false; recargar(main); return;
+        var esD = esTipoDesc(o.tipo); toast2(id === "nueva" ? (esD ? "Descuento aplicado" : "Multa aplicada") : (r.sinCambios ? "Sin cambios" : (esD ? "Descuento actualizado" : "Multa actualizada"))); K.edit = ""; K.nueva = false; recargar(main); return;
       }
       if ((b = ev.target.closest("[data-anular]")) || (b = ev.target.closest("[data-react]"))) {
         var react = b.hasAttribute("data-react"), mid = b.getAttribute(react ? "data-react" : "data-anular");
@@ -137,15 +153,16 @@
     if (tk.cosmetologa && P.indexOf(tk.cosmetologa) < 0) P.unshift(tk.cosmetologa);
     var box = dialogo('<h3>⚠️ Aplicar multa<button type="button" class="mcmu-x">×</button></h3><p class="mccf-sub">Ticket ' + e(tk.so || "") + (tk.cliente ? " · " + e(tk.cliente) : "") + ". Se descuenta en el rol del corte en que cae la fecha del ticket.</p>" +
       '<label>Cosmetóloga</label><select data-p>' + P.map(function (p) { return '<option' + (p === tk.cosmetologa ? " selected" : "") + ">" + e(p) + "</option>"; }).join("") + "</select>" +
-      '<label>Tipo</label><select data-t>' + T.map(function (t) { return '<option value="' + e(t.id) + '" data-monto="' + e(t.monto) + '">' + e(t.nombre) + " (" + $m(t.monto) + ")</option>"; }).join("") + "</select>" +
-      '<label>Monto</label><input type="text" inputmode="decimal" data-m value="' + e(T[0] ? T[0].monto : "") + '">' +
+      '<label>Tipo</label><select data-t><option value="Descuento" data-libre="1">Descuento (producto / otro) – monto libre</option>' + T.filter(function (t) { return !esTipoDesc(t.nombre); }).map(function (t) { return '<option value="' + e(t.id) + '" data-monto="' + e(t.monto) + '">' + e(t.nombre) + " (" + $m(t.monto) + ")</option>"; }).join("") + "</select>" +
+      '<label>Monto</label><input type="text" inputmode="decimal" data-m value="" placeholder="Monto">' +
       '<label>Motivo</label><textarea rows="2" data-mo placeholder="Qué pasó"></textarea>',
       async function (b) {
-        var r = await api("mt_crear", { persona: b.querySelector("[data-p]").value, tipoId: b.querySelector("[data-t]").value, monto: b.querySelector("[data-m]").value, motivo: b.querySelector("[data-mo]").value, fecha: tk.fecha || "", ticketId: tk.id || "", ticketSo: tk.so || "" });
+        var st0 = b.querySelector("[data-t]"), tipoVal = st0.value, esD = st0.selectedOptions[0] && st0.selectedOptions[0].getAttribute("data-libre") === "1";
+        var r = await api("mt_crear", { persona: b.querySelector("[data-p]").value, tipoId: esD ? "" : tipoVal, tipo: esD ? "Descuento" : "", monto: b.querySelector("[data-m]").value, motivo: b.querySelector("[data-mo]").value, fecha: tk.fecha || "", ticketId: tk.id || "", ticketSo: tk.so || "" });
         if (!r || r.error) throw new Error((r && r.error) || "No se pudo aplicar");
-        toast2("⚠️ Multa aplicada a " + b.querySelector("[data-p]").value);
+        toast2(esD ? ("Descuento aplicado a " + b.querySelector("[data-p]").value) : ("⚠️ Multa aplicada a " + b.querySelector("[data-p]").value));
       });
-    var st = box.querySelector("[data-t]"); st.onchange = function () { box.querySelector("[data-m]").value = st.selectedOptions[0].getAttribute("data-monto"); };
+    var st = box.querySelector("[data-t]"); st.onchange = function () { var o = st.selectedOptions[0], mi = box.querySelector("[data-m]"); if (!o || !mi || o.getAttribute("data-libre") === "1") return; var def = o.getAttribute("data-monto"); if (def) mi.value = def; };
   }
   async function render() {
     css(); K.edit = ""; K.nueva = false;
