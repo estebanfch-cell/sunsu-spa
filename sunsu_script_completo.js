@@ -2516,7 +2516,7 @@ function doGet(e) {
     if (action === 'getMensajes') {
       var DEF_MSG = [
         ['LINK REGISTRO', 'app.sunsuspa.com/registro.html'],
-        ['MENSAJE CONFIRMACION CITA', 'Hola {nombre} \uD83C\uDF38 Te saludamos de Sunsu Spa!\n\nTe escribimos para confirmar tu cita de ma\u00f1ana {dia} a las {hora} \uD83D\uDC86\u200D\u2640\uFE0F\n\n{registro}\u00bfNos confirmas tu asistencia? \uD83D\uDC99'],
+        ['MENSAJE CONFIRMACION CITA', 'Hola {nombre} \uD83C\uDF38 Te saludamos de Sunsu Spa!\n\nTe escribimos para confirmar tu cita de ma\u00f1ana {dia} a las {hora} \uD83D\uDC86\u200D\u2640\uFE0F\n\n{registro}\n\n\u00bfNos confirmas tu asistencia? \uD83D\uDC99'],
         ['MENSAJE REGISTRO PRIMERA VISITA', 'Como es tu primera visita, te pedimos llenar tu tarjeta de registro antes de venir. Toma menos de 2 minutos y nos permite cuidar tu piel como se merece \u2728\n\n\uD83D\uDCDD Tarjeta de registro\n{link}\n\n'],
         ['MENSAJE TARJETA SALUDO', 'Hola {nombre}, te saludamos de Sunsu Spa!'],
         ['MENSAJE TARJETA TRATAMIENTO', 'Te compartimos la tarjeta de tu tratamiento con las recomendaciones para tu piel y tu pr\u00f3xima cita recomendada. Gracias por visitarnos!'],

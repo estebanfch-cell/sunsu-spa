@@ -241,8 +241,8 @@ describe("TK216 rol visor (solo lectura, sin contacto)", () => {
     assert.match(html, /function esVisorRol\(\)/);
     assert.match(html, /destinoInicio\(\)/);
     assert.match(html, /#\/m\/clientes/);
-    assert.match(html, /SUNSU_CACHE = "sunsu-2026-11-25-DEV31"/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-25-DEV31"/);
+    assert.match(html, /SUNSU_CACHE = "sunsu-2026-11-25-TK221"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-25-TK221"/);
     const cli = fs.readFileSync(new URL("../../../mc-clientes.js", import.meta.url), "utf8");
     assert.match(cli, /soloLectura/);
     assert.match(cli, /Buscar por nombre o cédula/);
