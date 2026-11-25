@@ -28,6 +28,8 @@ export type TicketRecep = {
   anulado?: boolean;
   borrado?: boolean;
   vendido?: number;
+  /** Tickets de simulación (origin=test / TEST-TK-…) no entran al Control de Agenda ni al rol. */
+  origin?: unknown;
 };
 export type CitaRecep = {
   id?: unknown;
@@ -116,8 +118,14 @@ export function tieneFacialReal(t: { facial?: unknown; lineas?: LineaFacial[] })
   return (t.lineas || []).some((l) => s(l.tipo).toLowerCase() === "facial");
 }
 
+export function esTicketPruebaRecep(t: { origin?: unknown; so?: string; clave?: string }): boolean {
+  if (s(t.origin) === "test") return true;
+  return /^TEST-/i.test(s(t.clave) || s(t.so));
+}
+
 export function esCandidatoRecep(t: TicketRecep): boolean {
   if (t.borrado || t.anulado) return false;
+  if (esTicketPruebaRecep(t)) return false;
   if (esInterno(t.cosm, t.cedula)) return false;
   return tieneFacialReal(t);
 }
@@ -333,6 +341,7 @@ export function ticketDeFila(r: Row, lineas: Row[] = [], vendido = 0): TicketRec
     anulado: esCancelado(r) || orig.anulado === true || orig.cancelado === true,
     borrado: !!r.borrado_at,
     vendido,
+    origin: r.origin,
   };
 }
 
@@ -363,7 +372,7 @@ export async function recepcionDeCiclo(
     porClave.set(k, L);
   }
   const tickets: TicketRecep[] = rowsTk
-    .filter((r) => r.timestamp && !r.borrado_at)
+    .filter((r) => r.timestamp && !r.borrado_at && s(r.origin) !== "test")
     .map((r) => ticketDeFila(r, porClave.get(claveDe(r, leerSerie(r, "so_num"))) || [], o.vendidoDe ? o.vendidoDe(r) : 0));
 
   let links: LinkCita[] = [], calendarios: CalendarioRecep[] = [];

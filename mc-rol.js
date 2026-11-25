@@ -561,7 +561,7 @@
     return new Promise(function (ok, no) {
       if (window.XLSX) return ok(window.XLSX);
       var sc = document.createElement("script");
-      sc.src = "vendor-xlsx.js?v=20261125tk231";
+      sc.src = "vendor-xlsx.js?v=20261125tk232";
       sc.onload = function () { window.XLSX ? ok(window.XLSX) : no(new Error("No se pudo cargar el lector de Excel")); };
       sc.onerror = function () { no(new Error("No se pudo cargar el lector de Excel")); };
       document.head.appendChild(sc);
