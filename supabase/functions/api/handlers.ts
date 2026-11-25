@@ -7,7 +7,7 @@ import {
   ADMIN, ALL_ROLES, APP_VERSION, BETA_TABLES, IVA, LEGACY_APPS_SCRIPT_URL,
   PROD_COLS, RECEP, USO_FIELDS, addDays, b, calcularCiclo, cantAmpollas, cicloFin, cicloInicio, ciclosEntre, comisionProductos, comisionRecepcionDia, contarExtras,
   compraParaComision, desglosePaquetesTramo, listaExtrasPagados, marcaDePersona, PCT_COMISION_PRODUCTO, toCosmMark,
-  cotCalcular, ecuadorParts, esCanje, esInterno, estadoTicket, facialSku, hashPin, hmUtc, isAdmin, n, newSalt,
+  cotCalcular, ecuadorParts, esCanje, esCanjeSinCobro, esInterno, estadoTicket, facialSku, hashPin, hmUtc, isAdmin, n, newSalt,
   nombreEsAdmin, normCedula, normNombre, normalizarTramos, packSesiones, puedeCotizar, prodCol, productQtys, repartirPagos, rolCalcular, round2,
   s, skuCode, validarBitacora, validarPromo, ymdUtc, codigoPaquete, colTicket, telefonoEc, type Row, type TicketIn, esCancelado, FACIALES_2, FACIALES_3, facialesDeTicket, paquetesDeTicket, pagaComisionFacial, personaEsRecepcionista, comisionPaquetesTramo, siguienteCodigoPaq, tarifaFacial, detectarIdentificacion, factorTk } from "./domain.ts";
 import { ETIQUETA_TARDE, factorComisionTicket } from "./fecha_atencion.ts";
@@ -341,6 +341,7 @@ function toIn(r: R, cats?: Map<string, R>): TicketIn {
   return {
     fecha: ymdUtc(r.timestamp), cosm: s(r.atendido_por), cedula: s(r.id_3), facial: s(r.facial_hecho),
     pack3, pack6, extras: s(r.servicios_adicionales),
+    paquete: s(r.paquete), gift_card: s(r.gift_card), comp: s(r.comp), total: n(r.estimado),
     exclFacial: b(r.excluir_facial), exclPaquete: b(r.excluir_paquete), exclProducto: b(r.excluir_producto), exclExtras: b(r.excluir_extras),
     productos: productQtys(r),
     netoPack: cats ? subtotalDe(cats, pack3) : undefined,
@@ -389,7 +390,7 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
   const finCiclo = cicloFin(ciclo);
   for (const p of calc.personas) {
     const enCiclo = (t: TicketIn) => t.fecha >= ciclo && t.fecha <= finCiclo && t.cosm === p.cosm;
-    const propios = tks.filter((t) => enCiclo(t) && !t.exclProducto);
+    const propios = tks.filter((t) => enCiclo(t) && !t.exclProducto && !esInterno(t.cosm, t.cedula));
     const items = propios.flatMap((t) => t.productos.map((pr) => {
       const factor = factorTk(t);
       if (pr.ventaNeta == null) {
@@ -409,7 +410,7 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
       // TK210: lo de un ticket subido tarde va en su propia línea «… · Subido tarde · 50%».
       const fx = factorTk(t);
       const sufTarde = fx < 1 ? " · " + ETIQUETA_TARDE : "";
-      if (!t.exclExtras) {
+      if (!t.exclExtras && !esCanjeSinCobro(t)) {
         for (const nombre of listaExtrasPagados(t.extras)) nombres.push(nombre + sufTarde);
       }
       for (const f of facialesDeTicket(t)) {
@@ -521,15 +522,15 @@ function armarResumenHoy(
       if (cobraFacial(t.fecha)) out.comFaciales += tarifaFacial(f.sku, cfg) * f.cantidad * fx;
     }
     if (!t.exclPaquete) out.paquetes += paquetesDeTicket(t).length;
-    if (!t.exclExtras) {
+    if (!t.exclExtras && !esCanjeSinCobro(t)) {
       const ex = contarExtras(t.extras);
       const pagados = ex.n - ex.cortesia;
       out.extras += pagados;
       out.comExtras += pagados * cfg.extra * fx;
     }
-    if (!t.exclProducto) out.productos += t.productos.reduce((a, pr) => a + (pr.qty || 0), 0);
+    if (!t.exclProducto && !esInterno(t.cosm, t.cedula)) out.productos += t.productos.reduce((a, pr) => a + (pr.qty || 0), 0);
   }
-  const items = dia.filter((t) => !t.exclProducto).flatMap((t) => t.productos.map((pr) => {
+  const items = dia.filter((t) => !t.exclProducto && !esInterno(t.cosm, t.cedula)).flatMap((t) => t.productos.map((pr) => {
     const factor = factorTk(t);
     if (pr.ventaNeta == null) {
       return { venta: subtotalDe(cmap, pr.sku), compra: compraParaComision(cmap.get(skuCode(pr.sku))), qty: pr.qty, excluido: false, sku: pr.sku, factor };
