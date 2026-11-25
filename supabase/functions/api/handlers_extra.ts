@@ -346,6 +346,9 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
     return false;
   });
   const nombreVista = s(e && e.nombre_app) || s(e && e.apellidos_y_nombres) || s(histRow && histRow.empleada) || s(p.persona);
+  const { mapaNombresLegales, snapConNombreLegal, elegirNombreLegal } = await import("./rol_nombres.ts");
+  const look = await mapaNombresLegales(ctx);
+  const legalVista = look(nombreVista, ced || (e && e.cedula) || (histRow && histRow.cedula)) || elegirNombreLegal(e && e.apellidos_y_nombres, nombreVista);
   if (!e && !histRow) return { ok: false, error: "Empleada o periodo no encontrado" };
   if (acceso(ses.rol, "rol_pagos", await matrizDe(ctx.db)) !== "todos") {
     if (!esPropio(s(e && e.nombre_app), ses) && !esPropio(s(e && e.apellidos_y_nombres), ses) && !esPropio(s(histRow && histRow.empleada), ses) && !mismaPersonaRol(nombreVista, ses.name || "") && !mismaPersonaRol(nombreVista, ses.short || "")) {
@@ -356,7 +359,7 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
   const aprobado = await rolAprobadoDe(ctx, periodo, nombreVista);
   if (aprobado) {
     const snap = (aprobado.snapshot && typeof aprobado.snapshot === "object") ? aprobado.snapshot as R : {};
-    return { ok: true, data: { ...snap, fuente: "beta-aprobado", id: aprobado.id, estado: "aprobado" }, fuente: "beta-aprobado", estado: "aprobado", periodo, etiqueta: etiquetaPeriodo(periodo) };
+    return { ok: true, data: { ...snapConNombreLegal(snap, legalVista), fuente: "beta-aprobado", id: aprobado.id, estado: "aprobado" }, fuente: "beta-aprobado", estado: "aprobado", periodo, etiqueta: etiquetaPeriodo(periodo) };
   }
   // TK166: un mes del Historial RRHH ya se pagó — todos (admin y personal) ven ese rol, con el detalle
   // línea por línea (congelado en beta_rol_hist_detalle o armado al vuelo desde la hoja del mes).
@@ -367,7 +370,7 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
     if (!data) {
       try { data = (await detalleHistorialDe(ctx, histRow, clave, etiquetaPeriodo(clave), true)).d; } catch { data = rolDesdeHistorial(histRow, periodo); }
     }
-    return { ok: true, data: { ...data, estado: "aprobado" }, fuente: "historial", estado: "aprobado", periodo: clave, etiqueta: etiquetaPeriodo(clave) };
+    return { ok: true, data: { ...snapConNombreLegal(data as R, legalVista), estado: "aprobado" }, fuente: "historial", estado: "aprobado", periodo: clave, etiqueta: etiquetaPeriodo(clave) };
   }
   if (!e || !mes) return { ok: false, error: "Empleada o periodo no encontrado" };
   const noPub = await exigirRolPublicado(ctx, ses, periodo, s(e.nombre_app) || s(e.apellidos_y_nombres));
@@ -379,7 +382,7 @@ extend("getRolIndividual", "any", async (p, ctx, ses) => {
   const armado = await armarEntrada(ctx, s(e.nombre_app) || s(e.apellidos_y_nombres), periodo, anio, mes);
   if (armado.error) return { ok: false, ...armado };
   const snap = armado.snap as R;
-  return { ok: true, data: { ...snap, sheet, fuente: "motor-rrhh" }, fuente: "motor-rrhh", periodo: clavePeriodo(periodo), etiqueta: etiquetaPeriodo(clavePeriodo(periodo)) };
+  return { ok: true, data: { ...snapConNombreLegal(snap, legalVista || s(snap.nombreCompleto)), sheet, fuente: "motor-rrhh" }, fuente: "motor-rrhh", periodo: clavePeriodo(periodo), etiqueta: etiquetaPeriodo(clavePeriodo(periodo)) };
 });
 
 function dineroDe(row: R | undefined, keys: string[]): number {
