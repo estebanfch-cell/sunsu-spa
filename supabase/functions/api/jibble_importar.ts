@@ -1,4 +1,4 @@
-// Importador de historial Jibble → jibble_historial (aditivo, on conflict person_id+fecha).
+// DESACTIVADO (DEV-31b, Emilia t907u): la asistencia sale solo de la app. Importador de historial Jibble → jibble_historial (aditivo, on conflict person_id+fecha).
 // Las claves pueden vivir como JIBBLE_CLIENT_ID_NEW / JIBBLE_CLIENT_SECRET_NEW
 // (o JIBBLE_CLIENT_ID / SECRET, o JIBBLE_API_KEY / JIBBLE_API_SECRET). Nunca se imprimen.
 // El rol no depende de esta acción: si no hay claves, queda pendiente y se usan
@@ -8,7 +8,7 @@ import type { Ctx, Ses } from "./lib.ts";
 import { actorOf } from "./lib.ts";
 import { ecuadorParts, s, type Row } from "./domain.ts";
 import { esAdmin } from "./permisos.ts";
-import { JIBBLE_ULTIMO_DIA } from "./asistencia_api.ts";
+import { HISTORICO_ULTIMO_DIA as JIBBLE_ULTIMO_DIA } from "./asistencia_api.ts";
 
 const TOKEN_URL = "https://identity.prod.jibble.io/connect/token";
 const TS_URL = "https://time-attendance.prod.jibble.io/v1/Timesheets";
@@ -110,18 +110,8 @@ export async function importarJibbleRango(ctx: Ctx, ses: Ses, desde: string): Pr
   return { ok: true, desde, hasta: hoy, dias, personas: porPersona };
 }
 
-extend("jibble_importar", "any", async (p, ctx, ses) => {
-  if (!esAdmin(ses.rol)) return { error: "Solo administración importa el historial de Jibble." };
-  if (ses.prueba) return { error: "La simulación no escribe el historial real de Jibble." };
-  const rows = await ctx.db.all("jibble_historial").catch(() => [] as Row[]);
-  const max = rows.reduce((m, r) => {
-    const f = s(r.fecha).slice(0, 10);
-    return f && f > m ? f : m;
-  }, "2025-01-01");
-  const desde = /^\d{4}-\d{2}-\d{2}$/.test(s(p.desde)) ? s(p.desde) : max;
-  try {
-    return await importarJibbleRango(ctx, ses, desde);
-  } catch (e) {
-    return { ok: false, pendiente: true, error: e instanceof Error ? e.message : String(e) };
-  }
+extend("jibble_importar", "any", async (_p, _ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo administración." };
+  // DEV-31b (Emilia t907u): la asistencia es solo de la app. Jibble ya no se importa ni se lee.
+  return { ok: false, desactivado: true, error: "Jibble ya no se usa: la asistencia, las horas y los roles salen solo de la app." };
 });

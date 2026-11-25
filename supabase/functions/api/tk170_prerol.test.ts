@@ -28,7 +28,7 @@ function seed(): MemoryDb {
     ],
     beta_empleados: [{ id: "emp-evelyn", nombre_app: "Evelyn", afiliada_iess: false }],
     // Andrea: Jibble importado hasta el 10/11 (8 h cada día laborable)
-    jibble_historial: ["2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07", "2026-11-10"].map((f) => jib("Andrea", f, 540)),
+    asistencia_historico: ["2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07", "2026-11-10"].map((f) => jib("Andrea", f, 540)),
     tickets: [], multas_descuentos: [], asistencia_marcajes: [], permisos: [],
   });
 }
@@ -90,7 +90,7 @@ describe("TK170 pre-rol y empleados", () => {
     assert.equal(recalcularDiaJibble({ firstInTimestamp: "2026-11-03T15:00:00Z" }, "2026-11-03", cfg, [], jor, alm)!.abierto, true);
 
     const db = seed();
-    db.tables.set("jibble_historial", [
+    db.tables.set("asistencia_historico", [
       jib("Andrea", "2026-11-03", 540, 60, { firstInTimestamp: "2026-11-03T15:00:00Z", lastOutTimestamp: "2026-11-04T00:00:00Z" }),
       jib("Andrea", "2026-11-04", 1440, 0, { firstInTimestamp: "2026-11-04T15:00:00Z", lastOutTimestamp: "2026-11-05T00:00:00Z" }),
       jib("Andrea", "2026-11-05", 200, 0, { firstInTimestamp: "2026-11-05T15:00:00Z" }),

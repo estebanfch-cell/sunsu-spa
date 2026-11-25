@@ -25,7 +25,7 @@ function ctx(db: MemoryDb, now = "2026-11-20T23:30:00Z") {
 function seed() {
   return new MemoryDb({
     rrhh_empleadas: [{ cedula: "1711", nombre_app: "Andrea", apellidos_y_nombres: "Andrea Robles", sueldo_base: 482, bono_fijo: 0, fondo_reserva: "SI", fecha_ingreso: "2024-06-01", cargo: "Cosmetologa" }],
-    asistencia_marcajes: [], asistencia_auditoria: [], jibble_historial: [], permisos: [], tickets: [], multas_descuentos: [],
+    asistencia_marcajes: [], asistencia_auditoria: [], asistencia_historico: [], permisos: [], tickets: [], multas_descuentos: [],
   });
 }
 
