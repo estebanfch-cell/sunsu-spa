@@ -364,7 +364,7 @@ export function sinPatronal(snap: Row): Row {
   return o;
 }
 
-function vista(row: Row, snap0: Row, admin: boolean): Row {
+export function vista(row: Row, snap0: Row, admin: boolean): Row {
   const snap = admin ? snap0 : sinPatronal(snap0);
   return {
     ok: true, id: row.id, persona: row.persona, cedula: row.cedula, cargo: row.cargo,
@@ -374,6 +374,8 @@ function vista(row: Row, snap0: Row, admin: boolean): Row {
     origin: row.origin, creadoPor: row.creado_por,
     aprobadoPor: row.aprobado_por, aprobadoAt: row.aprobado_at,
     data: snap, admin,
+    // DEV-31c: estado ante Contabilidad (solo administración).
+    ...(admin ? { contab: { estado: s(row.contab_estado), por: s(row.contab_por), at: row.contab_at || null } } : {}),
   };
 }
 

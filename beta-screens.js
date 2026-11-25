@@ -16963,18 +16963,91 @@ function _lineasRol(d){
 }
 // TK166: el PDF del rol siempre con la plantilla oficial (fondo crema, logo SUNSU y el arte de las aves).
 // Carga el fondo (local en la app de iOS, si no el de app.sunsuspa.com) y la aprobación digital si existe.
-function _pdfRol(d, periodo, apro){
-  var go=function(img){ _pdfRolFondo(d, periodo, apro, img); };
+function _rolCargarFondo(cb){
   var urls=['giftcard_pag3_fondo.jpg', GCD_PAG3_URL], i=0;
   var tryNext=function(){
-    if(i>=urls.length){ go(null); return; }
+    if(i>=urls.length){ cb(null); return; }
     var img=new Image(); img.crossOrigin='anonymous';
-    img.onload=function(){ go(img); };
+    img.onload=function(){ cb(img); };
     img.onerror=function(){ i++; tryNext(); };
     img.src=urls[i];
   };
-  if(window._fondoA4Cache){ go({cached:true}); return; }
+  if(window._fondoA4Cache){ cb({cached:true}); return; }
   tryNext();
+}
+function _pdfRol(d, periodo, apro){
+  _rolCargarFondo(function(img){ _pdfRolFondo(d, periodo, apro, img); });
+}
+// DEV-31c (Emilia t911u): PRE-ROL en PDF (borrador para Contabilidad, sin firma de la empleada).
+// items = [{d:<datos del rol>, periodo}]; con varias empleadas va una hoja por persona + una hoja de resumen.
+function _pdfPreRolVarios(items, periodo, nombreArchivo){
+  items=(items||[]).filter(function(x){return x&&x.d;});
+  if(!items.length){ toast('No hay pre-roles para el PDF','#B86B6B'); return; }
+  _rolCargarFondo(function(fondo){
+    _gcdCargarJsPDF(function(ok){
+      if(!ok){toast('❌ No se pudo cargar el generador de PDF','#B86B6B');return;}
+      var doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'});
+      var apro={preRol:true, generado:_rolAhoraEc()};
+      var mes='';
+      items.forEach(function(it,i){
+        if(i>0) doc.addPage();
+        mes=_pdfRolPagina(doc,it.d,it.periodo||periodo,apro,fondo);
+      });
+      if(items.length>1) _pdfPreRolResumenHoja(doc,items,mes,apro,fondo);
+      var nom=nombreArchivo||('PRE-ROL '+mes+(items.length===1?' '+(items[0].d.nombre||'').split(' ')[0]:' todas')+'.pdf');
+      _entregarPDF(doc, nom);
+      toast('📄 Pre-rol listo','var(--green)');
+    });
+  });
+}
+function _rolAhoraEc(){
+  try{ return new Date().toLocaleString('es-EC',{timeZone:'America/Guayaquil',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}); }catch(e){ return ''; }
+}
+function _pdfPreRolResumenHoja(doc,items,mes,apro,fondo){
+  var W=595,H=842,NAVY='#3D5A7A',TXT='#4A5568',GOLD='#8A6D1A', xI=55, ANCHO=485, xD=xI+ANCHO;
+  doc.addPage();
+  var bg=fondo?_fondoA4Sunsu(fondo):null; if(bg) doc.addImage(bg,'JPEG',0,0,W,H);
+  _pdfRolBanda(doc,apro);
+  var y=150;
+  doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(17);
+  doc.text('RESUMEN DEL PRE-ROL',W/2,y,{align:'center'}); y+=16;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(TXT);
+  doc.text('Sunsu Spa - Quito - Período: '+mes,W/2,y,{align:'center'}); y+=26;
+  var cols=[['EMPLEADA',xI+6,'l'],['INGRESOS',xI+235,'r'],['IESS 9,45%',xI+320,'r'],['DESCUENTOS',xI+405,'r'],['NETO',xD-6,'r']];
+  doc.setFillColor(61,90,122); doc.roundedRect(xI,y,ANCHO,20,4,4,'F');
+  doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+  cols.forEach(function(c){ doc.text(c[0],c[1],y+13.5,c[2]==='r'?{align:'right'}:undefined); });
+  y+=20;
+  var n2=function(v){return '$'+(parseFloat(v)||0).toFixed(2);};
+  var tot={i:0,s:0,e:0,n:0};
+  items.forEach(function(it,idx){
+    var r=_lineasRol(it.d);
+    var iess=parseFloat(it.d.iess)||0, egr=r.totalEgresos-iess; if(egr<0) egr=0;
+    if(idx%2===1){doc.setFillColor(246,243,234);doc.rect(xI,y,ANCHO,18,'F');}
+    else{doc.setFillColor(255,255,255);doc.rect(xI,y,ANCHO,18,'F');}
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(TXT);
+    doc.text((it.d.nombre||'').toString(),xI+6,y+12.5);
+    doc.text(n2(r.totalIngresos),cols[1][1],y+12.5,{align:'right'});
+    doc.text(n2(iess),cols[2][1],y+12.5,{align:'right'});
+    doc.text(n2(egr),cols[3][1],y+12.5,{align:'right'});
+    doc.setFont('helvetica','bold'); doc.setTextColor(NAVY);
+    doc.text(n2(r.neto),cols[4][1],y+12.5,{align:'right'});
+    tot.i+=r.totalIngresos; tot.s+=iess; tot.e+=egr; tot.n+=r.neto; y+=18;
+  });
+  y+=6; doc.setDrawColor(196,148,58); doc.setLineWidth(0.8); doc.line(xI,y,xD,y); y+=15;
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(GOLD);
+  doc.text('TOTAL',xI+6,y);
+  doc.text(n2(tot.i),cols[1][1],y,{align:'right'}); doc.text(n2(tot.s),cols[2][1],y,{align:'right'});
+  doc.text(n2(tot.e),cols[3][1],y,{align:'right'}); doc.text(n2(tot.n),cols[4][1],y,{align:'right'});
+  y+=30; doc.setFont('helvetica','normal'); doc.setFontSize(7.8); doc.setTextColor(TXT);
+  doc.text(doc.splitTextToSize('PRE-ROL / Borrador para revisión de Contabilidad. Los valores se recalculan hasta que administración apruebe el rol. Descuentos = anticipos, cuotas de préstamos, préstamos IESS y multas (el aporte IESS personal va en su columna).',ANCHO),xI,y);
+}
+// Banda superior de cada hoja del PRE-ROL (no existe en el rol final).
+function _pdfRolBanda(doc,apro){
+  if(!(apro&&apro.preRol)) return;
+  doc.setFillColor(253,236,214); doc.roundedRect(55,112,485,22,4,4,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor('#B5651D');
+  doc.text('PRE-ROL / Borrador para revisión',297.5,126.5,{align:'center'});
 }
 // ── Rol de pagos en PDF con la identidad SUNSU (mismo fondo que OC y actas) ──
 // OJO tipografía: jsPDF (helvetica estándar) solo codifica latin-1 — nada de ✔ ni −
@@ -16982,17 +17055,27 @@ function _pdfRolFondo(d, sheetName, apro, fondo){
   _gcdCargarJsPDF(function(ok){
     if(!ok){toast('❌ No se pudo cargar el generador de PDF','#B86B6B');return;}
     var doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'});
+    if(apro&&apro.preRol&&!apro.generado) apro.generado=_rolAhoraEc();
+    var mesLabel=_pdfRolPagina(doc,d,sheetName,apro,fondo);
+    _entregarPDF(doc, (apro&&apro.preRol?'PRE-ROL ':'ROL ')+mesLabel+' '+(d.nombre||'').split(' ')[0]+'.pdf');
+    toast(apro&&apro.preRol?'📄 Pre-rol listo':'📄 Rol listo','var(--green)');
+  });
+}
+// Dibuja UNA hoja (o más si no cabe) del rol de una empleada en el doc recibido y devuelve la etiqueta del mes.
+function _pdfRolPagina(doc, d, sheetName, apro, fondo){
     var W=595, H=842, NAVY='#3D5A7A', TXT='#4A5568', GOLD='#8A6D1A', VERDE='#2E7D52', ROJO='#B84040';
     var xI=55, ANCHO=485, xD=xI+ANCHO, FILA=17;
     var bg=fondo?_fondoA4Sunsu(fondo):null;
-    var pintar=function(){ if(bg) doc.addImage(bg,'JPEG',0,0,W,H); };
+    var pre=!!(apro&&apro.preRol);
+    var pintar=function(){ if(bg) doc.addImage(bg,'JPEG',0,0,W,H); _pdfRolBanda(doc,apro); };
     pintar();
     var mesLabel=(d.etiqueta||(sheetName||'').replace('_',' ')).toString().toUpperCase();
     var y=150;
     doc.setTextColor(NAVY); doc.setFont('helvetica','bold'); doc.setFontSize(19);
-    doc.text('ROL DE PAGOS',W/2,y,{align:'center'}); y+=17;
+    doc.text(pre?'PRE-ROL DE PAGOS':'ROL DE PAGOS',W/2,y,{align:'center'}); y+=17;
     doc.setFontSize(9.5); doc.setFont('helvetica','normal'); doc.setTextColor(TXT);
-    doc.text('Sunsu Spa - Quito - Período: '+mesLabel,W/2,y,{align:'center'}); y+=26;
+    doc.text('Sunsu Spa - Quito - Período: '+mesLabel,W/2,y,{align:'center'}); y+=(pre?13:26);
+    if(pre){ doc.setFontSize(8); doc.text('Generado el '+(apro.generado||'')+' (hora de Ecuador) - valores a la fecha, se recalculan hasta la aprobación',W/2,y,{align:'center'}); y+=21; doc.setFontSize(9.5); }
     doc.setFontSize(9);
     var n2=function(v){return '$'+(parseFloat(v)||0).toFixed(2);};
     var fila=function(l,v){
@@ -17134,7 +17217,16 @@ function _pdfRolFondo(d, sheetName, apro, fondo){
     }
     // ── Aceptación: sello digital o línea de firma ──
     salto(apro&&apro.png?120:70);
-    if(apro&&apro.png){
+    if(pre){
+      // DEV-31c: el pre-rol no lleva firma de la empleada.
+      doc.setFillColor(253,236,214);
+      doc.roundedRect(xI,y,ANCHO,44,6,6,'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor('#B5651D');
+      doc.text('PRE-ROL / Borrador para revisión',xI+12,y+17);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(TXT);
+      doc.text('Pendiente de revisión de Contabilidad y de aprobación de administración. Sin firma de la empleada.',xI+12,y+31);
+      y+=56;
+    } else if(apro&&apro.png){
       // DEV-31: firma con el dedo de la empleada (PNG) sobre la línea de «Recibí conforme».
       doc.setFillColor(232,248,238);
       doc.roundedRect(xI,y,ANCHO,104,6,6,'F');
@@ -17163,10 +17255,9 @@ function _pdfRolFondo(d, sheetName, apro, fondo){
       doc.text('Recibí conforme - '+(d.nombre||''),W/2,yF+11,{align:'center'});
       y=yF+20;
     }
-    _entregarPDF(doc, 'ROL '+mesLabel+' '+(d.nombre||'').split(' ')[0]+'.pdf');
-    toast('📄 Rol listo','var(--green)');
-  });
+    return mesLabel;
 }
+
 // ── Visualizar el rol en el app (con aprobación rápida y descarga desbloqueada) ──
 async function visualizarRol(sheetName, cedula, btnEl){
   var btn=btnEl; var t0=btn?btn.textContent:'';
