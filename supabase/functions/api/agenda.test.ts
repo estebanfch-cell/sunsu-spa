@@ -167,6 +167,24 @@ describe("agenda (Acuity por la edge)", () => {
     assert.doesNotMatch(JSON.stringify(ana), /593991234567/);
   });
 
+  it("TK221: el link de registro no se pega a «Nota:» de la plantilla de confirmación", async () => {
+    const { db, h } = semilla();
+    db.tables.set("configuracion", [
+      { col_1: "LINK REGISTRO", col_2: "app.sunsuspa.com/registro.html" },
+      { col_1: "MENSAJE REGISTRO PRIMERA VISITA", col_2: "Completa tu tarjeta.\n\n📝 Tarjeta de registro:\n{link}\n\n" },
+      { col_1: "MENSAJE CONFIRMACION CITA", col_2: "Hola {nombre}.\n\nConfirmamos tu cita {dia} a las {hora}.\n\n{registro}Nota:\n- Llega puntual.\n\nNos encantará cuidarte." },
+    ]);
+    const w = await h("ag_wa", "ale", { id: 502 });
+    assert.equal(w.ok, true, String(w.error));
+    const texto = String(w.texto);
+    assert.doesNotMatch(texto, /registro\.htmlNota/);
+    assert.match(texto, /registro\.html\n\nNota:/);
+    assert.match(texto, /https:\/\/app\.sunsuspa\.com\/registro\.html/);
+    const { aislarLinkRegistro, conSaltoTrasRegistro } = await import("./wa_lib.ts");
+    assert.equal(aislarLinkRegistro("https://app.sunsuspa.com/registro.htmlNota:"), "https://app.sunsuspa.com/registro.html\n\nNota:");
+    assert.match(conSaltoTrasRegistro("https://app.sunsuspa.com/registro.html"), /\n\n$/);
+  });
+
   it("TK181: la Agenda se puede leer en «Ver como» (ag_meta/ag_citas/ag_cita), no escribir", async () => {
     const { lecturaEnVista } = await import("./permisos.ts");
     for (const a of ["ag_meta", "ag_citas", "ag_cita"]) assert.equal(lecturaEnVista(a), true, a);

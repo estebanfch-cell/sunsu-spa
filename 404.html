@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sunsu Spa</title>
+<script>
+(function () {
+  var p = (location.pathname || "").replace(/\/+$/, "") || "/";
+  var q = location.search || "";
+  // TK221: enlaces ya enviados por WhatsApp quedaron como /registro.htmlNota: (la plantilla pegaba «Nota:» al URL).
+  if (/^\/registro/i.test(p) || /registro\.html/i.test(p) || /\/sunsu-spa\/registro/i.test(p)) {
+    location.replace("/registro.html" + q);
+    return;
+  }
+})();
+</script>
+</head>
+<body style="font-family:system-ui,sans-serif;padding:2rem;text-align:center;color:#1a2a4a">
+  <p>No encontramos esa página.</p>
+  <p><a href="/">Ir a Sunsu Spa</a> · <a href="/registro.html">Tarjeta de registro</a></p>
+</body>
+</html>

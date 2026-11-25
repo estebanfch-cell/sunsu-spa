@@ -755,7 +755,7 @@ function _cargarProdColMap(){
 // Si el Sheet no responde, se usan estos textos: el app nunca se queda mudo.
 var MSG_DEF={
  'LINK REGISTRO':'app.sunsuspa.com/registro.html',
- 'MENSAJE CONFIRMACION CITA':'Hola {nombre} 🌸 Te saludamos de Sunsu Spa!\n\nTe escribimos para confirmar tu cita de mañana {dia} a las {hora} 💆‍♀️\n\n{registro}¿Nos confirmas tu asistencia? 💙',
+ 'MENSAJE CONFIRMACION CITA':'Hola {nombre} 🌸 Te saludamos de Sunsu Spa!\n\nTe escribimos para confirmar tu cita de mañana {dia} a las {hora} 💆‍♀️\n\n{registro}\n\n¿Nos confirmas tu asistencia? 💙',
  'MENSAJE REGISTRO PRIMERA VISITA':'Como es tu primera visita, te pedimos llenar tu tarjeta de registro antes de venir. Toma menos de 2 minutos y nos permite cuidar tu piel como se merece ✨\n\n📝 Tarjeta de registro\n{link}\n\n',
  'MENSAJE TARJETA SALUDO':'Hola {nombre}, te saludamos de Sunsu Spa!',
  'MENSAJE TARJETA TRATAMIENTO':'Te compartimos la tarjeta de tu tratamiento con las recomendaciones para tu piel y tu próxima cita recomendada. Gracias por visitarnos!',
@@ -11696,7 +11696,9 @@ function _waConfirmarCita(aptId, diaNom, btn){
   // el registro en una clienta nueva de verdad. Acuity es la fuente directa.
   var esNueva=(apt.type||'').toUpperCase().indexOf('PRIMERA')>=0;
   var bloqueReg=esNueva?_msg('MENSAJE REGISTRO PRIMERA VISITA',{link:_msg('LINK REGISTRO',{})}):'';
+  if(bloqueReg){ bloqueReg=bloqueReg.replace(/[ \t]+$/,''); if(!/\n\n$/.test(bloqueReg)) bloqueReg=bloqueReg.replace(/\n?$/,'\n\n'); }
   var msg=_msg('MENSAJE CONFIRMACION CITA',{nombre:nom, dia:dia, hora:hora, registro:bloqueReg});
+  msg=String(msg||'').replace(/((?:https?:\/\/)?(?:app\.)?sunsuspa\.com\/registro\.html)(?=[^\s/?#])/gi,'$1\n\n');
   var url=_waURL(tel,encodeURIComponent(msg));
   _abrirWaPestana(url);
   _marcarEtqCita(aptId,'ESPERANDO',diaNom,btn);

@@ -78,13 +78,26 @@ export function aplicarPlantilla(tpl: string, vars: Record<string, string | numb
     v.sesiones = String(v.usados ?? "") + (v.total != null ? "/" + v.total : "");
   }
   for (const [k, val] of Object.entries(v)) t = t.split("{" + k + "}").join(val == null ? "" : String(val));
-  return t.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  return aislarLinkRegistro(t.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim());
+}
+
+
+/** El bloque de registro debe terminar en salto: aplicarPlantilla() hace trim() y, si no, el URL se pega a lo que sigue ({registro}Nota: → registro.htmlNota:). */
+export function conSaltoTrasRegistro(bloque: string): string {
+  const x = String(bloque || "").replace(/[ \t]+$/g, "");
+  if (!x) return "";
+  return /\n\n$/.test(x) ? x : x.replace(/\n?$/, "\n\n");
+}
+
+/** Si el enlace de registro quedó pegado al texto siguiente, lo separa. */
+export function aislarLinkRegistro(t: string): string {
+  return String(t || "").replace(/((?:https?:\/\/)?(?:app\.)?sunsuspa\.com\/registro\.html)(?=[^\s/?#])/gi, "$1\n\n");
 }
 
 export function plantillasDefault(): Record<string, string> {
   const out: Record<string, string> = {
     "LINK REGISTRO": "app.sunsuspa.com/registro.html",
-    "MENSAJE CONFIRMACION CITA": "Hola {nombre} 🌸 Te saludamos de Sunsu Spa!\n\nTe escribimos para confirmar tu cita de mañana {dia} a las {hora} 💆‍♀️\n\n{registro}¿Nos confirmas tu asistencia? 💙",
+    "MENSAJE CONFIRMACION CITA": "Hola {nombre} 🌸 Te saludamos de Sunsu Spa!\n\nTe escribimos para confirmar tu cita de mañana {dia} a las {hora} 💆‍♀️\n\n{registro}\n\n¿Nos confirmas tu asistencia? 💙",
     "MENSAJE REGISTRO PRIMERA VISITA": "Como es tu primera visita, te pedimos llenar tu tarjeta de registro antes de venir. Toma menos de 2 minutos y nos permite cuidar tu piel como se merece ✨\n\n📝 Tarjeta de registro\n{link}\n\n",
     "MENSAJE CLIENTAS ANTIGUAS": "Hola {nombre}, te saludamos de Sunsu Spa.",
     "MENSAJE CUMPLEAÑOS": "Hola {nombre}, ¡feliz cumpleaños!",
