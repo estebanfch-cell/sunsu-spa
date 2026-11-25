@@ -82,7 +82,12 @@ extend("rol_pre_auto", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo administración ve el pre-rol." };
   const nombre = s(p.persona || p.nombre);
   if (!nombre) return { error: "Elige a la empleada." };
-  return await asegurarPreRol(ctx, ses, nombre);
+  try {
+    return await asegurarPreRol(ctx, ses, nombre);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { error: "No se pudo calcular el pre-rol de " + nombre + (msg ? ": " + msg : ".") };
+  }
 });
 
 extend("rol_pre_todos", "any", async (_p, ctx, ses) => {

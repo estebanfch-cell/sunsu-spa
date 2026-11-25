@@ -10,7 +10,7 @@ import { cicloFin, cicloInicio, ecuadorParts, n, normNombre, rolCalcularOficial,
 import { esAdmin, esPropio } from "./permisos.ts";
 import { clavePeriodo, etiquetaPeriodo, estaPublicado, mismaPersonaRol } from "./roles_api.ts";
 import { clasificarHorasRol, enMapaRrhh, horarioRolDeTabla, horarioRrhhDe, type DiaHorasRol } from "./horas_rol.ts";
-import { elegirNombreLegal, mapaNombresLegales, snapConNombreLegal } from "./rol_nombres.ts";
+import { elegirNombreLegal, filaEmpleadaDe, mapaNombresLegales, personaCortaDe, snapConNombreLegal } from "./rol_nombres.ts";
 
 const MESES: Record<string, number> = {
   ENERO: 1, FEBRERO: 2, MARZO: 3, ABRIL: 4, MAYO: 5, JUNIO: 6,
@@ -62,13 +62,8 @@ async function feriadosDe(ctx: Ctx): Promise<string[]> {
 }
 
 async function empleadaDe(ctx: Ctx, nombre: string): Promise<Row | null> {
-  const key = normNombre(nombre);
-  const first = key.split(" ")[0] || key;
   const rows = await ctx.db.all("rrhh_empleadas").catch(() => [] as Row[]);
-  return rows.find((r) => {
-    const a = normNombre(s(r.nombre_app) || s(r.apellidos_y_nombres) || s(r.nombre_jibble));
-    return a === key || a.startsWith(first + " ") || first.length >= 3 && a.split(" ")[0] === first;
-  }) || null;
+  return filaEmpleadaDe(rows, nombre);
 }
 
 function dineroDe(row: Row | null, keys: string[]): number {
@@ -282,7 +277,7 @@ export async function rolHorasMesDe(ctx: Ctx, nombre: string, anio: number, mes:
   if ((await adminesDe(ctx.db))(nombre)) return null;
   const emp = await empleadaDe(ctx, nombre);
   if (!emp) return null;
-  const persona = s(emp.nombre_app) || s(emp.apellidos_y_nombres);
+  const persona = personaCortaDe(emp);
   const cfgRolH = await configRolDe(ctx, persona);
   const desdeSnap = (snap: Row, fuente: string): Row => ({
     anio, mes, fuente,
@@ -310,7 +305,7 @@ export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string,
   if ((await adminesDe(ctx.db))(nombre)) return { error: "EFCH y Emi son administradoras: no tienen rol de pagos." };
   const emp = await empleadaDe(ctx, nombre);
   if (!emp) return { error: "No encuentro a esa persona en Personal › Empleados / RRHH." };
-  const persona = s(emp.nombre_app) || s(emp.apellidos_y_nombres);
+  const persona = personaCortaDe(emp);
   // DEV-31b (t907u): datos base del rol desde «Configuración de rol»; sin fila, la hoja RRHH.
   const cfgRol = await configRolDe(ctx, persona);
   if (cfgRol && !cfgRol.activa) return { error: persona + " está inactiva: ya no tiene rol de pagos." };

@@ -344,12 +344,16 @@
       + '<div class="rolx-neto"><span>NETO A RECIBIR:</span><b>$' + m2(r.neto) + "</b></div>" + notas + pie + "</div>";
   }
   function htmlKpis(d) {
-    var r = typeof _lineasRol === "function" ? _lineasRol(d) : { totalIngresos: d.totalIngresos, totalEgresos: d.totalEgresos, neto: d.totalRecibir };
-    var diasTxt = (r.dias && r.dias !== "—") ? r.dias : (typeof _rolDiasLinea === "function" ? _rolDiasLinea(d) : "");
+    // DEV-31k (t929u/t930u): minitablero = solo total de días, sueldo+bono y comisiones por separado. El desglose de días va en el rol/PDF.
+    if (typeof _htmlRolKpis === "function") return _htmlRolKpis(d);
+    var r = typeof _lineasRol === "function" ? _lineasRol(d) : { totalEgresos: d.totalEgresos, neto: d.totalRecibir };
     var tot = Number(d.diasTrabajados || 0) + Number(d.diasFest || 0) + Number(d.diasDesc || 0) + Number(d.diasAsumidos || 0);
+    var sueldoBono = Math.round((Number(d.sueldo || 0) + Number(d.bono || 0)) * 100) / 100;
+    var com = Math.round((Number(d.comFaciales || 0) + Number(d.comExtras || 0) + Number(d.comPaquetes || 0) + Number(d.comProductos || 0) + Number(d.comRecepcion || 0)) * 100) / 100;
     var k = function (a, b, cls) { return '<div class="rolx-k' + (cls ? " " + cls : "") + '"><span>' + a + "</span><b>" + b + "</b></div>"; };
-    return '<div class="rolx-kpis">' + k("Días", esc(tot) + (d.faltas ? ' <small class="err">' + esc(d.faltas) + " falta(s)</small>" : "") + (diasTxt ? ' <small>' + esc(diasTxt) + "</small>" : ""))
-      + k("Ingresos", "$" + m2(r.totalIngresos)) + k("IESS", "$" + m2(d.iess || 0)) + k("Descuentos", "$" + m2(Math.max(0, Number(r.totalEgresos) - Number(d.iess || 0))))
+    return '<div class="rolx-kpis">' + k("Días", esc(String(tot)) + (d.faltas ? ' <small class="err">' + esc(d.faltas) + " falta(s)</small>" : ""))
+      + k("Sueldo + bono", "$" + m2(sueldoBono)) + k("Comisiones", "$" + m2(com))
+      + k("IESS", "$" + m2(d.iess || 0)) + k("Descuentos", "$" + m2(Math.max(0, Number(r.totalEgresos) - Number(d.iess || 0))))
       + k("Neto", "$" + m2(r.neto), "neto") + "</div>";
   }
   var CONTAB = { "": "Sin enviar", enviado: "Enviado a contabilidad", ok: "Ok de contabilidad" };
@@ -423,6 +427,9 @@
     var pack = await api("rol_pre_auto", { persona: persona });
     if (persona !== RX.persona) return;
     if (!pack || pack.error) { body.innerHTML = '<p class="err">' + esc((pack && pack.error) || "No se pudo calcular el pre-rol") + "</p>"; return; }
+    if (!pack.data || (pack.data.nombre == null && pack.data.nombreCompleto == null && pack.data.totalRecibir == null && pack.data.sueldo == null)) {
+      body.innerHTML = '<p class="err">No se pudo calcular el pre-rol de ' + esc(persona) + ".</p>"; return;
+    }
     RX.pack = pack;
     body.innerHTML = htmlPreRolCuerpo(pack, persona);
     var det = body.querySelector("[data-mk-de]");
@@ -452,8 +459,9 @@
     if (!pack || pack.error) { toast((pack && pack.error) || "No se pudo abrir el rol"); return; }
     window._rolxVer = pack;
     var box = main.querySelector("#rolx-ver");
-    box.innerHTML = '<div class="rolx-verbar"><b>' + esc(pack.etiqueta || (pack.data && pack.data.etiqueta) || "") + '</b><span><button class="btn small" type="button" data-rolx-ver-pdf="1">Descargar PDF</button> <button class="btn ghost small" type="button" data-rolx-ver-cerrar="1">Cerrar</button></span></div>'
-      + htmlRolDoc(pack, { firma: pack.firma });
+    var dVer = pack.data || pack || {};
+    box.innerHTML = '<div class="rolx-verbar"><b>' + esc(pack.etiqueta || dVer.etiqueta || "") + '</b><span><button class="btn small" type="button" data-rolx-ver-pdf="1">Descargar PDF</button> <button class="btn ghost small" type="button" data-rolx-ver-cerrar="1">Cerrar</button></span></div>'
+      + htmlKpis(dVer) + htmlRolDoc(pack, { firma: pack.firma });
     box.scrollIntoView({ block: "start", behavior: "smooth" });
   }
   function wireAdmin(main) {
@@ -549,7 +557,7 @@
     return new Promise(function (ok, no) {
       if (window.XLSX) return ok(window.XLSX);
       var sc = document.createElement("script");
-      sc.src = "vendor-xlsx.js?v=20261125tk229";
+      sc.src = "vendor-xlsx.js?v=20261125tk230";
       sc.onload = function () { window.XLSX ? ok(window.XLSX) : no(new Error("No se pudo cargar el lector de Excel")); };
       sc.onerror = function () { no(new Error("No se pudo cargar el lector de Excel")); };
       document.head.appendChild(sc);

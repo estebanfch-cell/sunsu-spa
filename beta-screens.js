@@ -16944,6 +16944,29 @@ function _rolDiasLinea(d){
   ];
   return parts.join(' + ')+' = Total '+tot+' '+(tot===1?'día':'días');
 }
+
+function _rolDiasTotal(d){
+  d=d||{};
+  return Number(d.diasTrabajados||0)+Number(d.diasFest||0)+Number(d.diasDesc||0)+Number(d.diasAsumidos||0);
+}
+function _rolComisiones(d){
+  d=d||{};
+  var n=function(v){var x=Number(v);return isFinite(x)?x:0;};
+  return Math.round((n(d.comFaciales)+n(d.comExtras)+n(d.comPaquetes)+n(d.comProductos)+n(d.comRecepcion))*100)/100;
+}
+function _htmlRolKpis(d){
+  d=d||{};
+  var r=typeof _lineasRol==='function'?_lineasRol(d):{totalEgresos:d.totalEgresos,neto:d.totalRecibir};
+  var tot=_rolDiasTotal(d);
+  var sueldoBono=Math.round((Number(d.sueldo||0)+Number(d.bono||0))*100)/100;
+  var m2=function(v){var x=Number(v);return (Math.round(((isFinite(x)?x:0)+Number.EPSILON)*100)/100).toFixed(2);};
+  var e=typeof esc==='function'?esc:function(s){return String(s==null?'':s);};
+  var k=function(a,b,cls){return '<div class="rolx-k'+(cls?' '+cls:'')+'"><span>'+a+'</span><b>'+b+'</b></div>';};
+  return '<div class="rolx-kpis">'+k('Días',e(String(tot))+(d.faltas?' <small class="err">'+e(d.faltas)+' falta(s)</small>':''))
+    +k('Sueldo + bono','$'+m2(sueldoBono))+k('Comisiones','$'+m2(_rolComisiones(d)))
+    +k('IESS','$'+m2(d.iess||0))+k('Descuentos','$'+m2(Math.max(0,Number(r.totalEgresos||0)-Number(d.iess||0))))
+    +k('Neto','$'+m2(r.neto),'neto')+'</div>';
+}
 function _rolNombre(d){
   d=d||{};
   var n=(d.nombreCompleto||d.nombreLegal||d.apellidos_y_nombres||'').toString().trim();
