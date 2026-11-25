@@ -9,7 +9,7 @@ import { describe, it } from "node:test";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const file = (f: string) => readFileSync(join(root, f), "utf8");
-const CACHE = "sunsu-2026-11-25-DEV31G";
+const CACHE = "sunsu-2026-11-25-DEV31H";
 
 describe("TK217 WhatsApp abre en pestaña nueva (citas, recordatorios, tickets)", () => {
   const agenda = file("mc-agenda.js");
