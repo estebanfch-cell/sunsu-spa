@@ -6446,7 +6446,7 @@ function htmlRolOficial(pack) {
   return `<div class="card rol-oficial" data-rol-id="${esc(pack.id || "")}">
     <div class="card-title">Rol de pagos ${rolPill(pack.estado)} · ${esc(d.etiqueta || pack.etiqueta || pack.periodo || "")}</div>
     <p class="note">${esc(d.nombre || pack.persona || "")}${d.cargo ? " · " + esc(d.cargo) : ""}${d.cedula ? " · " + esc(d.cedula) : ""}<br>
-      Horas trabajadas ${esc((d.hrsNomina != null ? d.hrsNomina : (Number(d.hrsOrdinarias || 0) + Number(d.hrsSupl || 0) + Number(d.hrsExtr || 0) + Number(d.hrsDesc || 0))))} h${d.diasAsumidos ? " (incl. " + esc(d.diasAsumidos) + " días proyectados)" : ""}${d.faltas ? " · faltas " + esc(d.faltas) : ""} · ref. legal: ${esc(d.diasTrabajados || 0)} días con asistencia<br>
+      ${esc(typeof _rolDiasLinea === "function" ? _rolDiasLinea(d) : "")}${d.faltas ? " · faltas " + esc(d.faltas) : ""}<br>
       ${esc(d.fuenteHoras || "")}${d.reglaHoras ? " · " + esc(d.reglaHoras) : ""}</p>
     ${motivo}
     ${editable ? htmlRolEditable(d, campo, linea, hrs) : htmlRolLineas(d)}
@@ -8955,7 +8955,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-25-DEV31E"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-25-DEV31F"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -9136,8 +9136,8 @@ window.SunsuUpdate.init();
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk195"></script>
-<script src="beta-screens.js?v=20261125tk225"></script>
-<script src="mc-rol.js?v=20261125tk225"></script>
+<script src="beta-screens.js?v=20261125tk226"></script>
+<script src="mc-rol.js?v=20261125tk226"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
 <script src="mc-nav.js?v=20261123tk216"></script>

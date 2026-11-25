@@ -25,11 +25,7 @@
       var desc = Number(x.anticipos || 0) + Number(x.prestamos || 0);
       return '<tr data-prerol-fila="' + esc(x.nombre) + '">'
         + '<td><b>' + esc(x.nombre) + "</b>" + (x.afiliada ? "" : ' <span class="note">sin IESS</span>') + "</td>"
-        + '<td class="num">' + hrs(x.hrsNomina != null ? x.hrsNomina : (Number(x.hrsNormales || 0) + Number(x.hrsSupl || 0) + Number(x.hrsExtr || 0) + Number(x.hrsDesc || 0)))
-        + (x.diasAsumidos ? ' <span class="note">incl. asum.</span>' : "")
-        + (x.hrsDesc ? ' <span class="note">descanso: ' + hrs(x.hrsDesc) + "</span>" : "")
-        + (x.hrsExtr ? ' <span class="note">periodo: ' + hrs(x.hrsExtr) + "</span>" : "")
-        + (x.hrsSupl ? ' <span class="note">50%: ' + hrs(x.hrsSupl) + "</span>" : "")
+        + '<td class="num">' + esc(typeof _rolDiasLinea === "function" ? _rolDiasLinea(x) : ((Number(x.diasTrabajados || 0) + Number(x.diasFest || 0) + Number(x.diasDesc || 0) + Number(x.diasAsumidos || 0)) + " días"))
         + (x.faltas ? ' <span class="err">' + esc(x.faltas) + " f.</span>" : "") + "</td>"
         + '<td class="num">$' + m2(x.sueldo + x.bono) + "</td>"
         + '<td class="num">$' + m2(x.comisiones) + "</td>"
@@ -52,7 +48,7 @@
       + (opts.compacto ? "" : '<div class="tools"><button class="btn small" type="button" data-desc-abrir="1">💵 Anticipos y préstamos</button>'
       + '<button class="btn ghost small" type="button" data-rol-resumen-pdf="' + esc(r.periodo) + '">📄 Resumen PDF del mes</button>'
       + '<button class="btn ghost small" type="button" data-go="#/m/personal/config-rol">⚙️ Configuración de rol</button></div>')
-      + '<div class="prerol-tabla-wrap"><table class="prerol-tabla"><thead><tr><th>Empleada</th><th>Horas</th><th>Sueldo + bono</th><th>Comisiones</th><th>Horas extra</th><th>Décimos / fondo</th><th>Ingresos</th><th>IESS 9,45%</th><th>Anticipos / préstamos</th><th>Multas</th><th>Neto</th>' + (conCosto ? '<th>Patronal</th><th>Costo empresa</th>' : "") + '<th>Rol</th><th></th></tr></thead>'
+      + '<div class="prerol-tabla-wrap"><table class="prerol-tabla"><thead><tr><th>Empleada</th><th>Días</th><th>Sueldo + bono</th><th>Comisiones</th><th>Horas extra</th><th>Décimos / fondo</th><th>Ingresos</th><th>IESS 9,45%</th><th>Anticipos / préstamos</th><th>Multas</th><th>Neto</th>' + (conCosto ? '<th>Patronal</th><th>Costo empresa</th>' : "") + '<th>Rol</th><th></th></tr></thead>'
       + "<tbody>" + filas + '</tbody><tfoot><tr><td><b>Total</b></td><td></td><td></td><td class="num">$' + m2(t.comisiones) + '</td><td></td><td></td><td class="num">$' + m2(t.totalIngresos) + '</td><td class="num">$' + m2(t.iess) + '</td><td></td><td></td><td class="num"><b>$' + m2(t.neto) + "</b></td>" + (conCosto ? '<td class="num">$' + m2(t.patronal) + '</td><td class="num"><b>$' + m2(t.costoEmpresa) + "</b></td>" : "") + "<td></td><td></td></tr></tfoot></table></div>"
       + (opts.compacto ? "" : '<div id="desc-panel"></div><div id="prerol-detalle"></div>')
       + '<p class="note">' + esc(r.nota || "") + "</p></div>";
@@ -341,16 +337,16 @@
       + '<div class="rolx-titulo">' + (pre ? "PRE-ROL DE PAGOS" : "ROL DE PAGOS") + "</div>"
       + '<div class="rolx-sub">Sunsu Spa · Quito · Período: ' + esc(String(d.etiqueta || pack.etiqueta || pack.periodo || "").toUpperCase()) + "</div>"
       + '<div class="rolx-datos"><span><b>EMPLEADA</b> ' + esc(d.nombre || pack.persona || "") + "</span>" + (d.cedula ? "<span><b>CÉDULA</b> " + esc(d.cedula) + "</span>" : "")
-      + (d.cargo ? "<span><b>CARGO</b> " + esc(d.cargo) + "</span>" : "") + "<span><b>HORAS TRABAJADAS</b> " + esc(r.horas || r.dias) + "</span>" + (r.dias && r.dias !== "—" && r.horas ? "<span><b>DÍAS (REF. LEGAL)</b> " + esc(r.dias) + "</span>" : "") + "</div>"
+      + (d.cargo ? "<span><b>CARGO</b> " + esc(d.cargo) + "</span>" : "") + "<span><b>DÍAS</b> " + esc(r.dias || (typeof _rolDiasLinea === "function" ? _rolDiasLinea(d) : "")) + "</span></div>"
       + '<div class="rolx-bar ing">INGRESOS</div>' + ing + '<div class="rolx-tot v">TOTAL INGRESOS: $' + m2(r.totalIngresos) + "</div>" + egr
       + '<div class="rolx-neto"><span>NETO A RECIBIR:</span><b>$' + m2(r.neto) + "</b></div>" + notas + pie + "</div>";
   }
   function htmlKpis(d) {
     var r = typeof _lineasRol === "function" ? _lineasRol(d) : { totalIngresos: d.totalIngresos, totalEgresos: d.totalEgresos, neto: d.totalRecibir };
-    var h = Number(d.hrsNomina || 0) || (Number(d.hrsOrdinarias || 0) + Number(d.hrsSupl || 0) + Number(d.hrsExtr || 0) + Number(d.hrsDesc || 0));
-    var asumH = Number(d.diasAsumidos || 0) * ((Number(d.jornadaMins) || 480) / 60);
+    var diasTxt = (r.dias && r.dias !== "—") ? r.dias : (typeof _rolDiasLinea === "function" ? _rolDiasLinea(d) : "");
+    var tot = Number(d.diasTrabajados || 0) + Number(d.diasFest || 0) + Number(d.diasDesc || 0) + Number(d.diasAsumidos || 0);
     var k = function (a, b, cls) { return '<div class="rolx-k' + (cls ? " " + cls : "") + '"><span>' + a + "</span><b>" + b + "</b></div>"; };
-    return '<div class="rolx-kpis">' + k("Horas", hrs(h) + (asumH ? ' <small>(incl. ' + hrs(asumH) + " h asum.)</small>" : "") + (d.faltas ? ' <small class="err">' + esc(d.faltas) + " falta(s)</small>" : ""))
+    return '<div class="rolx-kpis">' + k("Días", esc(tot) + (d.faltas ? ' <small class="err">' + esc(d.faltas) + " falta(s)</small>" : "") + (diasTxt ? ' <small>' + esc(diasTxt) + "</small>" : ""))
       + k("Ingresos", "$" + m2(r.totalIngresos)) + k("IESS", "$" + m2(d.iess || 0)) + k("Descuentos", "$" + m2(Math.max(0, Number(r.totalEgresos) - Number(d.iess || 0))))
       + k("Neto", "$" + m2(r.neto), "neto") + "</div>";
   }
@@ -551,7 +547,7 @@
     return new Promise(function (ok, no) {
       if (window.XLSX) return ok(window.XLSX);
       var sc = document.createElement("script");
-      sc.src = "vendor-xlsx.js?v=20261125tk225";
+      sc.src = "vendor-xlsx.js?v=20261125tk226";
       sc.onload = function () { window.XLSX ? ok(window.XLSX) : no(new Error("No se pudo cargar el lector de Excel")); };
       sc.onerror = function () { no(new Error("No se pudo cargar el lector de Excel")); };
       document.head.appendChild(sc);
