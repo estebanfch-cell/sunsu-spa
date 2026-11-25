@@ -260,7 +260,7 @@ extend("rol_prerol_resumen", "any", async (p, ctx, ses) => {
     const comisiones = round2(n(d.comFacialesSolo) + n(d.comExtras) + n(d.comRecepcion) + n(d.comPaquetes) + n(d.comProductos));
     filas.push({
       nombre: e.nombre, cargo: e.cargo, afiliada: d.afiliada !== false,
-      diasTrabajados: n(d.diasTrabajados), diasAsumidos: n(d.diasAsumidos), faltas: n(d.faltas),
+      diasTrabajados: n(d.diasTrabajados), diasAsumidos: n(d.diasAsumidos), diasFest: n(d.diasFest), diasDesc: n(d.diasDesc), faltas: n(d.faltas),
       hrsNomina: n(d.hrsNomina), hrsNormales: n(d.hrsOrdinarias), hrsSupl: n(d.hrsSupl), hrsExtr: n(d.hrsExtr), hrsDesc: n(d.hrsDesc),
       sueldo: n(d.sueldo), bono: n(d.bono), comisiones,
       comFaciales: n(d.comFacialesSolo), comExtras: n(d.comExtras), comRecepcion: n(d.comRecepcion), comPaquetes: n(d.comPaquetes), comProductos: n(d.comProductos),
