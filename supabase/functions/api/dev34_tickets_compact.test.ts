@@ -10,31 +10,38 @@ const sw = readFileSync(new URL("sw.js", root), "utf8");
 const card = screens.slice(screens.indexOf("function _histCardHTML"), screens.indexOf("function _tkFotoTipo"));
 
 describe("DEV-34 lista de Tickets compacta (opción 1)", () => {
-  it("la versión de caché coincide y subió a DEV34", () => {
+  it("la versión de caché coincide y subió a DEV34B", () => {
     const enSw = (sw.match(/const CACHE = "([^"]+)"/) || [])[1];
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     assert.equal(enSw, enHtml);
-    assert.equal(enSw, "sunsu-2026-11-25-DEV34");
-    assert.match(html, /beta-screens\.js\?v=20261125dev34/);
+    assert.equal(enSw, "sunsu-2026-11-25-DEV34B");
+    assert.match(html, /beta-screens\.js\?v=20261125dev34b/);
     assert.match(html, /mc-tickets\.js\?v=20261125dev34/);
   });
 
-  it("línea 1: número · factura + estado + cosmetóloga a la derecha + menú ⋯", () => {
+  it("línea 1: solo el número + estado + cosmetóloga a la derecha + menú ⋯ (la factura ya no va aquí)", () => {
     assert.match(card, /class="mob-l1"/);
-    assert.match(card, /_histFacTag\(t,facn,anul\)/);
+    assert.match(card, /class="mob-num">'\+_histEsc\(l1\)\+'<\/span>/);
+    assert.doesNotMatch(card, /mob-num">'\+_histEsc\(l1\)\+_histFacTag/);
     assert.match(card, /class="mob-l1r"/);
     assert.match(card, /class="mob-who"/);
     assert.match(card, /_histMenuHTML\(t,i\)/);
     assert.match(card, /style="color:'\+_histEsc\(colWho\)/);
   });
 
-  it("línea 2: clienta a la izquierda, fecha · monto (total de líneas) a la derecha", () => {
+  it("línea 2: clienta a la izquierda; factura completa (con ceros) + fecha · monto a la derecha, sin recortar", () => {
     assert.match(card, /class="mob-l2"/);
     assert.match(card, /class="mob-cli"/);
+    assert.match(card, /class="mob-l2r"/);
+    assert.match(card, /_histFacTag\(t,facn,anul,true\)/);
     assert.match(card, /class="mob-l3t"/);
     assert.match(card, /_histFechaFmt\(t\.fecha\)/);
     assert.match(card, /_histMontos\(t\)\.tot\.toFixed\(2\)/);
+    assert.match(card, /_histFacNum\(t\)/);
     assert.doesNotMatch(card, /mob-saldo/);
+    assert.match(html, /#tk-cards \.mob-l2r \{ display: flex;/);
+    assert.match(html, /#tk-cards \.mob-l2 \.mob-fac, #tk-cards \.mob-fac-full \{[^}]*white-space: nowrap; overflow: visible; text-overflow: clip;/);
+    assert.match(html, /#tk-cards \.mob-l2 \.mob-l3t \{[^}]*overflow: visible; text-overflow: clip;/);
   });
 
   it("línea 3: miniaturas + resumen, cámara y WhatsApp chicos a la derecha; sin botón grande de factura", () => {
@@ -68,8 +75,12 @@ describe("DEV-34 lista de Tickets compacta (opción 1)", () => {
     assert.doesNotMatch(lab, /"ligar"|'ligar'|Ligar factura/);
   });
 
-  it("Falta factura sigue en rojo en la cabecera; el tip duplicado no ocupa una cuarta línea", () => {
-    assert.match(screens, /mob-fac mob-fac-falta"> · Falta factura/);
+  it("Falta factura y Canje · sin factura se leen completos en rojo/gris, sin tip extra", () => {
+    const fac = screens.slice(screens.indexOf("function _histFacTag"), screens.indexOf("function _histColorQuien"));
+    assert.match(fac, /mob-fac-falta/);
+    assert.match(fac, /Falta factura/);
+    assert.match(fac, /Canje · sin factura/);
+    assert.match(fac, /mob-fac-full/);
     assert.match(html, /\.mob-fac-falta \{ color: #B91C1C; font-weight: 800; \}/);
     assert.match(card, /var tipExtra=tip&&tip!=='Falta factura'/);
     assert.match(card, /tipExtra\?'<div class="mob-tip"/);
