@@ -68,6 +68,8 @@ export interface SnapLeido {
   utilidad: number;
   faltaCosto: boolean;
   esPaquete: boolean;
+  /** DEV-36b: línea marcada «excluir comisión»; no entra al cálculo. */
+  excluir?: boolean;
 }
 
 export async function snapsPorClave(db: { all: (t: string) => Promise<Row[]> }): Promise<Map<string, SnapLeido[]>> {
@@ -85,13 +87,15 @@ export async function snapsPorClave(db: { all: (t: string) => Promise<Row[]> }):
       const tipo = s(l.tipo);
       if (tipo !== "producto" && tipo !== "paquete") continue;
       const k = s(l.ticket_clave);
+      // Aunque la línea esté excluida, el ticket ya tiene snapshot en líneas: no sumar también beta_ticket_snaps.
+      conLineas.add(k);
+      if (l.excluir_comision === true) continue;
       add(k, {
         sku: s(l.sku), qty: n(l.cantidad),
         ventaNeta: n(l.venta_neta), compraComision: n(l.compra_comision),
         costoReal: n(l.costo_real), comision: n(l.comision), utilidad: n(l.utilidad),
         faltaCosto: l.falta_costo === true, esPaquete: tipo === "paquete",
       });
-      conLineas.add(k);
     }
   } catch { /* sin líneas beta */ }
   try {
@@ -201,8 +205,9 @@ export function aplicarSnapsATicket<T extends TicketIn>(t: T, snaps: SnapLeido[]
   const packs = snaps.filter((x) => x.esPaquete);
   const prods = snaps.filter((x) => !x.esPaquete);
   const out = { ...t };
-  if (prods.length) {
-    out.productos = prods.map((p) => ({
+  const prodsOk = prods.filter((p) => p.excluir !== true);
+  if (prodsOk.length) {
+    out.productos = prodsOk.map((p) => ({
       sku: p.sku, qty: p.qty, ventaNeta: p.ventaNeta, compraComision: p.compraComision, comision: p.comision,
     }));
   }

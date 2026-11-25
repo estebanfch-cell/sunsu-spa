@@ -139,6 +139,7 @@ export function overlayComision<T extends { productos: { sku: string; qty: numbe
   const out = { ...t };
   if (cab.neto_pack != null && cab.neto_pack !== "") out.netoPack = n(cab.neto_pack);
   if (cab.neto_pack6 != null && cab.neto_pack6 !== "") out.netoPack6 = n(cab.neto_pack6);
+  if (cab.total != null && cab.total !== "") out.total = n(cab.total);
   if (cab.excluir_cosmetologa === true) { out.exclFacial = true; out.exclPaquete = true; out.exclProducto = true; out.exclExtras = true; return out; }
   const L = lineas || [];
   const hayProd = L.some((l) => s(l.tipo) === "producto");
