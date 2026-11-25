@@ -24,7 +24,9 @@ function puedeAprobar(rol: string): boolean {
 }
 
 async function empleadaDe(ctx: Ctx, nombre: string): Promise<Row | undefined> {
-  return (await ctx.db.all("rrhh_empleadas")).find((r) => s(r.nombre_app) && mismo(s(r.nombre_app), nombre));
+  const { filaEmpleadaDe } = await import("./rol_nombres.ts");
+  const hit = filaEmpleadaDe(await ctx.db.all("rrhh_empleadas"), nombre);
+  return hit || undefined;
 }
 
 export async function saldoDe(ctx: Ctx, nombre: string) {

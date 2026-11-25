@@ -1,6 +1,7 @@
 // DEV-31j (Emilia t926u): nombre legal (nombres y apellidos) para el rol / PDF.
 import type { Ctx } from "./lib.ts";
-import { s, type Row } from "./domain.ts";
+import { normNombre, s, type Row } from "./domain.ts";
+import { mismaPersonaRol } from "./roles_api.ts";
 
 export function cedulaClave(v: unknown): string {
   return s(v).replace(/\.0+$/, "").replace(/\D/g, "");
@@ -57,3 +58,34 @@ export function snapConNombreLegal(snap: Row, legal: string): Row {
   const n = s(legal) || s(snap.nombreCompleto) || s(snap.nombre);
   return n ? { ...snap, nombreCompleto: n } : snap;
 }
+
+/** Resuelve la fila RRHH: nombre corto, nombre legal, jibble o cédula. Prefiere coincidencia exacta del nombre de la app. */
+export function filaEmpleadaDe(rows: Row[], nombre: string, cedula?: unknown): Row | null {
+  const key = normNombre(nombre);
+  const first = key.split(" ")[0] || key;
+  const ced = cedulaClave(cedula);
+  let best: Row | null = null, bestS = 0;
+  for (const r of rows) {
+    if (!(s(r.nombre_app) || s(r.apellidos_y_nombres) || s(r.nombre_jibble))) continue;
+    const app = normNombre(s(r.nombre_app));
+    const legal = normNombre(s(r.apellidos_y_nombres));
+    const jib = normNombre(s(r.nombre_jibble));
+    let sc = 0;
+    if (ced && cedulaClave(r.cedula) === ced) sc = 5;
+    else if (app && app === key) sc = 4;
+    else if (legal && legal === key) sc = 4;
+    else if (jib && jib === key) sc = 3;
+    else if (app && (app.startsWith(first + " ") || (first.length >= 3 && app.split(" ")[0] === first))) sc = 3;
+    else if (legal && mismaPersonaRol(s(r.apellidos_y_nombres), nombre)) sc = 2;
+    else if (jib && mismaPersonaRol(s(r.nombre_jibble), nombre)) sc = 2;
+    if (sc > bestS) { best = r; bestS = sc; }
+  }
+  return best;
+}
+
+/** El nombre corto de la app (Andrea, Alejandra…) es la clave de cruce; el legal no. */
+export function personaCortaDe(emp: Row | null | undefined, fallback = ""): string {
+  if (!emp) return s(fallback);
+  return s(emp.nombre_app) || s(fallback) || s(emp.apellidos_y_nombres);
+}
+
