@@ -1219,7 +1219,10 @@
   #tk-cards .mob-card { padding: 5px 10px; }
   #tk-cards .mob-num { font-size: 0.8rem; }
   #tk-cards .mob-l2 { margin-top: 1px; font-size: 0.82rem; align-items: center; }
-  #tk-cards .mob-l2 .mob-l3t { flex: none; color: var(--gray); font-size: 12px; }
+  #tk-cards .mob-l2r { display: flex; align-items: baseline; gap: 6px; flex: none; min-width: 0; }
+  #tk-cards .mob-l2 .mob-fac, #tk-cards .mob-fac-full { flex: none; white-space: nowrap; overflow: visible; text-overflow: clip; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; letter-spacing: 0; color: var(--gray); }
+  #tk-cards .mob-l2 .mob-fac-falta, #tk-cards .mob-l2 .mob-fac-no { font-family: inherit; }
+  #tk-cards .mob-l2 .mob-l3t { flex: none; color: var(--gray); font-size: 12px; white-space: nowrap; overflow: visible; text-overflow: clip; }
   #tk-cards .mob-l3 { margin-top: 2px; }
   #tk-cards .mob-thumbs { margin-top: 0; flex: 1; min-width: 0; }
   #tk-cards .mob-th, #tk-cards .mob-thmore { width: 22px; height: 22px; min-width: 22px; max-width: 22px; min-height: 22px; max-height: 22px; flex: 0 0 22px; }
@@ -8995,7 +8998,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-25-DEV31J"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-25-DEV34B"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -9176,7 +9179,7 @@ window.SunsuUpdate.init();
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk195"></script>
-<script src="beta-screens.js?v=20261125tk229"></script>
+<script src="beta-screens.js?v=20261125dev34b"></script>
 <script src="mc-rol.js?v=20261125tk229"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>

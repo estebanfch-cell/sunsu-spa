@@ -143,7 +143,7 @@ describe("TK208 · pantallas", () => {
   it("lista: badge Falta factura, rojo por faltaFactura, precedencia violeta > rojo > amarillo", () => {
     const js = file("beta-screens.js");
     assert.match(js, /function _tkFaltaFactura/);
-    assert.match(js, /mob-fac-falta"> · Falta factura/);
+    assert.match(js, /mob-fac-falta/); assert.match(js, /Falta factura/);
     assert.match(js, /faltaFac\?'Falta factura'/);
     assert.match(js, /_tkSolPend\(t\)\?' tk-solpend':fl\?' tk-flagged':fa\?' tk-falta'/);
     assert.match(js, /faltafactura:'#B91C1C'/);
@@ -163,6 +163,6 @@ describe("TK208 · pantallas", () => {
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     const enSw = (sw.match(/const CACHE = "([^"]+)"/) || [])[1];
     assert.equal(enHtml, enSw);
-    assert.equal(enSw, "sunsu-2026-11-25-DEV31J");
+    assert.equal(enSw, "sunsu-2026-11-25-DEV34B");
   });
 });
