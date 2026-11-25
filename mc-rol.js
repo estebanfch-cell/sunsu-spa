@@ -14,7 +14,8 @@
     if (e !== "aprobado") return pill;
     return pill + (r.firmado ? ' <span class="rol-pill firmado">Firmado</span>' : ' <span class="rol-pill porfirmar">Por firmar</span>');
   }
-  async function htmlPreRolResumen() {
+  async function htmlPreRolResumen(opts) {
+    opts = opts || {};
     var r = await api("rol_prerol_resumen", {});
     if (!r || r.error) return "";
     // Costo empresa y patronal: solo administración (la API los quita para quien no puede verlos).
@@ -37,19 +38,19 @@
         + '<td class="num"><b>$' + m2(x.neto) + "</b></td>"
         + (conCosto ? '<td class="num">$' + m2(x.patronal) + '</td><td class="num"><b>$' + m2(x.costoEmpresa) + "</b></td>" : "")
         + "<td>" + estadoRol(x.rol) + "</td>"
-        + '<td class="acc"><button class="btn ghost small" type="button" data-prerol="' + esc(x.nombre) + '">Detalle</button>'
+        + (opts.compacto ? "" : ('<td class="acc"><button class="btn ghost small" type="button" data-prerol="' + esc(x.nombre) + '">Detalle</button>'
         + ((!x.rol || x.rol.estado !== "aprobado") ? '<button class="btn ghost small" type="button" data-prerol-crear="' + esc(x.nombre) + '" data-periodo="' + esc(r.periodo) + '">' + (x.rol ? "Recalcular borrador" : "Crear borrador") + "</button>" : "")
         + (x.rol ? '<button class="btn ghost small" type="button" data-rol-ab="' + esc(x.rol.id) + '">Ver rol</button>' : "")
-        + "</td></tr>";
+        + "</td>")) + "</tr>";
     }).join("");
     var t = r.totales || {};
     return '<div class="card prerol-box"><div class="card-title">Pre-rol de ' + esc(r.etiqueta || "") + " al " + esc(fecha(r.hoy)) + "</div>"
-      + '<div class="tools"><button class="btn small" type="button" data-desc-abrir="1">💵 Anticipos y préstamos</button>'
+      + (opts.compacto ? "" : '<div class="tools"><button class="btn small" type="button" data-desc-abrir="1">💵 Anticipos y préstamos</button>'
       + '<button class="btn ghost small" type="button" data-rol-resumen-pdf="' + esc(r.periodo) + '">📄 Resumen PDF del mes</button>'
-      + '<button class="btn ghost small" type="button" data-go="#/m/personal/config-rol">⚙️ Configuración de rol</button></div>'
+      + '<button class="btn ghost small" type="button" data-go="#/m/personal/config-rol">⚙️ Configuración de rol</button></div>')
       + '<div class="prerol-tabla-wrap"><table class="prerol-tabla"><thead><tr><th>Empleada</th><th>Días</th><th>Horas</th><th>Sueldo + bono</th><th>Comisiones</th><th>Horas extra</th><th>Décimos / fondo</th><th>Ingresos</th><th>IESS 9,45%</th><th>Anticipos / préstamos</th><th>Multas</th><th>Neto</th>' + (conCosto ? '<th>Patronal</th><th>Costo empresa</th>' : "") + '<th>Rol</th><th></th></tr></thead>'
       + "<tbody>" + filas + '</tbody><tfoot><tr><td><b>Total</b></td><td></td><td></td><td></td><td class="num">$' + m2(t.comisiones) + '</td><td></td><td></td><td class="num">$' + m2(t.totalIngresos) + '</td><td class="num">$' + m2(t.iess) + '</td><td></td><td></td><td class="num"><b>$' + m2(t.neto) + "</b></td>" + (conCosto ? '<td class="num">$' + m2(t.patronal) + '</td><td class="num"><b>$' + m2(t.costoEmpresa) + "</b></td>" : "") + "<td></td><td></td></tr></tfoot></table></div>"
-      + '<div id="desc-panel"></div><div id="prerol-detalle"></div>'
+      + (opts.compacto ? "" : '<div id="desc-panel"></div><div id="prerol-detalle"></div>')
       + '<p class="note">' + esc(r.nota || "") + "</p></div>";
   }
 
@@ -267,12 +268,13 @@
     var log = (d.log || []).map(function (l) {
       return '<div class="note">' + esc(typeof horaEc === "function" ? horaEc(l.fecha) : l.fecha) + " · " + esc(l.actor) + " · <b>" + esc(l.persona) + "</b> · " + esc(l.accion) + (l.motivo ? " · " + esc(l.motivo) : "") + "</div>";
     }).join("") || '<p class="note">Todavía no hay cambios.</p>';
-    return '<h1>Configuración de rol</h1><p class="note">Datos base de cada empleada para el rol de pagos. Solo administración. Cada cambio queda en el historial (quién, antes y después). Emi y EFCH son administradoras: no aparecen aquí.</p>'
+    return '<h1>Configuración de rol</h1><div class="tools"><button class="btn ghost small" type="button" data-desc-abrir="1">💵 Anticipos y préstamos</button></div><div id="desc-panel"></div>' + (await htmlIessBox()) + '<p class="note">Datos base de cada empleada para el rol de pagos. Solo administración. Cada cambio queda en el historial (quién, antes y después). Emi y EFCH son administradoras: no aparecen aquí.</p>'
       + (activas || '<p class="note">Todavía no hay empleadas configuradas.</p>') + nuevas
       + (inact ? '<details class="card"><summary>Inactivas</summary>' + inact + "</details>" : "")
       + '<details class="card"><summary>Historial de cambios</summary>' + log + "</details>";
   }
   function wireConfig(main) {
+    wireIess(main);
     if (main._cfgWired) return;
     var hay = main.querySelector("[data-cfgrol]");
     if (!hay) return;
@@ -302,5 +304,332 @@
     });
   }
 
-  window.SunsuRol = { htmlConfigRol: htmlConfigRol, wireConfig: wireConfig, htmlPreRolResumen: htmlPreRolResumen, abrirDesc: abrirDesc, wireDesc: wireDesc, resumenPdf: resumenPdf, htmlFirma: htmlFirma, wireFirma: wireFirma };
+
+  // ── DEV-31c (Emilia t910u/t911u) · Roles (admin) rediseñado ──────────────────────────────────────────────
+  // Una empleada a la vez: su PRE-ROL del mes siempre creado y recalculado solo, con el mismo diseño del PDF.
+  function ahoraEc() {
+    try { return new Date().toLocaleTimeString("es-EC", { timeZone: "America/Guayaquil", hour: "2-digit", minute: "2-digit", hour12: false }); } catch (e) { return ""; }
+  }
+  function fechaHoraEc(iso) { return typeof horaEc === "function" ? horaEc(iso) : String(iso || ""); }
+  function pillsRol(it) {
+    var est = it.estado || "borrador";
+    var s = typeof rolPill === "function" ? rolPill(est) : esc(est);
+    if (est === "aprobado" && it.fuente !== "historial") s += it.firmado ? ' <span class="rol-pill firmado">Firmado</span>' : ' <span class="rol-pill porfirmar">Por firmar</span>';
+    return s;
+  }
+  // El rol tal como sale en el PDF: título, datos, barra INGRESOS (verde), EGRESOS (roja), NETO y pie.
+  function htmlRolDoc(pack, o) {
+    o = o || {};
+    var d = (pack && (pack.data || pack)) || {};
+    var r = typeof _lineasRol === "function" ? _lineasRol(d) : { ingresos: [], egresos: [], notas: [], totalIngresos: d.totalIngresos, totalEgresos: d.totalEgresos, neto: d.totalRecibir, dias: "" };
+    var fila = function (par, i, cls) { return '<div class="rolx-fila' + (i % 2 ? " z" : "") + '"><span>' + esc(par[0]) + '</span><b class="' + cls + '">$' + m2(par[1]) + "</b></div>"; };
+    var ing = r.ingresos.map(function (p, i) { return fila(p, i, "v"); }).join("");
+    var egr = r.egresos.length ? '<div class="rolx-bar egr">EGRESOS</div>' + r.egresos.map(function (p, i) { return fila(p, i, "r"); }).join("")
+      + '<div class="rolx-tot r">TOTAL EGRESOS: $' + m2(r.totalEgresos) + "</div>" : "";
+    var notas = (r.notas || []).map(function (x) { return '<p class="rolx-nota">' + esc(x) + "</p>"; }).join("");
+    var pre = !!o.pre;
+    var pie;
+    if (pre) pie = '<div class="rolx-pie pre"><b>PRE-ROL / Borrador para revisión</b><span>Pendiente de revisión de Contabilidad y de aprobación de administración. Sin firma de la empleada.</span></div>';
+    else if (o.firma && o.firma.png) pie = '<div class="rolx-pie ok"><b>ROL FIRMADO POR LA EMPLEADA</b><img alt="Firma" src="' + esc(o.firma.png) + '"><span>Recibí conforme · ' + esc(d.nombre || "") + " · firmado el " + esc(o.firma.fechaLocal || o.firma.firmadoAt || "") + "</span></div>";
+    else pie = '<div class="rolx-pie"><span>Recibí conforme · ' + esc(d.nombre || "") + "</span></div>";
+    return '<div class="rolx-doc' + (pre ? " is-pre" : "") + '">'
+      + (pre ? '<div class="rolx-banda">PRE-ROL / Borrador para revisión</div>' : "")
+      + '<div class="rolx-titulo">' + (pre ? "PRE-ROL DE PAGOS" : "ROL DE PAGOS") + "</div>"
+      + '<div class="rolx-sub">Sunsu Spa · Quito · Período: ' + esc(String(d.etiqueta || pack.etiqueta || pack.periodo || "").toUpperCase()) + "</div>"
+      + '<div class="rolx-datos"><span><b>EMPLEADA</b> ' + esc(d.nombre || pack.persona || "") + "</span>" + (d.cedula ? "<span><b>CÉDULA</b> " + esc(d.cedula) + "</span>" : "")
+      + (d.cargo ? "<span><b>CARGO</b> " + esc(d.cargo) + "</span>" : "") + "<span><b>DÍAS TRABAJADOS</b> " + esc(r.dias) + "</span></div>"
+      + '<div class="rolx-bar ing">INGRESOS</div>' + ing + '<div class="rolx-tot v">TOTAL INGRESOS: $' + m2(r.totalIngresos) + "</div>" + egr
+      + '<div class="rolx-neto"><span>NETO A RECIBIR:</span><b>$' + m2(r.neto) + "</b></div>" + notas + pie + "</div>";
+  }
+  function htmlKpis(d) {
+    var r = typeof _lineasRol === "function" ? _lineasRol(d) : { totalIngresos: d.totalIngresos, totalEgresos: d.totalEgresos, neto: d.totalRecibir };
+    var h = Number(d.hrsOrdinarias || 0) + Number(d.hrsSupl || 0) + Number(d.hrsExtr || 0) + Number(d.hrsDesc || 0);
+    var dias = Number(d.diasTrabajados || 0) + Number(d.diasAsumidos || 0);
+    var k = function (a, b, cls) { return '<div class="rolx-k' + (cls ? " " + cls : "") + '"><span>' + a + "</span><b>" + b + "</b></div>"; };
+    return '<div class="rolx-kpis">' + k("Días", esc(dias) + (d.diasAsumidos ? ' <small>(' + esc(d.diasAsumidos) + " asum.)</small>" : "") + (d.faltas ? ' <small class="err">' + esc(d.faltas) + " falta(s)</small>" : ""))
+      + k("Horas", hrs(h)) + k("Ingresos", "$" + m2(r.totalIngresos)) + k("IESS", "$" + m2(d.iess || 0)) + k("Descuentos", "$" + m2(Math.max(0, Number(r.totalEgresos) - Number(d.iess || 0))))
+      + k("Neto", "$" + m2(r.neto), "neto") + "</div>";
+  }
+  var CONTAB = { "": "Sin enviar", enviado: "Enviado a contabilidad", ok: "Ok de contabilidad" };
+  function htmlPreRolCuerpo(pack, persona) {
+    var d = pack.data || {};
+    var aprobado = pack.estado === "aprobado";
+    var pa = d.aportesPatronal || {};
+    var costo = '<div class="rolx-costo"><span>Aporte patronal <b>$' + m2(pa.total) + '</b></span><span>Costo total empresa <b>$' + m2(pa.costoEmpresa != null ? pa.costoEmpresa : Number(d.totalIngresos || 0) + Number(pa.total || 0)) + '</b></span><small>solo administración</small></div>';
+    var cab = '<div class="rolx-estado"><span>' + (aprobado ? "Rol de " : "Pre-rol de ") + esc(pack.etiqueta || d.etiqueta || "") + "</span> " + pillsRol(pack)
+      + (aprobado ? "" : ' <small class="note">se actualiza solo (marcas, comisiones, anticipos…) · actualizado hoy ' + esc(ahoraEc()) + "</small>") + "</div>";
+    var acc;
+    if (aprobado) {
+      acc = '<div class="rolx-acc"><div class="rolx-ap">✔ Aprobado' + (pack.aprobadoPor ? " por " + esc(pack.aprobadoPor) : "") + (pack.aprobadoAt ? " el " + esc(fechaHoraEc(pack.aprobadoAt)) : "") + " · "
+        + (pack.firmado ? "la empleada ya lo firmó" : "esperando la firma de la empleada") + '</div><button class="btn ghost small" type="button" data-rolx-pdf-final="' + esc(pack.id) + '">Descargar PDF</button></div>';
+    } else {
+      var c = (pack.contab && pack.contab.estado) || "";
+      var opts = Object.keys(CONTAB).map(function (k) { return '<option value="' + k + '"' + (k === c ? " selected" : "") + ">" + CONTAB[k] + "</option>"; }).join("");
+      var quien = c && pack.contab && pack.contab.at ? '<small class="note"> · ' + esc(pack.contab.por || "") + " " + esc(fechaHoraEc(pack.contab.at)) + "</small>" : "";
+      acc = '<div class="rolx-acc"><div class="rolx-conta"><button class="btn small" type="button" data-rolx-pdf="1">📄 Descargar PDF para Contabilidad</button>'
+        + '<button class="btn ghost small" type="button" data-rolx-pdf-todas="1">PDF de todas</button>'
+        + '<label class="rolx-cs">Contabilidad <select data-rolx-contab="' + esc(pack.id) + '">' + opts + "</select></label>" + quien + "</div>"
+        + '<button class="btn rolx-aprobar" type="button" data-rolx-aprobar="' + esc(pack.id) + '">Aprobar rol y enviar a la empleada</button>'
+        + '<p class="note rolx-aviso">La empleada no ve nada hasta que apruebes: entonces le aparece en su Rol para firmar.</p></div>';
+    }
+    return cab + htmlKpis(d) + htmlRolDoc(pack, { pre: !aprobado }) + costo + acc
+      + (aprobado ? "" : htmlMarcasBoxSafe(pack, persona));
+  }
+  function htmlMarcasBoxSafe(pack, persona) {
+    return typeof htmlMarcasAdminBox === "function" ? htmlMarcasAdminBox({ persona: persona, hoy: pack.hoy }) : "";
+  }
+  var RX = { personas: [], persona: "", pack: null };
+  async function htmlAdmin() {
+    var op = await api("rol_opciones");
+    if (!op || op.error) return '<p class="err">' + esc((op && op.error) || "No se pudo cargar") + "</p>";
+    RX.personas = (op.afiliadas || []).map(function (x) { return x.nombre; });
+    if (!RX.personas.length) return "<h1>Roles</h1><p class=\"note\">No hay empleadas activas. Actívalas en Configuración de rol.</p>";
+    var cur = typeof state !== "undefined" && state.persona && RX.personas.indexOf(state.persona) >= 0 ? state.persona : (RX.persona && RX.personas.indexOf(RX.persona) >= 0 ? RX.persona : RX.personas[0]);
+    RX.persona = cur;
+    var opts = RX.personas.map(function (n) { return '<option value="' + esc(n) + '"' + (n === cur ? " selected" : "") + ">" + esc(n) + "</option>"; }).join("");
+    return '<div class="rolx" id="rolx"><div class="rolx-top"><select id="rolx-persona" class="rolx-sel" aria-label="Empleada">' + opts + "</select>"
+      + '<button class="btn ghost small" type="button" data-rolx-hist="1" aria-expanded="false">Historial</button>'
+      + '<details class="rolx-mas"><summary class="btn ghost small">⋯ Más</summary><div class="rolx-menu">'
+      + '<button type="button" data-desc-abrir="1">💵 Anticipos y préstamos</button>'
+      + '<button type="button" data-go="#/m/personal/config-rol">⚙️ Configuración de rol</button>'
+      + '<button type="button" data-rolx-equipo="1">👥 Resumen del equipo</button></div></details></div>'
+      + '<div id="rolx-body"><p class="note">Calculando el pre-rol…</p></div>'
+      + '<div id="rolx-hist" hidden></div><div id="rolx-ver"></div><div id="rolx-equipo"></div><div id="desc-panel"></div></div>';
+  }
+  async function pdfDeRol(id) {
+    var pack = await api("rol_get", { id: id });
+    if (!pack || pack.error) { toast((pack && pack.error) || "No se pudo abrir el rol"); return; }
+    descargarPdf(pack);
+  }
+  async function descargarPdf(pack) {
+    var d = pack.data || pack, periodo = pack.periodo || d.periodo || "";
+    if (typeof _pdfRol !== "function") { toast("No se pudo cargar el generador de PDF"); return; }
+    if (pack.firma && pack.firma.png) { _pdfRol(d, periodo, { png: pack.firma.png, fecha: pack.firma.fechaLocal || pack.firma.firmadoAt, fechaLocal: pack.firma.fechaLocal }); return; }
+    var apro = null;
+    try {
+      var ap = await api("getAprobacionesRol", { sheet: periodo });
+      var ced = String(d.cedula || "").replace(/\.0+$/, "").replace(/\D/g, "");
+      apro = (ap && ap.aprobaciones && (ap.aprobaciones[ced] || ap.aprobaciones[ced + "0"])) || null;
+    } catch (e) { apro = null; }
+    _pdfRol(d, periodo, apro);
+  }
+  async function cargarRol(main, fechaMk) {
+    var body = main.querySelector("#rolx-body");
+    if (!body) return;
+    var persona = RX.persona;
+    var pack = await api("rol_pre_auto", { persona: persona });
+    if (persona !== RX.persona) return;
+    if (!pack || pack.error) { body.innerHTML = '<p class="err">' + esc((pack && pack.error) || "No se pudo calcular el pre-rol") + "</p>"; return; }
+    RX.pack = pack;
+    body.innerHTML = htmlPreRolCuerpo(pack, persona);
+    var det = body.querySelector("[data-mk-de]");
+    if (det && typeof wireMarcasAdmin === "function") wireMarcasAdmin(body, function (f) { return cargarRol(main, f); }, fechaMk, !!fechaMk);
+  }
+  async function abrirHistorial(main) {
+    var box = main.querySelector("#rolx-hist");
+    box.innerHTML = '<p class="note">Cargando historial…</p>';
+    var l = await api("roles_lista", { persona: RX.persona });
+    if (!l || l.error) { box.innerHTML = '<p class="err">' + esc((l && l.error) || "No se pudo cargar") + "</p>"; return; }
+    var items = (l.items || []).filter(function (it) { return it.estado === "aprobado"; });
+    box.innerHTML = '<div class="rolx-histl"><div class="rolx-hh"><b>Historial de ' + esc(RX.persona) + "</b></div>"
+      + (items.map(function (it) {
+        var ver = it.id ? 'data-rolx-ver-id="' + esc(it.id) + '"' : 'data-rolx-ver-sheet="' + esc(it.sheet || it.periodo) + '" data-cedula="' + esc(it.cedula || "") + '" data-persona="' + esc(it.persona || "") + '"';
+        return '<div class="rolx-h1"><span class="m">' + esc(it.etiqueta || it.periodo) + "</span><span class=\"p\">" + pillsRol(it) + '</span><b class="n">' + (typeof money === "function" ? money(it.neto != null ? it.neto : it.totalIngresos) : "$" + m2(it.neto)) + '</b><button class="btn ghost small" type="button" ' + ver + ">Ver</button></div>";
+      }).join("") || '<p class="note">Todavía no hay roles aprobados.</p>') + "</div>";
+  }
+  async function verRol(main, b) {
+    var pack;
+    if (b.hasAttribute("data-rolx-ver-id")) pack = await api("rol_get", { id: b.getAttribute("data-rolx-ver-id") });
+    else {
+      var sheet = b.getAttribute("data-rolx-ver-sheet");
+      var res = await api("getRolIndividual", { sheet: sheet, cedula: b.getAttribute("data-cedula") || "", persona: b.getAttribute("data-persona") || "" });
+      if (res && !res.error) pack = { ok: true, data: res.data || res, estado: "aprobado", periodo: res.periodo || sheet, etiqueta: res.etiqueta || (res.data && res.data.etiqueta) || sheet, persona: b.getAttribute("data-persona") || "" };
+      else pack = res;
+    }
+    if (!pack || pack.error) { toast((pack && pack.error) || "No se pudo abrir el rol"); return; }
+    window._rolxVer = pack;
+    var box = main.querySelector("#rolx-ver");
+    box.innerHTML = '<div class="rolx-verbar"><b>' + esc(pack.etiqueta || (pack.data && pack.data.etiqueta) || "") + '</b><span><button class="btn small" type="button" data-rolx-ver-pdf="1">Descargar PDF</button> <button class="btn ghost small" type="button" data-rolx-ver-cerrar="1">Cerrar</button></span></div>'
+      + htmlRolDoc(pack, { firma: pack.firma });
+    box.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+  function wireAdmin(main) {
+    var root = main.querySelector("#rolx");
+    if (!root || root._wired) return;
+    root._wired = true;
+    var sel = root.querySelector("#rolx-persona");
+    sel.onchange = function () {
+      RX.persona = sel.value;
+      if (typeof state !== "undefined") state.persona = sel.value;
+      root.querySelector("#rolx-ver").innerHTML = "";
+      root.querySelector("#rolx-body").innerHTML = '<p class="note">Calculando el pre-rol…</p>';
+      var hist = root.querySelector("#rolx-hist");
+      if (!hist.hidden) abrirHistorial(root);
+      cargarRol(root);
+    };
+    root.addEventListener("click", async function (ev) {
+      if (ev.target.closest(".rolx-menu")) { var m0 = root.querySelector(".rolx-mas"); if (m0) setTimeout(function () { m0.open = false; }, 0); }
+      var t = ev.target.closest("[data-rolx-hist],[data-rolx-equipo],[data-rolx-pdf],[data-rolx-pdf-todas],[data-rolx-pdf-final],[data-rolx-aprobar],[data-rolx-ver-id],[data-rolx-ver-sheet],[data-rolx-ver-pdf],[data-rolx-ver-cerrar]");
+      if (!t) return;
+      var mas = root.querySelector(".rolx-mas"); if (mas) mas.open = false;
+      if (t.hasAttribute("data-rolx-hist")) {
+        var h = root.querySelector("#rolx-hist");
+        h.hidden = !h.hidden;
+        t.setAttribute("aria-expanded", h.hidden ? "false" : "true");
+        if (!h.hidden) await abrirHistorial(root);
+        return;
+      }
+      if (t.hasAttribute("data-rolx-equipo")) {
+        var eq = root.querySelector("#rolx-equipo");
+        eq.innerHTML = '<p class="note">Cargando el resumen del equipo…</p>';
+        eq.innerHTML = (await htmlPreRolResumen({ compacto: true })) || '<p class="err">No se pudo cargar</p>';
+        eq.scrollIntoView({ block: "start", behavior: "smooth" });
+        return;
+      }
+      if (t.hasAttribute("data-rolx-pdf")) {
+        var p = RX.pack;
+        if (!p || typeof _pdfRol !== "function") { toast("No se pudo cargar el generador de PDF"); return; }
+        _pdfRol(p.data, p.periodo, { preRol: true });
+        return;
+      }
+      if (t.hasAttribute("data-rolx-pdf-todas")) {
+        t.disabled = true;
+        var r = await api("rol_pre_todos", {});
+        t.disabled = false;
+        if (!r || r.error) { toast((r && r.error) || "No se pudo armar el PDF"); return; }
+        if (typeof _pdfPreRolVarios !== "function") { toast("No se pudo cargar el generador de PDF"); return; }
+        _pdfPreRolVarios((r.items || []).map(function (x) { return { d: x.data, periodo: x.periodo }; }), RX.pack ? RX.pack.periodo : "");
+        if (RX.pack) cargarRol(root);
+        return;
+      }
+      if (t.hasAttribute("data-rolx-pdf-final")) { await pdfDeRol(t.getAttribute("data-rolx-pdf-final")); return; }
+      if (t.hasAttribute("data-rolx-ver-pdf")) { if (window._rolxVer) await descargarPdf(window._rolxVer); return; }
+      if (t.hasAttribute("data-rolx-ver-cerrar")) { root.querySelector("#rolx-ver").innerHTML = ""; return; }
+      if (t.hasAttribute("data-rolx-ver-id") || t.hasAttribute("data-rolx-ver-sheet")) { await verRol(root, t); return; }
+      if (t.hasAttribute("data-rolx-aprobar")) {
+        if ((typeof state !== "undefined") && (state.prueba || state.vista)) { toast("En «Ver como» o en simulación no se aprueban roles reales."); return; }
+        var id = t.getAttribute("data-rolx-aprobar");
+        var antes = RX.pack, netoAntes = Number(((antes && antes.data) || {}).totalRecibir || 0);
+        t.disabled = true;
+        var fresco = await api("rol_pre_auto", { persona: RX.persona });
+        if (!fresco || fresco.error) { t.disabled = false; toast((fresco && fresco.error) || "No se pudo actualizar el pre-rol"); return; }
+        if (Math.abs(Number((fresco.data || {}).totalRecibir || 0) - netoAntes) > 0.004) {
+          RX.pack = fresco; root.querySelector("#rolx-body").innerHTML = htmlPreRolCuerpo(fresco, RX.persona);
+          toast("El pre-rol cambió (de $" + m2(netoAntes) + " a $" + m2((fresco.data || {}).totalRecibir) + "). Revísalo y vuelve a aprobar.");
+          return;
+        }
+        var conta = (fresco.contab && fresco.contab.estado) || "";
+        var msg = "¿Aprobar el rol de " + RX.persona + " (" + (fresco.etiqueta || "") + ") por un neto de $" + m2((fresco.data || {}).totalRecibir) + " y enviarlo a la empleada para que lo firme?"
+          + (conta !== "ok" ? "\n\nOjo: Contabilidad todavía no está marcada como «Ok»." : "");
+        if (!window.confirm(msg)) { t.disabled = false; return; }
+        var ap = await api("rol_aprobar", { id: fresco.id });
+        t.disabled = false;
+        if (!ap || ap.error) { toast((ap && ap.error) || "No se pudo aprobar"); return; }
+        toast("Rol aprobado: " + RX.persona + " ya lo ve para firmar");
+        await cargarRol(root);
+      }
+    });
+    root.addEventListener("change", async function (ev) {
+      var s = ev.target.closest("[data-rolx-contab]");
+      if (!s) return;
+      var r = await api("rol_contab", { id: s.getAttribute("data-rolx-contab"), estado: s.value });
+      if (!r || r.error) { toast((r && r.error) || "No se pudo guardar"); await cargarRol(root); return; }
+      toast(CONTAB[s.value] || "Guardado");
+      await cargarRol(root);
+    });
+    cargarRol(root);
+  }
+
+
+  // ── DEV-31c · Planilla IESS: importar el XLS mensual y compararlo con el rol ────────────────────────────
+  function cargarXlsx() {
+    return new Promise(function (ok, no) {
+      if (window.XLSX) return ok(window.XLSX);
+      var sc = document.createElement("script");
+      sc.src = "vendor-xlsx.js?v=20261125tk223";
+      sc.onload = function () { window.XLSX ? ok(window.XLSX) : no(new Error("No se pudo cargar el lector de Excel")); };
+      sc.onerror = function () { no(new Error("No se pudo cargar el lector de Excel")); };
+      document.head.appendChild(sc);
+    });
+  }
+  async function filasDeXls(file) {
+    var X = await cargarXlsx();
+    var wb = X.read(await file.arrayBuffer(), { type: "array" });
+    var ws = wb.Sheets[wb.SheetNames[0]];
+    var m = X.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });
+    var hi = m.findIndex(function (r) { return r.some(function (c) { return /^c[eé]dula$/i.test(String(c).trim()); }) && r.some(function (c) { return /^periodo$/i.test(String(c).trim()); }); });
+    if (hi < 0) throw new Error("No encuentro las columnas Periodo y Cédula. ¿Es el «Detalle de la planilla» del IESS?");
+    // El XLS del IESS deja sin título la columna del valor CCC (queda justo después de «% CCC»).
+    var head = m[hi].map(function (h, i) { return String(h).trim() || (/% ?ccc/i.test(String(m[hi][i - 1] || "")) ? "CCC valor" : ""); });
+    return m.slice(hi + 1).map(function (r) { var o = {}; head.forEach(function (h, i) { if (String(h).trim()) o[String(h).trim()] = r[i]; }); return o; });
+  }
+  var EST_IESS = { ok: ["aprobado", "Coincide"], revisar: ["rechazado", "Revisar"], sin_rol: ["borrador", "Sin rol"], admin: ["borrador", "Administradora"], sin_empleada: ["rechazado", "No es empleada"] };
+  function dinero(v) { return v == null ? "—" : "$" + m2(v); }
+  function htmlComparacion(c) {
+    var filas = (c.items || []).concat(c.otros || []).map(function (x) {
+      var e = EST_IESS[x.estado] || ["borrador", x.estado];
+      var nom = x.persona ? esc(x.persona) : esc(x.nombreIess || "");
+      var sub = x.persona ? (x.nombreIess ? '<div class="note">' + esc(x.nombreIess) + "</div>" : "") : '<div class="note">C.I. ' + esc(x.cedulaIess) + "</div>";
+      var dif = x.dif == null ? "—" : (Math.abs(x.dif) < 0.005 ? "$0.00" : '<b class="err">' + (x.dif > 0 ? "+" : "−") + "$" + m2(Math.abs(x.dif)) + "</b>");
+      var afi = x.persona ? ((x.afiliadaApp ? "Sí" : "No") + " / " + (x.enPlanilla ? "Sí" : "No")) : "— / Sí";
+      return "<tr><td><b>" + nom + "</b>" + sub + "</td><td>" + afi + '</td><td class="num">' + dinero(x.aportableIess) + '</td><td class="num">' + dinero(x.aportableApp) + '</td><td class="num">' + dif
+        + '</td><td class="num">' + dinero(x.individualIess) + ' <span class="note">/ ' + dinero(x.individualApp) + '</span></td><td><span class="rol-pill ' + e[0] + '">' + esc(e[1]) + "</span>"
+        + (x.avisos || []).map(function (a) { return '<div class="note">' + esc(a) + "</div>"; }).join("") + "</td></tr>";
+    }).join("");
+    var t = c.totales || {};
+    return '<p class="note"><b>' + esc(c.etiqueta) + "</b> · fuente del rol: " + esc(((c.items || []).find(function (x) { return x.fuenteApp; }) || {}).fuenteApp || "—") + "</p>"
+      + '<div class="prerol-tabla-wrap"><table class="prerol-tabla"><thead><tr><th>Empleada</th><th>Afiliada app / IESS</th><th>Aportable IESS</th><th>Aportable rol</th><th>Diferencia</th><th>IESS individual (IESS / rol)</th><th>Estado</th></tr></thead><tbody>' + filas
+      + '</tbody><tfoot><tr><td><b>Total empleadas</b></td><td></td><td class="num">' + dinero(t.aportableIess) + '</td><td class="num">' + dinero(t.aportableApp) + '</td><td class="num">' + dinero(Math.round(((t.aportableIess || 0) - (t.aportableApp || 0)) * 100) / 100) + '</td><td class="num">' + dinero(t.individualIess) + ' <span class="note">/ ' + dinero(t.individualApp) + "</span></td><td></td></tr></tfoot></table></div>"
+      + '<p class="note">Patronal IESS: planilla ' + dinero(t.patronalIess) + " · rol " + dinero(t.patronalApp) + " · CCC (1 %) en la planilla: " + dinero(t.cccIess) + ". " + esc(c.nota || "") + "</p>";
+  }
+  async function htmlIessBox() {
+    var l = await api("iess_lista", {});
+    var items = (l && l.items) || [];
+    var opts = items.map(function (x) { return '<option value="' + esc(x.periodo) + '">' + esc(x.etiqueta) + " · " + esc(x.filas) + " filas</option>"; }).join("");
+    return '<details class="card iess-box"' + (items.length ? "" : "") + '><summary><b>Planilla IESS</b> · comparar con el rol</summary>'
+      + '<p class="note">Sube cada mes el «Detalle de la planilla» (XLS) que baja del IESS. La app compara afiliación, sueldo aportable y aporte individual con el rol de ese mes y avisa las diferencias. No cambia ningún dato.</p>'
+      + '<div class="tools"><label class="btn small">📥 Importar planilla IESS (XLS)<input type="file" accept=".xls,.xlsx" hidden data-iess-file></label>'
+      + (items.length ? '<select data-iess-per aria-label="Mes">' + opts + '</select><button class="btn ghost small" type="button" data-iess-comparar="1">Comparar</button>' : "") + "</div>"
+      + '<p class="err" data-iess-err></p><div data-iess-res>' + (items.length ? "" : '<p class="note">Todavía no hay planillas importadas.</p>') + "</div></details>";
+  }
+  function wireIess(main) {
+    var box = main.querySelector(".iess-box");
+    if (!box || box._wired) return;
+    box._wired = true;
+    var vivo = function () { return main.querySelector(".iess-box") || box; };
+    var err = function (m) { var e = vivo().querySelector("[data-iess-err]"); if (e) e.textContent = m || ""; };
+    var comparar = async function (per) {
+      var res = vivo().querySelector("[data-iess-res]");
+      res.innerHTML = '<p class="note">Comparando…</p>';
+      var c = await api("iess_comparar", { periodo: per });
+      res.innerHTML = c && !c.error ? htmlComparacion(c) : '<p class="err">' + esc((c && c.error) || "No se pudo comparar") + "</p>";
+    };
+    box.addEventListener("change", async function (ev) {
+      var f = ev.target.closest("[data-iess-file]");
+      if (!f || !f.files || !f.files[0]) return;
+      var file = f.files[0]; f.value = "";
+      err("");
+      try {
+        var filas = await filasDeXls(file);
+        var r = await api("iess_importar", { archivo: file.name, filas: filas });
+        if (!r || r.error) { err((r && r.error) || "No se pudo importar"); return; }
+        toast("Planilla importada: " + r.periodos.join(", ") + " (" + r.filas + " filas)" + (r.reemplazadas ? " · reemplaza la anterior" : ""));
+        var nuevo = await htmlIessBox();
+        var tmp = document.createElement("div"); tmp.innerHTML = nuevo;
+        var n = tmp.firstElementChild; n.open = true;
+        box.replaceWith(n); n._wired = false;
+        wireIess(main);
+        var sel = n.querySelector("[data-iess-per]");
+        if (sel) { sel.value = r.periodos[0]; await comparar(r.periodos[0]); }
+      } catch (e) { err(e && e.message ? e.message : "No se pudo leer el archivo"); }
+    });
+    box.addEventListener("click", async function (ev) {
+      var b = ev.target.closest("[data-iess-comparar]");
+      if (!b) return;
+      var sel = box.querySelector("[data-iess-per]");
+      if (sel) await comparar(sel.value);
+    });
+  }
+
+  window.SunsuRol = { htmlAdmin: htmlAdmin, wireAdmin: wireAdmin, htmlConfigRol: htmlConfigRol, wireConfig: wireConfig, htmlPreRolResumen: htmlPreRolResumen, abrirDesc: abrirDesc, wireDesc: wireDesc, resumenPdf: resumenPdf, htmlFirma: htmlFirma, wireFirma: wireFirma };
 })();
