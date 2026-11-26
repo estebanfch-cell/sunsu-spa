@@ -55,19 +55,117 @@
   }
 
   // ── Anticipos y préstamos ────────────────────────────────────────────────────────────────────────────────
+  function planMontosPrestamoUI(opts) {
+    var monto = Math.round((Number(opts.monto) || 0) * 100) / 100;
+    if (!(monto > 0)) return [];
+    var modo = opts.modo === "monto_cuota" ? "monto_cuota" : "numero_cuotas";
+    if (modo !== "monto_cuota") {
+      var cuotas = Math.max(1, Math.min(60, Math.round(Number(opts.cuotas) || 1)));
+      var base = Math.floor((monto / cuotas) * 100) / 100;
+      var out = [];
+      var acum = 0;
+      for (var i = 0; i < cuotas; i++) {
+        var v = i === cuotas - 1 ? Math.round((monto - acum) * 100) / 100 : base;
+        acum = Math.round((acum + v) * 100) / 100;
+        out.push(v);
+      }
+      return out;
+    }
+    var cuota = Math.round((Number(opts.montoCuota) || 0) * 100) / 100;
+    if (!(cuota > 0)) return [];
+    if (cuota >= monto) return [monto];
+    var cuotaC = Math.round(cuota * 100);
+    var montoC = Math.round(monto * 100);
+    var llenas = Math.floor(montoC / cuotaC);
+    var remC = montoC - llenas * cuotaC;
+    var rem = remC / 100;
+    if (remC <= 0) return Array.from({ length: llenas }, function () { return cuota; });
+    if (opts.restoModo === "sumar_ultimo") {
+      if (llenas < 1) return [monto];
+      if (llenas > 60) return [];
+      return Array.from({ length: llenas - 1 }, function () { return cuota; }).concat([Math.round((cuota + rem) * 100) / 100]);
+    }
+    if (llenas + 1 > 60) return [];
+    return Array.from({ length: llenas }, function () { return cuota; }).concat([rem]);
+  }
+  function periodoMasUI(periodos, inicio, k) {
+    var i = (periodos || []).findIndex(function (p) { return p.periodo === inicio; });
+    if (i < 0) return inicio;
+    return ((periodos[i + k] || {}).periodo) || "";
+  }
+  function syncDescForm(box) {
+    var form = box && box.querySelector("#f-desc");
+    if (!form) return;
+    var tipo = (form.tipo && form.tipo.value) || "anticipo";
+    var esPrest = tipo === "prestamo";
+    var prest = form.querySelector("[data-desc-prestamo]");
+    if (prest) prest.hidden = !esPrest;
+    var modoEl = form.querySelector('input[name="modo"]:checked');
+    var modo = (modoEl && modoEl.value) || "numero_cuotas";
+    var modoMonto = esPrest && modo === "monto_cuota";
+    var c = form.querySelector("[data-desc-cuotas]");
+    var mc = form.querySelector("[data-desc-monto-cuota]");
+    var re = form.querySelector("[data-desc-resto]");
+    if (c) c.hidden = !esPrest || modoMonto;
+    if (mc) mc.hidden = !modoMonto;
+    if (re) re.hidden = !modoMonto;
+    var lab = form.querySelector("[data-desc-primer-txt]");
+    if (lab) lab.textContent = esPrest ? "La 1ª cuota va en el rol de" : "Se descuenta desde el rol de";
+    var prev = form.querySelector("[data-desc-preview]");
+    if (!prev) return;
+    if (!esPrest) { prev.innerHTML = ""; return; }
+    var monto = Number(String(form.monto && form.monto.value || "").replace(",", "."));
+    var montoCuota = Number(String(form.montoCuota && form.montoCuota.value || "").replace(",", "."));
+    var restoEl = form.querySelector('input[name="restoModo"]:checked');
+    var montos = planMontosPrestamoUI({
+      monto: monto,
+      modo: modo,
+      cuotas: form.cuotas && form.cuotas.value,
+      montoCuota: montoCuota,
+      restoModo: restoEl && restoEl.value
+    });
+    if (!montos.length) {
+      prev.innerHTML = '<span class="note">Completa el monto y las cuotas para ver el calendario.</span>';
+      return;
+    }
+    var periodos = ((box._data) || {}).periodos || [];
+    var inicio = form.primerPeriodo && form.primerPeriodo.value;
+    var pagadas = Math.max(0, Math.round(Number(form.cuotasPagadas && form.cuotasPagadas.value) || 0));
+    var motivo = String(form.motivo && form.motivo.value || "").trim();
+    var tot = (Math.round(monto * 100) / 100).toFixed(2);
+    var rows = montos.map(function (v, i) {
+      var n = i + 1;
+      var per = periodoMasUI(periodos, inicio, i);
+      var labP = ((periodos.filter(function (p) { return p.periodo === per; })[0] || {}).etiqueta) || per || ("cuota " + n);
+      var pagada = n <= pagadas;
+      var eti = (motivo ? ("Préstamo — " + motivo + " ($" + tot + ") — cuota " + n + "/" + montos.length) : ("Préstamo ($" + tot + ") — cuota " + n + "/" + montos.length));
+      return "<tr" + (pagada ? ' class="desc-pagada"' : "") + "><td>" + labP + (pagada ? " ✓ pagada" : "") + "</td><td>$" + m2(v) + "</td><td>" + eti + "</td></tr>";
+    }).join("");
+    prev.innerHTML = "<b>Calendario de cuotas</b><table><thead><tr><th>Rol</th><th>Monto</th><th>Línea en el rol</th></tr></thead><tbody>" + rows + "</tbody></table>";
+  }
+
   function htmlDesc(d, edit) {
     edit = edit || {};
     var emps = (d.empleadas || []).map(function (e) { return '<option value="' + esc(e.nombre) + '"' + (edit.persona === e.nombre ? " selected" : "") + ">" + esc(e.nombre) + (e.afiliada === false ? " · sin IESS" : "") + "</option>"; }).join("");
     var per = (d.periodos || []).map(function (p) { var sel = (edit.primerPeriodo || d.siguiente) === p.periodo; return '<option value="' + esc(p.periodo) + '"' + (sel ? " selected" : "") + ">" + esc(p.etiqueta) + "</option>"; }).join("");
     var esPrest = edit.tipo === "prestamo";
+    var modoMonto = esPrest && edit.modo === "monto_cuota";
+    var restoUltimo = (edit.restoModo || "cuota_extra") === "sumar_ultimo";
     var lista = (d.items || []).map(function (x) {
       var est = x.estado === "anulado" ? '<span class="rol-pill rechazado">Anulado</span>' : x.terminado ? '<span class="rol-pill aprobado">Pagado</span>' : '<span class="rol-pill borrador">Activo</span>';
       var plan = (x.plan || []).map(function (c) { return esc(c.etiqueta) + " $" + m2(c.monto) + (c.pagada ? " ✓" : ""); }).join(" · ");
+      var cuotaTxt = "";
+      if (x.tipo === "prestamo") {
+        var planArr = x.plan || [];
+        var last = planArr.length ? planArr[planArr.length - 1].monto : x.cuota;
+        cuotaTxt = " en " + esc(x.cuotas) + " cuota(s) de $" + m2(x.cuota);
+        if (x.cuotas > 1 && Math.abs(Number(x.cuota) - Number(last)) > 0.004) cuotaTxt += " (última $" + m2(last) + ")";
+      }
       return '<div class="desc-item" data-desc-id="' + esc(x.id) + '"><div><b>' + esc(x.persona) + "</b> · " + (x.tipo === "prestamo" ? "Préstamo" : "Anticipo") + " $" + m2(x.monto)
-        + (x.tipo === "prestamo" ? " en " + esc(x.cuotas) + " cuota(s) de $" + m2(x.cuota) : "") + " " + est + (x.prueba ? ' <span class="note">(simulación)</span>' : "") + "</div>"
+        + cuotaTxt + " " + est + (x.prueba ? ' <span class="note">(simulación)</span>' : "") + "</div>"
         + '<div class="note">Entregado ' + esc(fecha(x.fecha)) + " · se descuenta desde el rol de " + esc(x.primerEtiqueta) + " · saldo $" + m2(x.saldo) + (x.motivo ? " · " + esc(x.motivo) : "") + (x.motivoAnulacion ? " · anulado: " + esc(x.motivoAnulacion) : "") + "</div>"
         + '<div class="note">' + plan + "</div>"
-        + (x.estado !== "anulado" ? '<div class="tools">' + (!(x.plan || []).some(function (c) { return c.pagada; }) ? '<button class="btn ghost small" type="button" data-desc-editar="' + esc(x.id) + '">Editar</button>' : "") + '<button class="btn ghost small" type="button" data-desc-anular="' + esc(x.id) + '">Anular</button><button class="btn ghost small" type="button" data-desc-hist="' + esc(x.id) + '">Historial</button></div>' : '<div class="tools"><button class="btn ghost small" type="button" data-desc-hist="' + esc(x.id) + '">Historial</button></div>')
+        + (x.estado !== "anulado" ? '<div class="tools">' + (!(x.plan || []).some(function (c) { return c.pagadaRol; }) ? '<button class="btn ghost small" type="button" data-desc-editar="' + esc(x.id) + '">Editar</button>' : "") + '<button class="btn ghost small" type="button" data-desc-anular="' + esc(x.id) + '">Anular</button><button class="btn ghost small" type="button" data-desc-hist="' + esc(x.id) + '">Historial</button></div>' : '<div class="tools"><button class="btn ghost small" type="button" data-desc-hist="' + esc(x.id) + '">Historial</button></div>')
         + '<div data-desc-histbox></div></div>';
     }).join("") || '<p class="note">Todavía no hay anticipos ni préstamos.</p>';
     return '<div class="card desc-box"><div class="card-title">Anticipos y préstamos <button class="btn ghost small" type="button" data-desc-cerrar="1">Cerrar</button></div>'
@@ -75,13 +173,26 @@
       + '<label>Empleada <select name="persona">' + emps + "</select></label>"
       + '<label>Tipo <select name="tipo" data-desc-tipo><option value="anticipo"' + (!esPrest ? " selected" : "") + '>Anticipo (se descuenta todo en un rol)</option><option value="prestamo"' + (esPrest ? " selected" : "") + ">Préstamo (en cuotas)</option></select></label>"
       + '<label>Monto $ <input name="monto" inputmode="decimal" value="' + esc(edit.monto != null ? m2(edit.monto) : "") + '" required></label>'
-      + '<label data-desc-cuotas' + (esPrest ? "" : " hidden") + '>Cuotas <input name="cuotas" type="number" min="1" max="60" step="1" value="' + esc(edit.cuotas || 3) + '"></label>'
       + '<label>Fecha de entrega <input name="fecha" type="date" value="' + esc(edit.fecha || d.hoy || "") + '"></label>'
-      + '<label>Se descuenta desde el rol de <select name="primerPeriodo">' + per + "</select></label>"
-      + '<label class="full">Motivo / nota <input name="motivo" maxlength="300" value="' + esc(edit.motivo || "") + '"></label>'
+      + '<label data-desc-primer-lab><span data-desc-primer-txt>' + (esPrest ? "La 1ª cuota va en el rol de" : "Se descuenta desde el rol de") + '</span> <select name="primerPeriodo">' + per + "</select></label>"
+      + '<label class="full">Motivo / observación <input name="motivo" maxlength="300" placeholder="Tratamiento Peeling" value="' + esc(edit.motivo || "") + '"></label>'
+      + '<div class="full desc-prestamo" data-desc-prestamo' + (esPrest ? "" : " hidden") + '>'
+      + '<div class="desc-modo">Cómo se arman las cuotas'
+      + '<label><input type="radio" name="modo" value="monto_cuota"' + (modoMonto ? " checked" : "") + '> Por monto de cuota</label>'
+      + '<label><input type="radio" name="modo" value="numero_cuotas"' + (!modoMonto ? " checked" : "") + '> Por número de cuotas</label></div>'
+      + '<div class="desc-prestamo-grid">'
+      + '<label data-desc-cuotas' + (modoMonto ? " hidden" : "") + '>Número de cuotas <input name="cuotas" type="number" min="1" max="60" step="1" value="' + esc(edit.cuotas || 3) + '"></label>'
+      + '<label data-desc-monto-cuota' + (modoMonto ? "" : " hidden") + '>Monto de cada cuota $ <input name="montoCuota" inputmode="decimal" value="' + esc(edit.montoCuota != null ? m2(edit.montoCuota) : "") + '"></label>'
+      + '<label>Cuotas ya pagadas <input name="cuotasPagadas" type="number" min="0" max="59" step="1" value="' + esc(edit.cuotasPagadas != null ? edit.cuotasPagadas : 0) + '"><span class="note">Empieza en la cuota siguiente. Sirve si ya se descontó en un rol anterior.</span></label>'
+      + '</div>'
+      + '<div class="desc-resto" data-desc-resto' + (modoMonto ? "" : " hidden") + '>Si queda un residuo'
+      + '<label><input type="radio" name="restoModo" value="sumar_ultimo"' + (restoUltimo ? " checked" : "") + '> Sumar al último pago</label>'
+      + '<label><input type="radio" name="restoModo" value="cuota_extra"' + (!restoUltimo ? " checked" : "") + '> Cuota extra</label></div>'
+      + '<div class="desc-preview note" data-desc-preview></div>'
+      + '</div>'
       + '<div class="tools full"><button class="btn small" type="submit">' + (edit.id ? "Guardar cambios" : "Registrar") + "</button>" + (edit.id ? '<button class="btn ghost small" type="button" data-desc-nuevo="1">Cancelar edición</button>' : "") + "</div>"
       + '<p class="err full" id="desc-err"></p>'
-      + '<p class="note full">Anticipo: por defecto se descuenta completo en el rol del mes siguiente. Préstamo: una cuota por rol hasta pagarlo. Vale también para quien no está afiliada al IESS. Cada cambio queda en el historial.</p></form>'
+      + '<p class="note full">Anticipo: por defecto se descuenta completo en el rol del mes siguiente. Préstamo: una cuota por rol hasta pagarlo. Vale también para quien no está afiliada al IESS. El motivo aparece en la línea de Descuentos del rol. Cada cambio queda en el historial.</p></form>'
       + '<div class="desc-lista">' + lista + "</div></div>";
   }
   async function abrirDesc(main, edit) {
@@ -92,24 +203,23 @@
     if (!d || d.error) { box.innerHTML = '<p class="err">' + esc((d && d.error) || "No se pudo cargar") + "</p>"; return; }
     box._data = d;
     box.innerHTML = htmlDesc(d, edit);
+    syncDescForm(box);
     box.scrollIntoView({ block: "nearest" });
   }
   function wireDesc(main) {
     var box = main.querySelector("#desc-panel");
     if (!box || box._wired) return;
     box._wired = true;
-    box.addEventListener("change", function (ev) {
-      if (ev.target && ev.target.hasAttribute && ev.target.hasAttribute("data-desc-tipo")) {
-        var c = box.querySelector("[data-desc-cuotas]");
-        if (c) c.hidden = ev.target.value !== "prestamo";
-      }
-    });
+    box.addEventListener("change", function () { syncDescForm(box); });
+    box.addEventListener("input", function () { syncDescForm(box); });
     box.addEventListener("submit", async function (ev) {
       if (!ev.target || ev.target.id !== "f-desc") return;
       ev.preventDefault();
       var body = Object.fromEntries(new FormData(ev.target).entries());
       body.monto = Number(String(body.monto || "").replace(",", "."));
-      if (body.tipo !== "prestamo") body.cuotas = 1;
+      if (body.montoCuota != null && body.montoCuota !== "") body.montoCuota = Number(String(body.montoCuota).replace(",", "."));
+      body.cuotasPagadas = Number(body.cuotasPagadas || 0);
+      if (body.tipo !== "prestamo") { body.cuotas = 1; body.modo = "numero_cuotas"; body.cuotasPagadas = 0; }
       var err = box.querySelector("#desc-err");
       var res = await api("rol_desc_guardar", body);
       if (!res || res.error) { if (err) err.textContent = (res && res.error) || "No se pudo guardar"; return; }
@@ -123,7 +233,7 @@
       if (t.hasAttribute("data-desc-nuevo")) { await abrirDesc(main); return; }
       var id = t.getAttribute("data-desc-editar") || t.getAttribute("data-desc-anular") || t.getAttribute("data-desc-hist");
       var it = ((box._data || {}).items || []).find(function (x) { return x.id === id; });
-      if (t.hasAttribute("data-desc-editar") && it) { box.innerHTML = htmlDesc(box._data, it); return; }
+      if (t.hasAttribute("data-desc-editar") && it) { box.innerHTML = htmlDesc(box._data, it); syncDescForm(box); return; }
       if (t.hasAttribute("data-desc-anular")) {
         var motivo = window.prompt("¿Por qué se anula? (queda en el historial)");
         if (!motivo) return;
