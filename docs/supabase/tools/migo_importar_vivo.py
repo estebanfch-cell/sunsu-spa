@@ -10,14 +10,16 @@ Qué hace
   emitir, anular, ni a Cerrar Caja.
 
 Qué NO hace (y no se puede inventar en headless)
-  sistema.migo.com.ec es un WebForms ASP.NET. «Exportar a Excel» es un postback
+  Migo (desde el 26-nov-2026 en https://sistema.minegocio.com.ec; el dominio
+  viejo sistema.migo.com.ec responde «Ocurrió un error interno» al hacer login)
+  es una app web con sesión. «Exportar a Excel» es un postback
   que necesita cookie de sesión y __VIEWSTATE. curl no es fiable; la edge
   function no puede abrir un navegador.
 
   Para que el cruce sea horario de verdad hace falta un trabajo EN UNA CAJA
   (Playwright o un navegador ya logueado), no en la función:
 
-  1. Entrar a https://sistema.migo.com.ec SOLO con el login de la bóveda
+  1. Entrar a https://sistema.minegocio.com.ec SOLO con el login de la bóveda
      5135118 (nunca 5134734). No pulsar Cerrar Caja. No emitir ni anular.
   2. Ir al reporte Ventas → Cobros Realizados, rango desde 2026-11-01 (o el
      mes en curso) hasta hoy, Exportar a Excel. El Detalle es opcional y no
