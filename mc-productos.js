@@ -23,6 +23,19 @@
     if (v) v._consig = (Number(c.cantidad) || 0); else L.unshift({ grupo: "CONSIGNACION", nombre: "Venta", cantidad: 0, _consig: Number(c.cantidad) || 0 });
     return L;
   }
+  // TK34 / t973u: la columna y el filtro «Venta» incluyen el stock de la bodega Consignación
+  // (no se muestra como bodega aparte). Así un producto solo en consignación no aparece en 0.
+  function qtyVenta(p) {
+    var g = p.porGrupo || {};
+    return (Number(g.CONSIGNACION) || 0) + (Number(g.BCONSIG) || 0);
+  }
+  function ventaHtml(p) {
+    if (p.tipo === "servicio") return '<span class="mcp-sub">—</span>';
+    var g = p.porGrupo || {}, v = Number(g.CONSIGNACION) || 0, c = Number(g.BCONSIG) || 0;
+    if (c && !v) return q2(c) + ' <span class="mcp-sc">🤝</span>';
+    if (c && v) return q2(v + c) + ' <span class="mcp-sc">🤝 ' + q2(c) + "</span>";
+    return q2(v);
+  }
   var SUBS = [["CABINA_1", "Cabina 1"], ["CABINA_2", "Cabina 2"], ["CABINA_3", "Cabina 3"]];
   var PRECIO = { beta_pvp: 1, beta_compra_real: 1, beta_compra_comision: 1 };
 
@@ -178,6 +191,7 @@
     if (id === "margen") return Number(p.margenPct) || 0;
     if (id === "stock") return p.tipo === "servicio" ? -1 : Number(p.stock) || 0;
     if (id === "estStock") return p.tipo === "servicio" ? 9 : p.estado === "agotado" ? 0 : p.estado === "bajo" ? 1 : 2;
+    if (id === "g_CONSIGNACION") return qtyVenta(p);
     if (id.indexOf("g_") === 0) return Number((p.porGrupo || {})[id.slice(2)]) || 0;
     return String(p[id] || "");
   }
@@ -188,7 +202,8 @@
       if (f.sub && p.subtipo !== f.sub) return false;
       if (f.marca && p.marca !== f.marca) return false;
       if (f.categoria && p.categoria !== f.categoria) return false;
-      if (f.bodega && !(p.porGrupo && Number(p.porGrupo[f.bodega]) > 0)) return false;
+      if (f.bodega === "CONSIGNACION" && !(qtyVenta(p) > 0)) return false;
+      else if (f.bodega && f.bodega !== "CONSIGNACION" && !(p.porGrupo && Number(p.porGrupo[f.bodega]) > 0)) return false;
       var act = f.activo || (f.estado === "inactivos" ? "inactivos" : "");
       if (act === "inactivos") { if (p.activo !== false) return false; }
       else if (act !== "todos" && p.activo === false && !qq) return false;
@@ -256,6 +271,7 @@
     else if (c.id === "pvpSinIva") v = money(p.pvpSinIva != null ? p.pvpSinIva : p.subtotal);
     else if (c.id === "costo") v = money(p.compraReal);
     else if (c.id === "margen") v = p.faltaCosto ? '<span class="falta-costo">Falta costo</span>' : (p.margenPct == null ? "—" : q2(Math.round(Number(p.margenPct) * 10) / 10) + "%");
+    else if (c.id === "g_CONSIGNACION") v = ventaHtml(p);
     else if (c.id.indexOf("g_") === 0) v = p.tipo === "servicio" ? '<span class="mcp-sub">—</span>' : q2((p.porGrupo || {})[c.id.slice(2)] || 0);
     else v = e(p[c.id] || "—");
     return '<td class="' + cls + '">' + v + "</td>";
@@ -273,11 +289,14 @@
   }
   function stockBodegas(p) {
     if (p.tipo === "servicio") return "";
-    var G = [["CONSIGNACION", "Venta"], ["CABINA", "Cabina"], ["OFICINA", "Oficina"]];
-    return G.map(function (g) {
-      var n = Number((p.porGrupo || {})[g[0]]) || 0;
-      return n ? g[1] + " " + q2(n) : "";
-    }).filter(Boolean).join(" · ");
+    var g = p.porGrupo || {};
+    var bits = [];
+    var v = Number(g.CONSIGNACION) || 0, c = Number(g.BCONSIG) || 0;
+    if (v) bits.push("Venta " + q2(v));
+    if (c) bits.push("🤝 consignación " + q2(c));
+    if (Number(g.CABINA)) bits.push("Cabina " + q2(g.CABINA));
+    if (Number(g.OFICINA)) bits.push("Oficina " + q2(g.OFICINA));
+    return bits.join(" · ");
   }
   function cardProd(p) {
     var sku = sTrim(p.skuVisible || p.sku);
