@@ -376,12 +376,22 @@ export async function cicloDe(ctx: Ctx, fecha?: string) {
   const tramos = aplicado.tramos;
   const cfg = aplicado.cfg;
   const cmap = await catMap(ctx);
-  const ovb = await (await import("./ticket_beta.ts")).overlayDe(ctx.db);
+  const ovMod = await import("./ticket_beta.ts");
+  const ovb = await ovMod.overlayDe(ctx.db);
   const rowsTk = (await tickets(ctx)).filter((r) => r.timestamp && !esCancelado(r));
   const claveTk = (r: R) => claveDe(r, leerSerie(r, "so_num"));
   try { const { asegurarSnapshots } = await import("./costos_reales.ts"); await asegurarSnapshots(ctx.db, "sistema-tk114", false, rowsTk, claveTk); } catch { /* columnas o tabla aún no aplicadas */ }
   const snaps = await snapsPorClave(ctx.db);
-  const tks = rowsTk.map((r) => aplicarSnapsATicket(ovb(r, toIn(r, cmap)), snaps.get(claveTk(r))));
+  const factVivo = await ctx.db.all("beta_migo_facturas_vivo").catch(() => [] as R[]);
+  const mapaMigo = ovMod.mapaSubtotalMigoPaquetes(factVivo);
+  const cabs = await ctx.db.all("beta_tickets").catch(() => [] as R[]);
+  const cabBy = new Map(cabs.map((c) => [s(c.clave), c]));
+  const tks = rowsTk.map((r) => ovMod.aplicarNetosRealesPaquete(
+    aplicarSnapsATicket(ovb(r, toIn(r, cmap)), snaps.get(claveTk(r))),
+    r,
+    mapaMigo,
+    cabBy.get(claveTk(r)),
+  ));
   const ov = await ctx.db.all("ciclo_override");
   const hit = ov.find((r) => s(r.ciclo).slice(0, 10) === ciclo);
   const marcas = await marks(ctx);

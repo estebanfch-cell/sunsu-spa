@@ -794,13 +794,54 @@ export function comisionPaquetesTramoFactor(netos: number[], factores: number[],
   return { monto: round2(monto), etiqueta: base.etiqueta };
 }
 export interface TramoPaquete { desde: number; hasta: number; modo: "fijo" | "pct"; valor: number }
-/** Desde el ciclo que abre el 2026-10-26. pct guarda la fracción (0.05 = 5% del neto), redondeada hacia abajo. */
+/** Desde el ciclo que abre el 2026-10-26 y hasta el que cierra el 2026-11-25 (10-10-10). pct = fracción (0.05 = 5% del neto), redondeada hacia abajo. */
 export const TRAMOS_PAQUETE: TramoPaquete[] = [
   { desde: 1, hasta: 10, modo: "pct", valor: 0.05 },
   { desde: 11, hasta: 20, modo: "pct", valor: 0.08 },
   { desde: 21, hasta: 30, modo: "pct", valor: 0.11 },
   { desde: 31, hasta: 100000, modo: "pct", valor: 0.14 },
 ];
+/** Emilia t970u: a partir del ciclo 26-nov-2026 → 25-dic-2026 (rol de diciembre) los cortes pasan a 12-15-20, con los mismos %. */
+export const CICLO_TRAMOS_121520_DESDE = "2026-11-26";
+export const TRAMOS_PAQUETE_121520: TramoPaquete[] = [
+  { desde: 1, hasta: 12, modo: "pct", valor: 0.05 },
+  { desde: 13, hasta: 27, modo: "pct", valor: 0.08 },
+  { desde: 28, hasta: 47, modo: "pct", valor: 0.11 },
+  { desde: 48, hasta: 100000, modo: "pct", valor: 0.14 },
+];
+/** Tramos de fábrica del ciclo: 10-10-10 hasta el que abre el 2026-10-26; 12-15-20 desde el 2026-11-26. */
+export function tramosPorCiclo(ciclo: string): TramoPaquete[] {
+  const c = s(ciclo).slice(0, 10);
+  const base = c >= CICLO_TRAMOS_121520_DESDE ? TRAMOS_PAQUETE_121520 : TRAMOS_PAQUETE;
+  return base.map((t) => ({ ...t }));
+}
+/**
+ * Base del % de paquetes: subtotal real sin IVA, después de descuentos o ajustes (nunca el total con IVA).
+ * Orden: venta neta ya guardada, subtotal de la línea Migo, total de línea / IVA, y solo al final el subtotal de catálogo.
+ */
+export function netoPaqueteReal(opts: {
+  ventaNeta?: number | null;
+  migoSubtotal?: number | null;
+  totalLinea?: number | null;
+  catalogoSubtotal?: number | null;
+}): number {
+  // Migo primero: refleja el subtotal cobrado, incluso si el descuento se aplicó después del ticket.
+  if (n(opts.migoSubtotal) > 0) return round2(n(opts.migoSubtotal));
+  if (opts.ventaNeta != null) return round2(Math.max(0, n(opts.ventaNeta)));
+  if (n(opts.totalLinea) > 0) return round2(n(opts.totalLinea) / IVA);
+  if (n(opts.catalogoSubtotal) > 0) return round2(n(opts.catalogoSubtotal));
+  return 0;
+}
+/** Nº de factura del ticket (fac_7, # FAC o datos.factura), solo dígitos, para cruzar con Migo. */
+export function facDigitosDe(r: { fac_7?: unknown; orig?: unknown; datos?: unknown } | null | undefined): string {
+  if (!r) return "";
+  const o = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+  const d = r.datos && typeof r.datos === "object" ? r.datos as Row : {};
+  const raw = s(r.fac_7) || s(o["# FAC"]) || s(o.factura) || s(d.factura);
+  const last = raw.match(/(\d+)(?:\.0+)?$/);
+  if (last) return last[1].replace(/^0+/, "") || "0";
+  return raw.replace(/\.0+$/, "").replace(/\D/g, "").replace(/^0+/, "");
+}
 export type TipoReglaCom = "facial" | "producto" | "base" | "extra" | "recepcion" | "tramo";
 export interface ReglaCom {
   tipo: TipoReglaCom;
@@ -919,7 +960,7 @@ export function usaNivelesPaquete(ciclo: string): boolean {
   return ciclo <= CICLO_NIVEL_HASTA;
 }
 
-export function normalizarTramos(raw: unknown): TramoPaquete[] {
+export function normalizarTramos(raw: unknown, ciclo: string = ""): TramoPaquete[] {
   const arr = Array.isArray(raw) ? raw : (raw && typeof raw === "object" && Array.isArray((raw as Row).tramos) ? (raw as Row).tramos as unknown[] : []);
   const out: TramoPaquete[] = [];
   for (const item of arr) {
@@ -936,7 +977,7 @@ export function normalizarTramos(raw: unknown): TramoPaquete[] {
     if (modo === "pct" && valor > 1) valor = valor / 100;
     if (desde > 0 && valor >= 0) out.push({ desde, hasta, modo, valor });
   }
-  return out.length ? out.sort((a, b) => a.desde - b.desde) : TRAMOS_PAQUETE.map((t) => ({ ...t }));
+  return out.length ? out.sort((a, b) => a.desde - b.desde) : tramosPorCiclo(ciclo);
 }
 
 function etiquetaTramo(u: number, tier: TramoPaquete | undefined): string {
@@ -1096,7 +1137,10 @@ export function cfgDesdeReglas(reglas: ReglaCom[], ciclo: string, tramosKv: unkn
   if (tramoRows.length) {
     const fecha = tramoRows.map((r) => s(r.vigente_desde).slice(0, 10)).sort().pop() || ciclo;
     tramos = normalizarTramos(tramoRows.filter((r) => s(r.vigente_desde).slice(0, 10) === fecha));
-  } else tramos = normalizarTramos(tramosKv);
+  } else {
+    const kvTiene = !!(tramosKv && ((Array.isArray(tramosKv) && tramosKv.length) || (typeof tramosKv === "object" && Array.isArray((tramosKv as { tramos?: unknown[] }).tramos) && (tramosKv as { tramos: unknown[] }).tramos.length)));
+    tramos = kvTiene && ciclo < CICLO_TRAMOS_121520_DESDE ? normalizarTramos(tramosKv, ciclo) : tramosPorCiclo(ciclo);
+  }
   return { cfg, tramos };
 }
 
