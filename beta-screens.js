@@ -4338,19 +4338,119 @@ function _esMovil_(){
     || (navigator.maxTouchPoints>1 && /Mac/.test(navigator.userAgent));
 }
 
-// Entrega un PDF de jsPDF SIN link fantasma: en celular abre la hoja de compartir
-// nativa con SOLO el archivo (igual que el gift card); en compu, descarga directa.
-function _entregarPDF(doc, nombre){
+function _esIOS_(){
+  return /iPad|iPhone|iPod/i.test(navigator.userAgent||'')
+    || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+}
+function _esPwa_(){
   try{
-    var blob=doc.output('blob');
-    var file=new File([blob], nombre, {type:'application/pdf'});
-    if(_esMovil_()&&navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
-      navigator.share({files:[file]}).catch(function(){ doc.save(nombre); });
+    if(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+  }catch(eM){}
+  return !!navigator.standalone;
+}
+function _nombrePdfRolesTodas(periodo, etiqueta){
+  var lab=String(etiqueta||'').trim();
+  if(!lab){
+    var c=String(periodo||'').trim().toUpperCase();
+    var p=c.split('_');
+    if(p.length>=2) lab=p[0].charAt(0)+p[0].slice(1).toLowerCase()+' '+p[1];
+    else lab=c.replace(/_/g,' ');
+  }
+  var slug=lab.replace(/\s+/g,'_').replace(/[^\wÁÉÍÓÚáéíóúüñÑ-]/g,'');
+  return 'Roles_'+slug+'.pdf';
+}
+function _esAdminNombreRol(nombre){
+  var k=String(nombre||'').trim().toLowerCase();
+  if(!k) return false;
+  if(k==='efch'||k==='emi'||k==='e.m.i.') return true;
+  if(/^efch\b/.test(k)||/^emi\b/.test(k)) return true;
+  if(/ferlito/.test(k)) return true;
+  return false;
+}
+
+// Entrega un PDF de jsPDF sin pop-up: en iPhone/PWA la descarga y window.open
+// suelen fallar (sobre todo después de un await). Se intenta la hoja de compartir
+// nativa; si no hay gesto o no se puede, se deja una hoja en la página para
+// tocar «Abrir» o «Compartir». En escritorio, descarga directa.
+function _pdfBlob(doc){
+  var blob=doc.output('blob');
+  if(blob && !(blob.type||'').toLowerCase().includes('pdf')) blob=new Blob([blob],{type:'application/pdf'});
+  return blob;
+}
+function _pdfFile(blob, nombre){
+  try{ return new File([blob], nombre, {type:'application/pdf'}); }catch(e){ return null; }
+}
+function _pdfDescargarBlob(blob, nombre){
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url; a.download=nombre; a.rel='noopener'; a.style.display='none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ if(a.parentNode) a.parentNode.removeChild(a); URL.revokeObjectURL(url); }, 4000);
+}
+function _pdfEntregaHoja(blob, nombre){
+  var prev=document.getElementById('sunsu-pdf-entrega');
+  if(prev) prev.remove();
+  var url=URL.createObjectURL(blob);
+  var file=_pdfFile(blob, nombre);
+  var box=document.createElement('div');
+  box.id='sunsu-pdf-entrega';
+  box.setAttribute('role','dialog');
+  box.setAttribute('aria-label','PDF listo');
+  box.innerHTML='<div class="sunsu-pdf-entrega-bg" data-pdf-cierra="1"></div>'
+    +'<div class="sunsu-pdf-entrega-card">'
+    +'<p class="sunsu-pdf-entrega-tit">PDF listo</p>'
+    +'<p class="sunsu-pdf-entrega-nom"></p>'
+    +'<iframe title="Vista del PDF" class="sunsu-pdf-entrega-fr"></iframe>'
+    +'<div class="sunsu-pdf-entrega-acc">'
+    +'<button type="button" class="btn small" data-pdf-share="1">Compartir</button>'
+    +'<button type="button" class="btn small" data-pdf-abrir="1">Abrir</button>'
+    +'<button type="button" class="btn ghost small" data-pdf-cierra="1">Cerrar</button>'
+    +'</div></div>';
+  var nom=box.querySelector('.sunsu-pdf-entrega-nom');
+  if(nom) nom.textContent=nombre;
+  var fr=box.querySelector('iframe');
+  if(fr) fr.src=url;
+  function cierra(){
+    box.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  }
+  box.addEventListener('click', function(ev){
+    var t=ev.target.closest('[data-pdf-cierra],[data-pdf-share],[data-pdf-abrir]');
+    if(!t) return;
+    if(t.hasAttribute('data-pdf-cierra')){ cierra(); return; }
+    if(t.hasAttribute('data-pdf-share')){
+      if(file && navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+        navigator.share({files:[file], title:nombre}).catch(function(){});
+      } else {
+        _pdfDescargarBlob(blob, nombre);
+      }
       return;
     }
-  }catch(ePd){}
-  doc.save(nombre);
+    if(t.hasAttribute('data-pdf-abrir')){
+      var w=window.open(url, '_blank');
+      if(!w) _pdfDescargarBlob(blob, nombre);
+    }
+  });
+  document.body.appendChild(box);
+  return box;
 }
+function _entregarPDF(doc, nombre){
+  var blob;
+  try{ blob=_pdfBlob(doc); }catch(e0){ try{ doc.save(nombre); }catch(e1){} return; }
+  var file=_pdfFile(blob, nombre);
+  if(_esMovil_() && file && navigator.share && navigator.canShare){
+    try{
+      if(navigator.canShare({files:[file]})){
+        navigator.share({files:[file], title:nombre}).catch(function(){ _pdfEntregaHoja(blob, nombre); });
+        return;
+      }
+    }catch(eSh){}
+  }
+  if(_esIOS_() || _esPwa_()){ _pdfEntregaHoja(blob, nombre); return; }
+  try{ _pdfDescargarBlob(blob, nombre); }catch(eD){ try{ doc.save(nombre); }catch(eS){ _pdfEntregaHoja(blob, nombre); } }
+}
+
 
 function compartirGiftCard(){
   _gcdGuardarRegistro();
@@ -17110,22 +17210,30 @@ function _pdfRol(d, periodo, apro){
 // DEV-31c (Emilia t911u): PRE-ROL en PDF (borrador para Contabilidad, sin firma de la empleada).
 // items = [{d:<datos del rol>, periodo}]; con varias empleadas va una hoja por persona + una hoja de resumen.
 function _pdfPreRolVarios(items, periodo, nombreArchivo){
-  items=(items||[]).filter(function(x){return x&&x.d;});
-  if(!items.length){ toast('No hay pre-roles para el PDF','#B86B6B'); return; }
+  items=(items||[]).filter(function(x){
+    if(!x||!x.d) return false;
+    var nom=x.d.nombre||x.d.nombreCompleto||x.persona||'';
+    return !_esAdminNombreRol(nom);
+  });
+  if(!items.length){ toast('No hay roles para el PDF de este período','#B86B6B'); return; }
   _rolCargarFondo(function(fondo){
     _gcdCargarJsPDF(function(ok){
       if(!ok){toast('❌ No se pudo cargar el generador de PDF','#B86B6B');return;}
       var doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'});
-      var apro={preRol:true, generado:_rolAhoraEc()};
+      var generado=_rolAhoraEc();
       var mes='';
       items.forEach(function(it,i){
         if(i>0) doc.addPage();
+        var pre=it.estado!=='aprobado';
+        var apro;
+        if(pre) apro={preRol:true, generado:generado};
+        else if(it.firma&&it.firma.png) apro={png:it.firma.png, fecha:it.firma.fechaLocal||it.firma.firmadoAt, fechaLocal:it.firma.fechaLocal};
+        else apro=null;
         mes=_pdfRolPagina(doc,it.d,it.periodo||periodo,apro,fondo);
       });
-      if(items.length>1) _pdfPreRolResumenHoja(doc,items,mes,apro,fondo);
-      var nom=nombreArchivo||('PRE-ROL '+mes+(items.length===1?' '+(items[0].d.nombre||'').split(' ')[0]:' todas')+'.pdf');
+      var nom=nombreArchivo||_nombrePdfRolesTodas(periodo, mes);
       _entregarPDF(doc, nom);
-      toast('📄 Pre-rol listo','var(--green)');
+      toast('📄 PDF de todas listo','var(--green)');
     });
   });
 }

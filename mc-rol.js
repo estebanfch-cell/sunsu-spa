@@ -498,7 +498,7 @@
   function htmlMarcasBoxSafe(pack, persona) {
     return typeof htmlMarcasAdminBox === "function" ? htmlMarcasAdminBox({ persona: persona, hoy: pack.hoy }) : "";
   }
-  var RX = { personas: [], persona: "", pack: null };
+  var RX = { personas: [], persona: "", pack: null, cache: {}, prefetchP: null, pintado: false, fondo: false };
   async function htmlAdmin() {
     var op = await api("rol_opciones");
     if (!op || op.error) return '<p class="err">' + esc((op && op.error) || "No se pudo cargar") + "</p>";
@@ -506,6 +506,7 @@
     if (!RX.personas.length) return "<h1>Roles</h1><p class=\"note\">No hay empleadas activas. Actívalas en Configuración de rol.</p>";
     var cur = typeof state !== "undefined" && state.persona && RX.personas.indexOf(state.persona) >= 0 ? state.persona : (RX.persona && RX.personas.indexOf(RX.persona) >= 0 ? RX.persona : RX.personas[0]);
     RX.persona = cur;
+    prefetchTodos();
     var opts = RX.personas.map(function (n) { return '<option value="' + esc(n) + '"' + (n === cur ? " selected" : "") + ">" + esc(n) + "</option>"; }).join("");
     return '<div class="rolx" id="rolx"><div class="rolx-top"><select id="rolx-persona" class="rolx-sel" aria-label="Empleada">' + opts + "</select>"
       + '<button class="btn ghost small" type="button" data-rolx-hist="1" aria-expanded="false">Historial</button>'
@@ -513,7 +514,7 @@
       + '<button type="button" data-desc-abrir="1">💵 Anticipos y préstamos</button>'
       + '<button type="button" data-go="#/m/personal/config-rol">⚙️ Configuración de rol</button>'
       + '<button type="button" data-rolx-equipo="1">👥 Resumen del equipo</button></div></details></div>'
-      + '<div id="rolx-body"><p class="note">Calculando el pre-rol…</p></div>'
+      + '<div id="rolx-body"><p class="note">Abriendo el pre-rol…</p></div>'
       + '<div id="rolx-hist" hidden></div><div id="rolx-ver"></div><div id="rolx-equipo"></div><div id="desc-panel"></div></div>';
   }
   async function pdfDeRol(id) {
@@ -533,22 +534,95 @@
     } catch (e) { apro = null; }
     _pdfRol(d, periodo, apro);
   }
+  function packTieneDatos(pack) {
+    if (!pack || pack.error || pack.vacio) return false;
+    var d0 = pack.data || pack;
+    return !!(d0 && (d0.nombre != null || d0.nombreCompleto != null || d0.totalRecibir != null || d0.sueldo != null || d0.etiqueta != null));
+  }
+  function guardarCache(pack) {
+    if (!packTieneDatos(pack)) return;
+    var d0 = pack.data || pack;
+    if (!pack.data) pack.data = d0;
+    var key = pack.persona || (d0 && (d0.nombre || d0.nombreCompleto)) || "";
+    if (key) RX.cache[key] = pack;
+  }
+  function pintarRol(main, pack, persona, opts) {
+    var body = main.querySelector("#rolx-body");
+    if (!body || persona !== RX.persona || !packTieneDatos(pack)) return;
+    var d0 = pack.data || pack;
+    if (!pack.data) pack.data = d0;
+    RX.pack = pack;
+    guardarCache(pack);
+    RX.pintado = true;
+    var nota = "";
+    if (opts && opts.aviso) nota = '<p class="note rolx-aviso-snap">' + esc(opts.aviso) + "</p>";
+    else if (opts && opts.actualizando) nota = '<p class="note rolx-aviso-snap">Se muestra el último pre-rol guardado · actualizando cifras…</p>';
+    body.innerHTML = nota + htmlPreRolCuerpo(pack, persona);
+    var det = body.querySelector("[data-mk-de]");
+    if (det && typeof wireMarcasAdmin === "function") wireMarcasAdmin(body, function (f) { return cargarRol(main, f); }, opts && opts.fechaMk, !!(opts && opts.fechaMk));
+  }
+  function prefetchTodos() {
+    if (RX.prefetchP) return RX.prefetchP;
+    RX.prefetchP = api("rol_pre_todos", { recargar: false }).then(function (r) {
+      if (!r || r.error) return r;
+      (r.items || []).forEach(function (it) { guardarCache(it); });
+      return r;
+    }).catch(function () { return null; });
+    return RX.prefetchP;
+  }
+  function prefetchRecalcFondo() {
+    if (RX.fondo) return;
+    RX.fondo = true;
+    api("rol_pre_todos", { recargar: true }).then(function (r) {
+      if (!r || r.error) return;
+      (r.items || []).forEach(function (it) { guardarCache(it); });
+      if (RX.persona && RX.cache[RX.persona]) {
+        var root = document.querySelector("#rolx");
+        if (root) pintarRol(root, RX.cache[RX.persona], RX.persona, {});
+      }
+    }).catch(function () { RX.fondo = false; });
+  }
   async function cargarRol(main, fechaMk) {
     var body = main.querySelector("#rolx-body");
     if (!body) return;
     var persona = RX.persona;
-    var pack = await api("rol_pre_auto", { persona: persona });
-    if (persona !== RX.persona) return;
-    if (!pack || pack.error) { body.innerHTML = '<p class="err">' + esc((pack && pack.error) || "No se pudo calcular el pre-rol") + "</p>"; return; }
-    var d0 = pack.data || pack;
-    if (!d0 || (d0.nombre == null && d0.nombreCompleto == null && d0.totalRecibir == null && d0.sueldo == null && d0.etiqueta == null)) {
-      body.innerHTML = '<p class="err">No se pudo calcular el pre-rol de ' + esc(persona) + ".</p>"; return;
+    var cached = RX.cache[persona];
+    if (packTieneDatos(cached) && !fechaMk) {
+      pintarRol(main, cached, persona, { actualizando: true, fechaMk: fechaMk });
+    } else {
+      try {
+        var leido = await api("rol_pre_leer", { persona: persona });
+        if (persona !== RX.persona) return;
+        if (packTieneDatos(leido)) {
+          pintarRol(main, leido, persona, { actualizando: true, fechaMk: fechaMk });
+        } else if (!packTieneDatos(RX.cache[persona])) {
+          body.innerHTML = '<p class="note">Preparando el primer pre-rol de ' + esc(persona) + "…</p>";
+        }
+      } catch (eL) {
+        if (!packTieneDatos(RX.cache[persona])) {
+          body.innerHTML = '<p class="note">Preparando el pre-rol de ' + esc(persona) + "…</p>';
+        }
+      }
     }
-    if (!pack.data) pack.data = d0;
-    RX.pack = pack;
-    body.innerHTML = htmlPreRolCuerpo(pack, persona);
-    var det = body.querySelector("[data-mk-de]");
-    if (det && typeof wireMarcasAdmin === "function") wireMarcasAdmin(body, function (f) { return cargarRol(main, f); }, fechaMk, !!fechaMk);
+    try {
+      var pack = await api("rol_pre_auto", { persona: persona });
+      if (persona !== RX.persona) return;
+      if (packTieneDatos(pack)) {
+        pintarRol(main, pack, persona, { fechaMk: fechaMk });
+      } else if (packTieneDatos(RX.cache[persona])) {
+        pintarRol(main, RX.cache[persona], persona, { aviso: "No se pudo actualizar ahora. Se muestra el último pre-rol guardado.", fechaMk: fechaMk });
+      } else {
+        body.innerHTML = '<p class="note">Todavía no hay un pre-rol guardado de ' + esc(persona) + ". Se reintentará en un momento.</p>";
+      }
+    } catch (eA) {
+      if (persona !== RX.persona) return;
+      if (packTieneDatos(RX.cache[persona])) {
+        pintarRol(main, RX.cache[persona], persona, { aviso: "No se pudo actualizar ahora. Se muestra el último pre-rol guardado.", fechaMk: fechaMk });
+      } else {
+        body.innerHTML = '<p class="note">Todavía no hay un pre-rol guardado de ' + esc(persona) + ". Se reintentará en un momento.</p>";
+      }
+    }
+    prefetchRecalcFondo();
   }
   async function abrirHistorial(main) {
     var box = main.querySelector("#rolx-hist");
@@ -588,9 +662,9 @@
       RX.persona = sel.value;
       if (typeof state !== "undefined") state.persona = sel.value;
       root.querySelector("#rolx-ver").innerHTML = "";
-      root.querySelector("#rolx-body").innerHTML = '<p class="note">Calculando el pre-rol…</p>';
       var hist = root.querySelector("#rolx-hist");
       if (!hist.hidden) abrirHistorial(root);
+      if (packTieneDatos(RX.cache[RX.persona])) pintarRol(root, RX.cache[RX.persona], RX.persona, { actualizando: true });
       cargarRol(root);
     };
     root.addEventListener("click", async function (ev) {
@@ -619,13 +693,22 @@
         return;
       }
       if (t.hasAttribute("data-rolx-pdf-todas")) {
+        var periodo = (RX.pack && (RX.pack.periodo || (RX.pack.data && RX.pack.data.periodo))) || "";
         t.disabled = true;
-        var r = await api("rol_pre_todos", {});
+        toast("Armando el PDF de todas…");
+        if (typeof _gcdCargarJsPDF === "function") _gcdCargarJsPDF(function () {});
+        if (typeof _rolCargarFondo === "function") _rolCargarFondo(function () {});
+        var r = await api("rol_pre_todos", { periodo: periodo, recargar: false });
         t.disabled = false;
         if (!r || r.error) { toast((r && r.error) || "No se pudo armar el PDF"); return; }
         if (typeof _pdfPreRolVarios !== "function") { toast("No se pudo cargar el generador de PDF"); return; }
-        _pdfPreRolVarios((r.items || []).map(function (x) { return { d: x.data, periodo: x.periodo }; }), RX.pack ? RX.pack.periodo : "");
-        if (RX.pack) cargarRol(root);
+        var items = (r.items || []).map(function (x) {
+          return { d: x.data || x, periodo: x.periodo || periodo, estado: x.estado, persona: x.persona, firma: x.firma };
+        }).filter(function (x) { return x.d && (x.d.nombre || x.d.nombreCompleto || x.d.sueldo != null || x.d.totalRecibir != null); });
+        if (!items.length) { toast((r.errores && r.errores.length) ? "Todavía no hay roles guardados de este período." : "No hay roles para el PDF"); return; }
+        var nom = (typeof _nombrePdfRolesTodas === "function") ? _nombrePdfRolesTodas(r.periodo || periodo, r.etiqueta) : "";
+        _pdfPreRolVarios(items, r.periodo || periodo, nom);
+        if (r.errores && r.errores.length) toast("PDF sin " + r.errores.map(function (e) { return e.persona; }).join(", ") + " (sin rol guardado)");
         return;
       }
       if (t.hasAttribute("data-rolx-pdf-final")) { await pdfDeRol(t.getAttribute("data-rolx-pdf-final")); return; }
@@ -662,6 +745,9 @@
       if (!r || r.error) { toast((r && r.error) || "No se pudo guardar"); await cargarRol(root); return; }
       toast(CONTAB[s.value] || "Guardado");
       await cargarRol(root);
+    });
+    prefetchTodos().then(function () {
+      if (RX.persona && packTieneDatos(RX.cache[RX.persona]) && !RX.pintado) pintarRol(root, RX.cache[RX.persona], RX.persona, { actualizando: true });
     });
     cargarRol(root);
   }

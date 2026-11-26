@@ -1099,6 +1099,11 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     const { cuadreTrasTicket } = await import("./migo_cuadre_api.ts");
     out.cuadre = await cuadreTrasTicket(ctx, actor);
   } catch { /* el ticket ya quedó */ }
+  try {
+    const { programarRefrescoPreRol } = await import("./rol_admin_api.ts");
+    const cosm = s(p.cosmetologa) || s(p.atendido_por) || s((base as { atendido_por?: unknown }).atendido_por);
+    programarRefrescoPreRol(ctx, ses, cosm ? [String(cosm)] : undefined);
+  } catch { /* el ticket ya quedó */ }
   return out;
 }
 

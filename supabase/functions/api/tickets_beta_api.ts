@@ -664,7 +664,15 @@ extend("tk_guardar", "any", async (p, ctx, ses) => {
   if (!r) return { error: "Ticket no encontrado" };
   if (!(await veTicket(ctx, ses, r))) return { error: "No tienes permiso" };
   if (!esAdmin(ses.rol)) return { error: "Un cambio de ticket lo pide con «Solicitar cambio» (lo aprueba un admin)" };
-  return await reflags(ctx, ses, p, await guardarTodo(ctx, ses, r, p));
+  const out = await reflags(ctx, ses, p, await guardarTodo(ctx, ses, r, p));
+  if (out && !out.error) {
+    try {
+      const { programarRefrescoPreRol } = await import("./rol_admin_api.ts");
+      const cosm = s((r as { atendido_por?: unknown }).atendido_por) || s(p.atendido_por) || s(p.cosmetologa);
+      programarRefrescoPreRol(ctx, ses, cosm ? [cosm] : undefined);
+    } catch { /* el ticket ya quedó */ }
+  }
+  return out;
 });
 /** TK81 (Emilia 18/11): cada cambio de líneas o factura vuelve a evaluar los flags contra las líneas actuales (nunca quedan rancios). */
 async function reflags(ctx: Ctx, ses: Ses, p: Row, out: Row): Promise<Row> {
