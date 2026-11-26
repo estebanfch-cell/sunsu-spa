@@ -200,6 +200,15 @@ export async function cancelarTicket(p: Row, ctx: Ctx, ses: Ses): Promise<Row> {
     + (rev.gifts_restauradas.length ? " · gift cards restauradas: " + rev.gifts_restauradas.map((x) => x.codigo).join(", ") : "")
     + (rev.pagos_anulados.length ? " · pagos anulados: " + rev.pagos_anulados.length : "")
     + (rev.factura_liberada ? " · factura liberada: " + s(rev.factura_liberada.factura) : ""));
+  // TK224: si había una solicitud pendiente de editar/eliminar este ticket, se cierra.
+  // El ticket ya está cancelado; no se vuelve a aplicar la solicitud ni se borra el ticket.
+  try {
+    const { cerrarSolicitudesTicketInactivo } = await import("./avisos_auto.ts");
+    const claves = new Set([s(p.clave), so, s(r.so_num)].filter(Boolean));
+    await cerrarSolicitudesTicketInactivo(ctx, actor, claves);
+    const { resolverAvisosObsoletos } = await import("./avisos_auto.ts");
+    await resolverAvisosObsoletos(ctx, actor);
+  } catch { /* el aviso no frena la cancelación */ }
   return { ok: true, so, stock: moves.length, unidades: moves.reduce((a, m) => a + n(m.delta), 0), paquetes: paqs, liberadas,
     gifts_anuladas: rev.gifts_anuladas, gifts_restauradas: rev.gifts_restauradas, pagos_anulados: rev.pagos_anulados.length, factura_liberada: rev.factura_liberada };
 }

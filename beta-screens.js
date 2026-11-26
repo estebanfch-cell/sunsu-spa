@@ -7623,7 +7623,7 @@ function _dKpi(titulo,valor,act,prev,prevTxt,extra,pie){
 function _dashCss(){
   if(document.getElementById('dsh-css')) return;
   var st=document.createElement('style'); st.id='dsh-css';
-  st.textContent='.dsh-wrap{max-width:760px;margin:0 auto}'
+  st.textContent='.dsh-wrap{max-width:760px;margin:0 auto;padding:0 12px;box-sizing:border-box}'
     +'.dsh-tabs{display:flex;background:var(--blue-l);border-radius:12px;padding:4px;gap:3px;margin:6px 0 8px}'
     +'.dsh-tab{flex:1;border:0;background:transparent;color:var(--gray);font-weight:800;font-size:0.72rem;padding:8px 4px;border-radius:9px;cursor:pointer}'
     +'.dsh-tab.on{background:var(--navy);color:#fff;box-shadow:var(--shadow-sm)}'
@@ -7648,7 +7648,7 @@ function _dashCss(){
     +'.dsh-tbl{width:100%;border-collapse:collapse;font-size:0.62rem}.dsh-tbl th{color:var(--gray);font-weight:800;text-align:right;padding:4px 3px;border-bottom:1.2px solid var(--cream-d);position:sticky;top:0;background:#fff}.dsh-tbl th:first-child,.dsh-tbl td:first-child{text-align:left}.dsh-tbl td{padding:4px 3px;text-align:right;border-bottom:1px solid var(--gray-l);color:var(--text);font-weight:700}'
     +'.dsh-ptabs{display:flex;gap:3px;background:var(--blue-l);border-radius:10px;padding:3px;margin:6px 0}.dsh-ptabs button{flex:1;border:0;background:transparent;font-size:0.6rem;font-weight:800;color:var(--gray);padding:6px 2px;border-radius:8px;cursor:pointer}.dsh-ptabs button.on{background:var(--navy);color:#fff}'
     +'.dsh-ov{position:fixed;inset:0;background:rgba(20,30,50,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px}.dsh-ovb{background:#fff;border-radius:14px;max-width:860px;width:100%;max-height:88vh;overflow:hidden;padding:12px 14px;box-shadow:0 12px 40px rgba(0,0,0,.25)}.dsh-x{border:0;background:var(--blue-l);border-radius:50%;width:30px;height:30px;font-size:1.1rem;cursor:pointer}.dsh-dd:hover{background:var(--blue-l);border-radius:8px}.dsh-ovb .dsh-tbl td:nth-child(2),.dsh-ovb .dsh-tbl td:nth-child(3),.dsh-ovb .dsh-tbl th:nth-child(3),.dsh-ovb .dsh-tbl th:nth-child(4){text-align:left}'
-    +'@media(max-width:520px){.dsh-grid{grid-template-columns:1fr}.dsh-v{font-size:1.3rem}}';
+    +'.dash-av{max-width:760px;margin:10px auto 8px;padding:0;width:100%;box-sizing:border-box}.dash-av-it{display:flex;align-items:center;gap:6px;margin:0 0 6px;padding:6px 8px;border:1px solid var(--cream-d,#E8DCC8);border-radius:10px;background:#fff;box-sizing:border-box}.dash-av-go{flex:1 1 auto;min-width:0;background:none;border:0;padding:0;text-align:left;font:inherit;cursor:pointer;color:var(--navy-d,#2E4A66)}.dash-av-tx{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden;text-overflow:ellipsis;font-size:0.7rem;font-weight:650;line-height:1.3;max-height:calc(1.3em * 3)}.dash-av-x{flex:0 0 28px;width:28px;height:28px;margin:0;font-size:1rem}@media(max-width:520px){.dsh-grid{grid-template-columns:1fr}.dsh-v{font-size:1.3rem}}';
   document.head.appendChild(st);
 }
 function dashPeriodo(p){ _dashSt.periodo=p; renderInicio(document.getElementById('content')); }
@@ -7711,17 +7711,51 @@ function _dashWire(c){
     var x=ev.target.closest('[data-dd]'); if(x){ dashDetalle(x.getAttribute('data-dd'),x.getAttribute('data-ddk'),x.getAttribute('data-ddn')); }
   });
 }
+var _dashGen=0;
+function _dashCacheKey(st){
+  return 'sunsu.dash.getDashboard.'+String(st.periodo||'hoy')+':'+String(st.desde||'')+':'+String(st.hasta||'');
+}
+function _dashCacheGet(st){
+  try{
+    var j=JSON.parse(localStorage.getItem(_dashCacheKey(st))||'');
+    if(j&&j.d&&typeof j.d==='object'&&!j.d.error) return j.d;
+  }catch(e){}
+  return null;
+}
+function _dashCacheSet(st,d){
+  if(!d||d.error) return;
+  try{ localStorage.setItem(_dashCacheKey(st), JSON.stringify({t:Date.now(),d:d})); }catch(e){}
+}
+function _dashSkeleton(){
+  return '<div class="dsh-wrap"><div class="sk" aria-hidden="true"><div class="sk-line w"></div><div class="sk-kpis"><div class="sk-kpi"></div><div class="sk-kpi"></div><div class="sk-kpi"></div></div><div class="sk-card"></div><div class="sk-card"></div><div class="sk-card"></div></div></div>';
+}
 function renderInicio(c){
   _dashCss();
   var st=_dashSt;
-  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando el dashboard...</div>';
+  var cached=_dashCacheGet(st);
+  if(cached){ _pintaDashboard(c, cached, st); }
+  else { c.innerHTML=_dashSkeleton(); }
+  var gen=++_dashGen;
   var q='&periodo='+encodeURIComponent(st.periodo)+(st.periodo==='rango'?'&desde='+encodeURIComponent(st.desde)+'&hasta='+encodeURIComponent(st.hasta):'');
   fetch(APPS_SCRIPT_URL+'?action=getDashboard&token='+encodeURIComponent(window._token||'')+q+'&_t='+Date.now())
   .then(function(r){return r.json();})
   .then(function(d){
+    if(gen!==_dashGen) return;
     // Backend todavía sin `getDashboard`: se queda el dashboard anterior.
     if(d&&d.error&&/no implementada/i.test(String(d.error))){ renderInicioLegacy(c); return; }
-    if(!d||d.error){ c.innerHTML='<div style="padding:20px;color:#B86B6B;font-weight:700">'+_dE((d&&d.error)||'Error')+'</div>'; return; }
+    if(!d||d.error){
+      if(!cached) c.innerHTML='<div style="padding:20px;color:#B86B6B;font-weight:700">'+_dE((d&&d.error)||'Error')+'</div>';
+      return;
+    }
+    _dashCacheSet(st,d);
+    _pintaDashboard(c,d,st);
+  })
+  .catch(function(){
+    if(gen!==_dashGen) return;
+    if(!cached) c.innerHTML='<div style="padding:20px;color:#B86B6B;font-weight:700">Sin conexión — desliza para recargar</div>';
+  });
+}
+function _pintaDashboard(c,d,st){
     window._dashData=d; st._labelPrev=d.labelPrev;
     if(!st.desde) st.desde=d.desde; if(!st.hasta) st.hasta=d.hasta;
     var a=d.actual||{}, p=d.anterior||{}, pg=a.pagos||{}, inv=d.inventario||{}, cp=d.compras||{}, hist=d.historia||[];
@@ -7788,12 +7822,11 @@ function renderInicio(c){
       +'<div class="dsh-sub" style="text-align:center;padding:4px 0 10px">Montos sin IVA 15% · fechas en hora de Ecuador · se actualiza con ↻</div></div>';
     _dashWire(c);
     if (typeof cargarReloj === "function") cargarReloj();
-  })
-  .catch(function(){ c.innerHTML='<div style="padding:20px;color:#B86B6B;font-weight:700">Sin conexión — desliza para recargar</div>'; });
+    if (typeof montarAvisosDash === "function") void montarAvisosDash(c);
 }
 // Dashboard anterior (solo pulso del día). Queda si el backend aún no tiene getDashboard.
 function renderInicioLegacy(c){
-  c.innerHTML='<div class="loading"><div class="spinner"></div>Cargando el pulso del día...</div>';
+  if(!c.querySelector('.dsh-wrap')) c.innerHTML=_dashSkeleton();
   fetch(APPS_SCRIPT_URL+'?action=getDashboardHoy&token='+encodeURIComponent(window._token||'')+'&_t='+Date.now())
   .then(function(r){return r.json();})
   .then(function(d){

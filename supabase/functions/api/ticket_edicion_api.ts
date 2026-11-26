@@ -444,14 +444,20 @@ export async function avisarEdicionTicket(ctx: Ctx, ses: Ses, clave: string, sol
   } catch { /* push opcional */ }
 }
 
-export function avisosVirtualesEdicion(sols: Row[], existentes: Row[], ses: Ses, esAdminRol: boolean): Row[] {
+export function avisosVirtualesEdicion(sols: Row[], existentes: Row[], ses: Ses, esAdminRol: boolean, inactivos?: Set<string>): Row[] {
   if (!esAdminRol) return [];
   const out: Row[] = [];
   for (const r of sols) {
     if (s(r.tabla) !== "ticket_detalle" || s(r.estado) !== "pendiente" || r.prueba === true) continue;
+    if (inactivos && inactivos.has(s(r.fila))) continue;
     const link = s(r.enlace) || ("#/m/tickets/t/" + encodeURIComponent(s(r.fila)));
     const sid = s(r.id);
-    if (existentes.some((x) => s(x.tipo) === "edicion_ticket" && (s(x.ref_id) === sid || s(x.id) === "sol:" + sid || s(x.id) === sid || (s(x.link) === link && !s((x as Row).leida_at || x.leida))))) continue;
+    // TK224: si ya hay un aviso (leído o no) de esta solicitud, no se resucita uno virtual.
+    // Antes solo se omitía si había uno SIN leer, y el × no servía: al marcar leído reaparecía el virtual.
+    if (existentes.some((x) => {
+      const same = s(x.ref_id) === sid || s(x.id) === "sol:" + sid || s(x.id) === sid || s(x.link) === link;
+      return same && (s(x.tipo) === "edicion_ticket" || s(x.tipo) === "solicitud" || !s(x.tipo));
+    })) continue;
     const anu = s(r.tipo) === "eliminacion";
     out.push({
       id: "sol:" + s(r.id), tipo: "edicion_ticket",

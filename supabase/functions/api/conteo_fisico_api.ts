@@ -431,17 +431,19 @@ extend("cf_revisar", "any", async (p, ctx, ses) => {
   return { error: "Acción inválida" };
 });
 
-// Avisos dentro de la app (tarjeta «Asignado a ti» del inicio y campana).
+// Avisos dentro de la app (campana, dropdown de alertas y lista compacta al pie del dashboard).
 extend("notif_mias", "any", async (_p, ctx, ses) => {
-  // TK223: apaga avisos cuya condición ya se resolvió (solicitud, permiso, conteo).
+  // TK223 / TK224: apaga avisos cuya condición ya se resolvió (solicitud, permiso, conteo, ticket cancelado).
   try { await resolverAvisosObsoletos(ctx, actorOf(ses)); } catch { /* la lista igual se sirve */ }
   const rows = (await todas(ctx, "beta_notificaciones")).filter((x) => s(x.usuario) === yo(ses)).sort((a, b) => s(b.created_at).localeCompare(s(a.created_at))).slice(0, 30);
-  const items = rows.map((x) => ({ id: x.id, tipo: s(x.tipo), titulo: s(x.titulo), cuerpo: s(x.cuerpo || x.texto), link: s(x.link || x.ruta), leida: !!s(x.leida_at), fecha: s(x.created_at) }));
+  const items = rows.map((x) => ({ id: x.id, tipo: s(x.tipo), titulo: s(x.titulo), cuerpo: s(x.cuerpo || x.texto), link: s(x.link || x.ruta), ref_id: s(x.ref_id), leida: !!s(x.leida_at), fecha: s(x.created_at) }));
   if (esAdmin(ses.rol)) {
     try {
       const { avisosVirtualesEdicion } = await import("./ticket_edicion_api.ts");
+      const { cargarTicketsInactivos } = await import("./avisos_auto.ts");
       const sols = await ctx.db.all("solicitudes_cambio").catch(() => [] as Row[]);
-      const extra = avisosVirtualesEdicion(sols, items as Row[], ses, true);
+      const inactivos = await cargarTicketsInactivos(ctx);
+      const extra = avisosVirtualesEdicion(sols, items as Row[], ses, true, inactivos);
       for (const it of extra) items.unshift(it);
     } catch { /* sin solicitudes */ }
   }
@@ -450,8 +452,30 @@ extend("notif_mias", "any", async (_p, ctx, ses) => {
 });
 extend("notif_leer", "any", async (p, ctx, ses) => {
   const ids = new Set((Array.isArray(p.ids) ? p.ids : [p.id]).map((x) => s(x)));
-  for (const x of (await todas(ctx, "beta_notificaciones")).filter((r) => s(r.usuario) === yo(ses) && !s(r.leida_at) && (ids.has(s(r.id)) || p.todas === true))) {
-    await ctx.db.write(actorOf(ses), "beta_notificaciones", "update", { id: x.id }, { leida_at: ctx.now.toISOString() });
+  const actor = actorOf(ses);
+  const uid = yo(ses);
+  const now = ctx.now.toISOString();
+  const rows = await todas(ctx, "beta_notificaciones");
+  for (const x of rows.filter((r) => s(r.usuario) === uid && !s(r.leida_at) && (ids.has(s(r.id)) || p.todas === true))) {
+    await ctx.db.write(actor, "beta_notificaciones", "update", { id: x.id }, { leida_at: now });
+  }
+  // TK224: el × de un aviso virtual (id sol:…) debe quedar en el servidor por usuario.
+  // Esas filas no existen en beta_notificaciones; se guarda un acuse con ref_id para que no reaparezca.
+  if (p.todas !== true) {
+    for (const id of ids) {
+      if (!id.startsWith("sol:")) continue;
+      const sid = id.slice(4);
+      if (!sid) continue;
+      const hay = rows.some((r) => s(r.usuario) === uid && (s(r.id) === id || s(r.ref_id) === sid));
+      if (hay) continue;
+      try {
+        await ctx.db.write(actor, "beta_notificaciones", "insert", {}, {
+          id: crypto.randomUUID(), usuario: uid, tipo: "edicion_ticket",
+          titulo: "Aviso descartado", cuerpo: "", ref_id: sid, link: "",
+          leida_at: now, created_at: now,
+        });
+      } catch { /* el dismiss de la pantalla ya se aplicó */ }
+    }
   }
   return { ok: true };
 });
