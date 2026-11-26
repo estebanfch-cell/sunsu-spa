@@ -75,6 +75,45 @@ describe("DEV-31e etiquetas del rol", () => {
     assert.ok(!lbl.some((l) => l.includes("descanso/feriado") || l.startsWith("Horas extraordinarias descanso") || l.startsWith("Horas extraordinarias periodo")));
     assert.equal(out.dias, "Días trabajados 14 + Días feriado (trabajados) 3 + Día descanso (trabajado) 1 + Días asumidos 4 = Total 22 días");
   });
+
+  it("línea DÍAS omite componentes en 0 (pantalla y PDF)", () => {
+    const src = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
+    const pick = (name: string) => {
+      const i = src.indexOf("function " + name + "(");
+      let depth = 0, j = src.indexOf("{", i);
+      for (; j < src.length; j++) { if (src[j] === "{") depth++; else if (src[j] === "}" && --depth === 0) break; }
+      return src.slice(i, j + 1);
+    };
+    const dias = new Function(`${pick("_rolDiasLinea")}\nreturn _rolDiasLinea;`)() as (d: unknown) => string;
+    assert.equal(
+      dias({ diasTrabajados: 15, diasFest: 2, diasDesc: 0, diasAsumidos: 0 }),
+      "Días trabajados 15 + Días feriado (trabajados) 2 = Total 17 días",
+    );
+    assert.equal(
+      dias({ diasTrabajados: 15, diasFest: 0, diasDesc: 0, diasAsumidos: 0 }),
+      "Días trabajados 15 = Total 15 días",
+    );
+    assert.equal(
+      dias({ diasTrabajados: 14, diasFest: 0, diasDesc: 1, diasAsumidos: 0 }),
+      "Días trabajados 14 + Día descanso (trabajado) 1 = Total 15 días",
+    );
+    assert.equal(
+      dias({ diasTrabajados: 10, diasFest: 0, diasDesc: 0, diasAsumidos: 2 }),
+      "Días trabajados 10 + Días asumidos 2 = Total 12 días",
+    );
+    assert.equal(
+      dias({ diasTrabajados: 0, diasFest: 0, diasDesc: 0, diasAsumidos: 0 }),
+      "Total 0 días",
+    );
+    // _lineasRol alimenta la pantalla (DÍAS) y el PDF; misma cadena.
+    const lineas = new Function(`${pick("_rolNum")}\n${pick("_rolHrs")}\n${pick("_rolDiasLinea")}\n${pick("_rolNombre")}\n${pick("_lineasRol")}\nreturn _lineasRol;`)() as (d: unknown) => { dias: string };
+    assert.equal(
+      lineas({ diasTrabajados: 15, diasFest: 2 }).dias,
+      "Días trabajados 15 + Días feriado (trabajados) 2 = Total 17 días",
+    );
+    assert.ok(src.includes("fila('DÍAS:', rol.dias"));
+    assert.ok(src.includes("${esc(rol.dias)}"));
+  });
 });
 
 describe("DEV-31l asumir jornada sin marcajes (t941u)", () => {

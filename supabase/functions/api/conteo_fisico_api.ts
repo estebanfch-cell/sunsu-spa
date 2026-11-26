@@ -431,7 +431,7 @@ extend("cf_revisar", "any", async (p, ctx, ses) => {
   return { error: "Acción inválida" };
 });
 
-// Avisos dentro de la app (campana, dropdown de alertas y lista compacta al pie del dashboard).
+// Avisos dentro de la app (campana, dropdown de alertas y lista compacta arriba del dashboard).
 extend("notif_mias", "any", async (_p, ctx, ses) => {
   // TK223 / TK224: apaga avisos cuya condición ya se resolvió (solicitud, permiso, conteo, ticket cancelado).
   try { await resolverAvisosObsoletos(ctx, actorOf(ses)); } catch { /* la lista igual se sirve */ }
@@ -448,6 +448,22 @@ extend("notif_mias", "any", async (_p, ctx, ses) => {
     } catch { /* sin solicitudes */ }
   }
   items.sort((a, b) => s(b.fecha).localeCompare(s(a.fecha)));
+  // TK225: aviso al equipo de la regla del 50%, visible para todos hasta el 6 dic 2026 (Ecuador),
+  // salvo que esa persona lo haya descartado con × (acuse en beta_notificaciones).
+  try {
+    const { avisoTardeActivo, AVISO_TARDE_TEXTO, AVISO_TARDE_ID } = await import("./fecha_atencion.ts");
+    const { ecuadorParts } = await import("./domain.ts");
+    if (avisoTardeActivo(ecuadorParts(ctx.now).ymd)) {
+      const key = AVISO_TARDE_ID;
+      const hay = items.some((x) => s(x.id) === key || s((x as Row).ref_id) === key);
+      if (!hay) {
+        items.unshift({
+          id: key, tipo: "aviso_equipo", titulo: AVISO_TARDE_TEXTO, cuerpo: "",
+          link: "", ref_id: key, leida: false, fecha: ctx.now.toISOString(),
+        });
+      }
+    }
+  } catch { /* el resto de avisos se sirve igual */ }
   return { ok: true, items: items.slice(0, 30), sinLeer: items.filter((x) => !x.leida).length };
 });
 extend("notif_leer", "any", async (p, ctx, ses) => {
@@ -463,14 +479,14 @@ extend("notif_leer", "any", async (p, ctx, ses) => {
   // Esas filas no existen en beta_notificaciones; se guarda un acuse con ref_id para que no reaparezca.
   if (p.todas !== true) {
     for (const id of ids) {
-      if (!id.startsWith("sol:")) continue;
-      const sid = id.slice(4);
+      if (!id.startsWith("sol:") && !id.startsWith("aviso:")) continue;
+      const sid = id.startsWith("sol:") ? id.slice(4) : id;
       if (!sid) continue;
       const hay = rows.some((r) => s(r.usuario) === uid && (s(r.id) === id || s(r.ref_id) === sid));
       if (hay) continue;
       try {
         await ctx.db.write(actor, "beta_notificaciones", "insert", {}, {
-          id: crypto.randomUUID(), usuario: uid, tipo: "edicion_ticket",
+          id: crypto.randomUUID(), usuario: uid, tipo: id.startsWith("aviso:") ? "aviso_equipo" : "edicion_ticket",
           titulo: "Aviso descartado", cuerpo: "", ref_id: sid, link: "",
           leida_at: now, created_at: now,
         });
