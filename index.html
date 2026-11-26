@@ -356,8 +356,16 @@
   .ix-sheet { background: white; border-radius: 18px; padding: 16px; width: min(480px, 100%); margin-top: 8px; }
   .ix-sheet label { display: block; font-size: 0.68rem; font-weight: 700; color: var(--gray); margin: 8px 0; }
   .ix-sheet input, .ix-sheet select, .ix-sheet textarea { width: 100%; margin-top: 4px; padding: 8px; border: 1.5px solid var(--cream-d); border-radius: 9px; font: inherit; }
-  .ix-sol { border-top: 1px solid var(--cream-d); padding: 10px 0; font-size: 0.78rem; }
-  .ix-diff { font-size: 0.72rem; color: var(--navy); }
+  .ix-sheet.ix-sols { width: min(560px, 100%); max-height: min(88vh, 760px); overflow: auto; }
+  .ix-sol { border: 1px solid var(--cream-d); border-radius: 12px; padding: 10px 12px; margin: 0 0 10px; font-size: 0.78rem; background: #fff; }
+  .ix-sol-hd { font-weight: 650; color: var(--navy-d, #2E4A66); line-height: 1.35; margin: 0 0 6px; }
+  .ix-sol-mot, .ix-diff { font-size: 0.72rem; color: var(--navy); margin: 0 0 4px; }
+  .ix-diff-tx { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  .ix-diff.exp .ix-diff-tx { -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; }
+  .ix-vermas { background: none; border: 0; padding: 0; color: var(--navy); font: inherit; font-size: 0.68rem; font-weight: 800; cursor: pointer; text-decoration: underline; }
+  .ix-hist { display: inline-block; margin-top: 8px; background: none; border: 0; padding: 0; color: var(--gray); font: inherit; font-size: 0.72rem; cursor: pointer; text-decoration: underline; }
+  .ix-hist-box { margin-top: 8px; }
+  .ix-sol.hist { opacity: 0.85; background: #FAF8F3; }
   .btn[hidden] { display: none !important; }
   .ix-sol.prueba { background: #fff7e0; border-left: 4px solid #c99a2e; padding-left: 8px; }
   .ix-prueba { display: inline-block; background: #c99a2e; color: #fff; font-weight: 800; font-size: 0.66rem; letter-spacing: .06em; border-radius: 6px; padding: 1px 6px; }
@@ -935,6 +943,9 @@
   .dash-av-tx { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; text-overflow: ellipsis; font-size: 0.68rem; font-weight: 650; line-height: 1.3; max-height: calc(1.3em * 2); }
   .dash-av-it.exp .dash-av-tx { -webkit-line-clamp: unset; line-clamp: unset; max-height: none; overflow: visible; }
   .dash-av-x { flex: 0 0 28px; width: 28px; height: 28px; margin: 0; font-size: 1rem; }
+  .dash-av-extra { display: none; }
+  .dash-av.abierto .dash-av-extra { display: block; }
+  .dash-av-more { display: block; width: 100%; margin: 2px 0 0; padding: 4px 8px; border: 0; background: none; color: var(--navy-d, #2E4A66); font: inherit; font-size: 0.68rem; font-weight: 800; text-align: left; cursor: pointer; }
   .ver-como-nav { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
   .top-user .dot { width: 8px; height: 8px; border-radius: 99px; margin-right: 6px; flex: 0 0 8px; background: #F4E3B2; }
   .aviso-pin-5d {
@@ -1137,7 +1148,7 @@
   .mob-num { font-weight: 800; color: var(--navy-d, #2b3f5c); font-size: 0.86rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mob-fac { font-weight: 500; color: var(--gray); font-size: 11.5px; letter-spacing: 0; font-variant-numeric: tabular-nums; }
   .mob-fac-no { color: #B45309; font-weight: 600; }
-  .mob-fac-falta { color: #B91C1C; font-weight: 800; }
+  .mob-fac-falta, .mob-vouch-desc { color: #B91C1C; font-weight: 800; }
   /* TK208: rojo bien saturado en iPhone (Safari lava los pasteles). */
   @supports (-webkit-touch-callout: none) {
     .tk-row.tk-flagged td { background: #F87171; color: #7f1d1d; }
@@ -4176,10 +4187,13 @@ function alertasDashboard(apr, notif, ocultas, vouchers) {
   const fuera = new Set((ocultas || []).map(String));
   const out = [], vistos = new Set();
   const add = (x) => { if (!x.key || fuera.has(x.key) || vistos.has(x.key)) return; vistos.add(x.key); out.push(x); };
-  // TK157: descuadres de voucher leídos con Claude Vision (voucher vs ticket / factura Migo). × los descarta igual.
+  // TK226: Falta factura y Descuadre voucher no van en avisos ni en el dropdown;
+  // se pintan en rojo en la tarjeta del ticket. Se ignoran vouchers.items de esos tipos.
   ((vouchers && !vouchers.error && vouchers.items) || []).forEach((v) => {
     if (!v || !v.key) return;
-    add({ key: String(v.key), icono: "🧾", texto: "⚠️ " + String(v.texto || ("Descuadre voucher " + (v.clave || ""))), detalle: String(v.detalle || v.mensaje || ""), href: v.href || ("#/m/tickets/t/" + encodeURIComponent(v.clave || "")) });
+    var tipo = String(v.tipo || ""), key = String(v.key), tx = String(v.texto || "");
+    if (tipo === "falta_factura" || tipo === "descuadre" || /^falta-factura/.test(key) || /^voucher:/.test(key) || /falta factura|descuadre voucher/i.test(tx)) return;
+    add({ key: key, icono: "🧾", texto: String(v.texto || "Aviso"), detalle: String(v.detalle || v.mensaje || ""), href: v.href || "" });
   });
   ((apr && !apr.error && apr.grupos) || []).forEach((g) => (g.items || []).forEach((it) => {
     if (it && it.prueba) return;
@@ -4221,6 +4235,8 @@ if (!window._dashAlWired) {
     if (!t) return;
     const x = t.closest("[data-al-x]");
     if (x) { ev.preventDefault(); ev.stopPropagation(); const row = x.closest("[data-al-key]"); descartarAlerta(x.getAttribute("data-al-x"), row && row.getAttribute("data-al-notif")); return; }
+    const more = t.closest("[data-av-more]");
+    if (more) { ev.preventDefault(); const box = more.closest("#dash-av") || document.getElementById("dash-av"); if (box) { const on = box.classList.toggle("abierto"); const n = more.getAttribute("data-av-more"); more.textContent = on ? "Ver menos" : ("Ver " + n + " más"); } return; }
     const b = t.closest("#dash-al-btn");
     if (b) { const dd = document.getElementById("dash-al-dd"); if (dd) { dd.hidden = !dd.hidden; b.setAttribute("aria-expanded", dd.hidden ? "false" : "true"); } return; }
     const g = t.closest("[data-al-go]");
@@ -4233,21 +4249,25 @@ if (!window._dashAlWired) {
 }
 /** TK225: avisos compactos arriba del dashboard (máx. 2 líneas; toque para abrir o ampliar), con ×. */
 function htmlDashAvisosFoot(alertas, conteos) {
-  const av = (alertas || []).map((a) => {
+  const filaAv = (a) => {
     const eq = String(a.notifId || a.key || "").indexOf("aviso:") >= 0;
     const tx = [a.icono, a.texto, a.detalle].filter(Boolean).join(" · ");
     return `<div class="dash-av-it${eq ? " dash-av-eq" : ""}" data-al-key="${esc(a.key)}"${a.notifId != null ? ` data-al-notif="${esc(a.notifId)}"` : ""}>` +
     `<button type="button" class="dash-av-go" data-al-go="${esc(a.href || "")}"><span class="dash-av-tx">${esc(tx)}</span></button>` +
     `<button type="button" class="dash-al-x dash-av-x" data-al-x="${esc(a.key)}" title="Descartar" aria-label="Descartar">×</button></div>`;
-  }).join("");
-  const cf = (conteos || []).map((c) =>
+  };
+  const filaCf = (c) =>
     `<div class="dash-av-it">` +
     `<button type="button" class="dash-av-go" data-al-go="#/m/conteos/cf/${encodeURIComponent(c.id)}">` +
     `<span class="dash-av-tx">Conteo físico ${esc(c.numero)} · ${esc(c.bodegaNombre || "")}${c.lineas ? " · " + esc(c.contadas) + "/" + esc(c.lineas) : ""}</span>` +
-    `</button></div>`
-  ).join("");
-  if (!av && !cf) return "";
-  return `<div class="dash-av" id="dash-av">${cf}${av}</div>`;
+    `</button></div>`;
+  const rows = (conteos || []).map(filaCf).concat((alertas || []).map(filaAv));
+  if (!rows.length) return "";
+  const max = 3;
+  const vis = rows.slice(0, max).join("");
+  const extra = rows.slice(max);
+  const more = extra.length ? `<div class="dash-av-extra">${extra.join("")}</div><button type="button" class="dash-av-more" data-av-more="${extra.length}">Ver ${extra.length} más</button>` : "";
+  return `<div class="dash-av" id="dash-av">${vis}${more}</div>`;
 }
 async function montarAvisosDash(c) {
   if (!c || !c.isConnected) return;
@@ -9092,7 +9112,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-26-ROLMOD"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-26-TK226"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -9273,19 +9293,19 @@ window.SunsuUpdate.init();
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk195"></script>
-<script src="beta-screens.js?v=20261126rolmod"></script>
+<script src="beta-screens.js?v=20261126tk226"></script>
 <script src="mc-rol.js?v=20261126rolmod"></script>
-<script src="beta-inline.js?v=20261120tk179"></script>
+<script src="beta-inline.js?v=20261126tk226"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
 <script src="mc-nav.js?v=20261123tk216"></script>
 <script src="mc-permisos.js?v=20261120tk179"></script>
 <script src="mc-protocolos.js?v=20261120tk179"></script>
-<script src="mc-conteo.js?v=20261126tk225"></script>
+<script src="mc-conteo.js?v=20261126tk226"></script>
 <script src="mc-transferencias.js?v=20261120tk179"></script>
 <script src="mc-ajustes.js?v=20261120tk179"></script>
 <script src="vendor-qrcode.js?v=20261120tk179"></script>
 <script src="mc-wa.js?v=20261124tk217"></script>
-<script src="mc-tickets.js?v=20261125dev34"></script>
+<script src="mc-tickets.js?v=20261126tk226"></script>
 <script src="mc-maestro.js?v=20261120tk186"></script>
 <script src="mc-empleados.js?v=20261120tk179"></script>
 <script src="mc-edit.js?v=20261120tk179"></script>
@@ -9306,8 +9326,8 @@ window.SunsuUpdate.init();
 <script src="mc-movil.js?v=20261120tk179"></script>
 <script src="mc-promociones.js?v=20261120tk179"></script>
 <script src="mc-agenda.js?v=20261124tk217"></script>
-<script src="mc-staff-home.js?v=20261121tk210"></script>
-<script src="mc-aviso-tarde.js?v=20261126tk225"></script>
+<script src="mc-staff-home.js?v=20261126tk226"></script>
+<script src="mc-aviso-tarde.js?v=20261126tk226"></script>
 <script src="mc-borradores.js?v=20261120tk179"></script>
 <script src="mc-portal.js?v=20261120tk179"></script>
 <script src="mc-portal-admin.js?v=20261120tk179"></script><script>

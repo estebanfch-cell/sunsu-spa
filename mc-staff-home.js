@@ -202,17 +202,7 @@
     if (d && d.error) return '<p class="err">' + e(d.error) + "</p>";
     render._last = d;
     var cuerpo = html(d);
-    // TK208: recepción (y admin en «Ver como») ve «Falta factura» en Inicio, igual que el Dashboard.
-    try {
-      var rol = String((d && d.rol) || (window.state && ((state.user && (state.user.role || state.user.rol)) || (state.userReal && (state.userReal.role || state.userReal.rol)))) || "");
-      if (/recepcion|reception|admin/i.test(rol) && typeof api === "function" && typeof alertasDashboard === "function" && typeof htmlDashTop === "function") {
-        var vch = await Promise.resolve(api("voucher_alertas", {})).catch(function () { return null; });
-        if (vch && vch.items && vch.items.length) {
-          var ocultas = typeof alertasOcultas === "function" ? alertasOcultas() : [];
-          cuerpo = htmlDashTop(alertasDashboard(null, null, ocultas, vch)) + cuerpo;
-        }
-      }
-    } catch (alErr) {}
+    // TK226: Falta factura y Descuadre voucher ya no se listan en Inicio; van en rojo en Tickets.
     return cuerpo;
   }
   function wire(main) {

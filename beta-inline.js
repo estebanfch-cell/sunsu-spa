@@ -361,42 +361,144 @@
     };
   }
 
-  function txt(v) { return v == null || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v); }
-  function diff(antes, propuestos) {
-    antes = antes || {};
-    propuestos = propuestos || {};
-    // Pantallas viejas (TK61): el antes y los nombres viajan dentro de la propuesta.
-    if (propuestos.__antes && typeof propuestos.__antes === "object") antes = Object.assign({}, propuestos.__antes, antes);
-    if (propuestos.__campos && typeof propuestos.__campos === "object") antes = Object.assign({ _campos: propuestos.__campos }, antes);
-    var nombres = antes._campos && typeof antes._campos === "object" ? antes._campos : {};
-    // Solo lo que la persona propuso cambiar (las propuestas parciales no muestran campos «borrados»).
-    var keys = Object.keys(propuestos).filter(function (k) { return k.charAt(0) !== "_"; });
-    return keys.filter(function (k) { return txt(antes[k]) !== txt(propuestos[k]); }).map(function (k) {
-      return '<div class="ix-diff"><b>' + esc(nombres[k] || k) + '</b> ' + esc(txt(antes[k])) + " → " + esc(txt(propuestos[k])) + "</div>";
-    }).join("") || '<div class="ix-diff">Sin diferencia de campos</div>';
+  var IX_OCULTOS = { __antes: 1, __campos: 1, __payload: 1, _via: 1, _campos: 1, _cambios: 1, edicion_form: 1, form: 1, paqPick: 1, colQ: 1, facial_hecho: 1, servicios_adicionales: 1, diff: 1, propuesta: 1, lineas: 1, totales: 1, datos: 1 };
+  var IX_NOMBRES = { autorizaFotos: "Autoriza fotos", autoriza_fotos: "Autoriza fotos", notas: "Notas", recomendaciones: "Recomendaciones", retorno: "Fecha de regreso", fechaRetorno: "Fecha de regreso", retornoTrat: "Tratamiento recomendado", justificacion_descuento: "Motivo del descuento", nombre: "Nombre", apellido: "Apellido", cedula: "Cédula", factura: "Factura", cosmetologa: "Atendió", cabina: "Cabina", local: "Local", telefono: "Teléfono", sector: "Sector", tipoPiel: "Tipo de piel", alergias: "Alergias", medicacion: "Medicación", condiciones: "Condiciones", nacimiento: "Nacimiento", estimado: "Total", total: "Total", descuento: "Descuento" };
+  function ixNombre(k) {
+    if (IX_NOMBRES[k]) return IX_NOMBRES[k];
+    if (CAMPOS) {
+      var g, i, L;
+      for (g in CAMPOS) {
+        L = CAMPOS[g] || [];
+        for (i = 0; i < L.length; i++) if (L[i][0] === k) return L[i][1];
+      }
+    }
+    return null;
   }
-
-  async function panel() {
-    var data = await api("getSolicitudes", {});
-    if (data.error) { if (window.toast) toast(data.error); return; }
-    var overlay = document.createElement("div");
-    overlay.className = "ix-overlay";
+  function ixVal(v) {
+    if (v == null || v === "") return "—";
+    if (typeof v === "boolean") return v ? "SI" : "NO";
+    if (typeof v === "number" && isFinite(v)) return (Math.abs(v) >= 0 && /total|estimado|precio|monto/i.test(String(v)) === false) ? (v === Math.round(v * 100) / 100 && (v > 1 || v === 0) ? "$" + Number(v).toFixed(2) : String(v)) : String(v);
+    if (typeof v === "object") return "";
+    var s0 = String(v);
+    if (/^\d+(\.\d+)?$/.test(s0) && Number(s0) >= 0 && s0.indexOf(".") >= 0) return "$" + Number(s0).toFixed(2);
+    return s0;
+  }
+  function ixMoney(v) {
+    var n = Number(v);
+    return isFinite(n) ? "$" + n.toFixed(2) : "—";
+  }
+  function ixLinea(lbl, antes, despues) {
+    var a = ixVal(antes), d = ixVal(despues);
+    if (!a && !d) return "";
+    if (a === d) return "";
+    var tx = (lbl ? lbl + ": " : "") + (a || "—") + " → " + (d || "—");
+    return '<div class="ix-diff"><div class="ix-diff-tx">' + esc(tx) + '</div><button type="button" class="ix-vermas" data-ix-mas-txt hidden>ver más</button></div>';
+  }
+  // TK226: resumen legible. Nunca JSON ni claves internas.
+  function resumenCambios(s) {
+    var prop = (s && s.propuestos && typeof s.propuestos === "object") ? s.propuestos : {};
+    var antes = (s && s.antes && typeof s.antes === "object") ? s.antes : {};
+    if (prop.__antes && typeof prop.__antes === "object") antes = Object.assign({}, prop.__antes, antes);
+    var nombres = Object.assign({}, IX_NOMBRES, (antes._campos && typeof antes._campos === "object") ? antes._campos : {}, (prop.__campos && typeof prop.__campos === "object") ? prop.__campos : {});
+    var out = [];
+    function push(lbl, a, d) {
+      var h = ixLinea(lbl || "", a, d);
+      if (h) out.push(h);
+    }
+    if (s && s.tipo === "eliminacion") {
+      return '<div class="ix-diff"><div class="ix-diff-tx">Se pide eliminar ' + esc(s.etiqueta || s.fila || "este registro") + "</div></div>";
+    }
+    if (Array.isArray(prop._cambios)) {
+      prop._cambios.forEach(function (c) {
+        if (!c) return;
+        push(c.etiqueta || c.campo || ixNombre(c.clave) || "", c.antes, c.despues);
+      });
+    }
+    var P = (prop.propuesta && typeof prop.propuesta === "object") ? prop.propuesta : null;
+    if (P && Array.isArray(P.legible)) {
+      P.legible.forEach(function (c) {
+        if (!c) return;
+        var det = c.detalle ? String(c.detalle) : "";
+        det = det.replace(/^Antes:\s*/i, "").replace(/\s*→\s*Después:\s*/i, " → ");
+        var tx = (c.titulo ? String(c.titulo) + ": " : "") + (det || "");
+        if (!tx.replace(":", "").trim()) return;
+        out.push('<div class="ix-diff"><div class="ix-diff-tx">' + esc(tx) + '</div><button type="button" class="ix-vermas" data-ix-mas-txt hidden>ver más</button></div>');
+      });
+    }
+    if (P && P.total && P.total.texto) {
+      out.push('<div class="ix-diff"><div class="ix-diff-tx">' + esc(String(P.total.texto)) + '</div></div>');
+    } else if (prop.totales && typeof prop.totales === "object") {
+      var ta = (antes.totales && typeof antes.totales === "object") ? antes.totales.total : antes.total;
+      var td = prop.totales.total;
+      if (td != null && Number(ta) !== Number(td)) push("Total", ixMoney(ta), ixMoney(td));
+    }
+    if (Array.isArray(prop.lineas) && !(P && Array.isArray(P.legible) && P.legible.length)) {
+      var L0 = (antes.lineas && Array.isArray(antes.lineas)) ? antes.lineas : [];
+      var aTxt = L0.length ? (L0.length + " línea" + (L0.length === 1 ? "" : "s")) : "—";
+      var dTxt = prop.lineas.length + " línea" + (prop.lineas.length === 1 ? "" : "s");
+      push("Líneas", aTxt, dTxt);
+    }
+    var datos = (prop.datos && typeof prop.datos === "object") ? prop.datos : {};
+    var datosA = (antes.datos && typeof antes.datos === "object") ? antes.datos : antes;
+    Object.keys(datos).forEach(function (k) {
+      if (IX_OCULTOS[k] || k.charAt(0) === "_") return;
+      var lbl = nombres[k] || ixNombre(k);
+      if (!lbl) return;
+      push(lbl, datosA[k], datos[k]);
+    });
+    Object.keys(prop).forEach(function (k) {
+      if (IX_OCULTOS[k] || k.charAt(0) === "_") return;
+      if (typeof prop[k] === "object") return;
+      var lbl = nombres[k] || ixNombre(k);
+      if (!lbl) return;
+      var av = (antes[k] != null) ? antes[k] : (datosA[k]);
+      push(lbl, av, prop[k]);
+    });
+    if (!out.length) return '<div class="ix-diff"><div class="ix-diff-tx">Sin diferencia de campos visible</div></div>';
+    return out.join("");
+  }
+  function ixTipo(s) {
+    if (!s) return "Cambio";
+    if (s.tipo === "eliminacion") return s.tabla === "cliente_beta" ? "Eliminar ficha" : "Eliminar ticket";
+    if (s.tabla === "cliente_beta") return "Cambio de ficha";
+    if (s.tabla === "ticket_detalle") return "Edición de ticket";
+    return "Cambio";
+  }
+  function ixCosa(s) {
+    if (s.etiqueta) return s.etiqueta;
+    if (s.fila) return String(s.fila);
+    return "";
+  }
+  function ixCuando(s) {
+    return s && s.creado ? new Date(s.creado).toLocaleString("es-EC", { timeZone: "America/Guayaquil", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+  }
+  function tarjetaSol(s, hist) {
+    var cosa = ixCosa(s);
+    var cuando = ixCuando(s);
+    var abrir = s.enlace ? ' <a href="' + esc(s.enlace) + '" data-ix-abrir>Abrir</a>' : "";
+    var prueba = s.prueba ? '<span class="ix-prueba">SIMULACIÓN</span> ' : "";
     var admin = edita();
-    var items = (data.items || []).map(function (s) {
-      var cosa = s.etiqueta ? esc(s.etiqueta) : esc(s.tabla) + " " + esc(s.fila);
-      var cuerpo = s.tipo === "eliminacion" ? "<div>🗑️ Eliminar " + cosa + "</div>" : diff(s.antes, s.propuestos);
-      var acciones = admin && s.estado === "pendiente"
-        ? '<div class="ix-acc"><button type="button" data-ok="' + esc(s.id) + '">Aprobar</button><button type="button" data-no="' + esc(s.id) + '">Rechazar</button></div>'
-        : '<div class="ix-estado">' + esc(s.estado) + (s.comentario ? " · " + esc(s.comentario) : "") + "</div>";
-      var cuando = s.creado ? new Date(s.creado).toLocaleString("es-EC", { timeZone: "America/Guayaquil", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
-      var abrir = s.enlace ? ' <a href="' + esc(s.enlace) + '" data-ix-abrir>Abrir →</a>' : "";
-      var prueba = s.prueba ? '<span class="ix-prueba">SIMULACIÓN</span> ' : "";
-      return '<article class="ix-sol' + (s.prueba ? " prueba" : "") + '"><div>' + prueba + "<b>" + esc(s.solicitante) + "</b> · " + (s.tipo === "eliminacion" ? "pide eliminar" : "pide un cambio") + " · " + cosa + abrir + (cuando ? ' <span class="ix-cuando">' + esc(cuando) + "</span>" : "") + "</div><div><i>Motivo:</i> " + esc(s.motivo) + "</div>" + cuerpo + (s.prueba ? '<div class="ix-nota">Solicitud de simulación: aprobar o rechazar no cambia datos reales.</div>' : "") + acciones + "</article>";
-    }).join("") || '<p>No hay solicitudes.</p>';
-    overlay.innerHTML = '<div class="ix-sheet"><div class="ix-line"><b>Solicitudes</b><button type="button" id="ix-x">×</button></div>' + items + "</div>";
-    document.body.appendChild(overlay);
+    var acciones = !hist && admin && s.estado === "pendiente"
+      ? '<div class="ix-acc"><button type="button" data-ok="' + esc(s.id) + '">Aprobar</button><button type="button" data-no="' + esc(s.id) + '">Rechazar</button></div>'
+      : (hist ? '<div class="ix-estado">' + esc(s.estado || "") + (s.comentario ? " · " + esc(s.comentario) : "") + "</div>" : "");
+    var hd = prueba + "<b>" + esc(s.solicitante || "") + "</b> · " + esc(ixTipo(s)) + (cosa ? " · " + esc(cosa) : "") + abrir + (cuando ? ' <span class="ix-cuando">' + esc(cuando) + "</span>" : "");
+    var mot = s.motivo ? '<div class="ix-sol-mot"><i>Motivo:</i> ' + esc(s.motivo) + "</div>" : "";
+    return '<article class="ix-sol' + (s.prueba ? " prueba" : "") + (hist ? " hist" : "") + '"><div class="ix-sol-hd">' + hd + "</div>" + mot + resumenCambios(s) + (s.prueba && !hist ? '<div class="ix-nota">Solicitud de simulación: aprobar o rechazar no cambia datos reales.</div>' : "") + acciones + "</article>";
+  }
+  function wireSolPanel(overlay) {
     var _el = overlay.querySelector("#ix-x"); if (_el) _el.onclick = function () { overlay.remove(); };
     overlay.querySelectorAll("[data-ix-abrir]").forEach(function (a) { a.addEventListener("click", function () { overlay.remove(); }); });
+    overlay.querySelectorAll("[data-ix-mas-txt]").forEach(function (b) {
+      var box = b.previousElementSibling;
+      if (!box) return;
+      if (box.scrollHeight > box.clientHeight + 2) b.hidden = false;
+      b.onclick = function () {
+        var d = b.closest(".ix-diff");
+        if (!d) return;
+        var on = d.classList.toggle("exp");
+        b.textContent = on ? "ver menos" : "ver más";
+      };
+    });
     overlay.querySelectorAll("[data-ok],[data-no]").forEach(function (btn) {
       btn.onclick = async function () {
         var aprobar = btn.hasAttribute("data-ok");
@@ -408,6 +510,37 @@
         refrescar(tablaDe([]));
       };
     });
+    var histBtn = overlay.querySelector("[data-ix-hist]");
+    if (histBtn) histBtn.onclick = async function () {
+      histBtn.disabled = true;
+      var box = overlay.querySelector("#ix-hist");
+      if (!box) return;
+      if (box.getAttribute("data-on") === "1") {
+        box.hidden = true; box.setAttribute("data-on", "0"); histBtn.textContent = "Ver historial"; histBtn.disabled = false; return;
+      }
+      box.innerHTML = '<p class="ix-cuando">Cargando historial…</p>';
+      box.hidden = false;
+      var h = await api("getSolicitudes", { historial: true }).catch(function () { return null; });
+      var list = ((h && h.items) || []).map(function (s) { return tarjetaSol(s, true); }).join("") || '<p class="ix-cuando">No hay solicitudes anteriores.</p>';
+      box.innerHTML = list;
+      box.setAttribute("data-on", "1");
+      histBtn.textContent = "Ocultar historial";
+      histBtn.disabled = false;
+      wireSolPanel(overlay);
+    };
+  }
+
+  async function panel() {
+    var data = await api("getSolicitudes", {});
+    if (data.error) { if (window.toast) toast(data.error); return; }
+    var overlay = document.createElement("div");
+    overlay.className = "ix-overlay";
+    var items = (data.items || []).map(function (s) { return tarjetaSol(s, false); }).join("") || '<p>No hay solicitudes pendientes.</p>';
+    var histN = Number(data.historial) || 0;
+    var hist = histN ? '<button type="button" class="ix-hist" data-ix-hist>Ver historial</button><div id="ix-hist" class="ix-hist-box" hidden></div>' : "";
+    overlay.innerHTML = '<div class="ix-sheet ix-sols"><div class="ix-line"><b>Solicitudes</b><button type="button" id="ix-x">×</button></div>' + items + hist + "</div>";
+    document.body.appendChild(overlay);
+    wireSolPanel(overlay);
   }
 
   async function contar() {
