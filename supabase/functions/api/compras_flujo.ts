@@ -5,6 +5,8 @@ import { consultar } from "./query.ts";
 import { enPrueba, type Db } from "./db.ts";
 import { n, productQtys, round2, s, skuCode, siguienteTestDoc, ymdUtc, type Row, esCancelado } from "./domain.ts";
 import { BODEGA_CABINA, BODEGA_VENTA, runErp } from "./erp.ts";
+import { destinoDe } from "./recepciones.ts";
+import { famsConsigDb } from "./consig_config.ts";
 import { guardarArchivo } from "./lib.ts";
 import { codigoFamilia, familiaDeFila, mismoNombre } from "./ventas.ts";
 
@@ -238,6 +240,7 @@ export async function escribirLineas(db: Db, actor: string, ocId: string, lineas
   }
   const prev = (await db.all("erp_oc_lineas")).filter((r) => r.oc_id === ocId);
   for (const old of prev) await db.write(actor, "erp_oc_lineas", "delete", { id: old.id }, null);
+  const famsOn = await famsConsigDb(db);
   let i = 0;
   let sub = 0;
   let escritas = 0;
@@ -249,8 +252,8 @@ export async function escribirLineas(db: Db, actor: string, ocId: string, lineas
     const precio = ln.precio != null ? n(ln.precio) : precioDe(prod);
     const neto = round2(cant * precio);
     sub += neto;
-    const uso = s(prod.uso);
-    const bodega = s(ln.bodega_id) || (uso === "cabina" ? BODEGA_CABINA : BODEGA_VENTA);
+    const dest = destinoDe(prod, famsOn);
+    const bodega = dest.bodega_id || s(ln.bodega_id) || (s(prod.uso) === "cabina" ? BODEGA_CABINA : BODEGA_VENTA);
     await db.write(actor, "erp_oc_lineas", "insert", {}, {
       id: id(), oc_id: ocId, producto_id: prod.id, cantidad: cant, precio, descuento_pct: 0,
       bodega_id: bodega, subtotal: neto, recibido: 0, no_recibido: 0, plazo: s(ln.plazo) || "CONSIGNACION", orden: i++,
@@ -438,6 +441,7 @@ export async function comprasRecibir(db: Db, actor: string, p: Row, now: Date, a
   const map = new Map(prods.map((r) => [String(r.id), r]));
   const recibir: Row[] = [];
   const noRec: { id: string; qty: number }[] = [];
+  const famsOn = await famsConsigDb(db);
   for (const ln of ins) {
     const ol = pedidas.find((r) => r.id === ln.oc_linea_id || r.id === ln.id);
     if (!ol) return { error: "Línea de OC no existe" };
@@ -447,8 +451,8 @@ export async function comprasRecibir(db: Db, actor: string, p: Row, now: Date, a
     if (rec + no > pend + 1e-9) return { error: "La cantidad supera lo pendiente de " + s(map.get(String(ol.producto_id))?.sku || "la línea") };
     if (rec > 0) {
       const prod = map.get(String(ol.producto_id));
-      const uso = s(prod?.uso);
-      const bodega = s(ol.bodega_id) || (uso === "cabina" ? BODEGA_CABINA : BODEGA_VENTA);
+      const dest = destinoDe(prod, famsOn);
+      const bodega = dest.bodega_id || s(ol.bodega_id) || (s(prod?.uso) === "cabina" ? BODEGA_CABINA : BODEGA_VENTA);
       recibir.push({ oc_linea_id: ol.id, cantidad: rec, bodega_id: bodega });
     }
     if (no > 0) noRec.push({ id: String(ol.id), qty: no });
