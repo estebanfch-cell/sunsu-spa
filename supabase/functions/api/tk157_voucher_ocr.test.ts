@@ -172,23 +172,28 @@ describe("TK157 alertas del Dashboard", () => {
   it("alertasDescuadre puro", () => {
     assert.equal(alertasDescuadre([{ clave: "X", datos: { comprobantes: [{ url: "archivo:z", cruce: { estado: "cuadra" } }] } }], new Set()).length, 0);
   });
-  it("Dashboard: alertasDashboard incluye el descuadre y el × lo descarta (clave voucher:…)", () => {
+  it("Dashboard: alertasDashboard ya no lista descuadre ni falta factura", () => {
     const html = file("index.html");
     const ini = html.indexOf("function alertasDashboard(");
     const fin = html.indexOf("function htmlDashTop(");
     const src = html.slice(ini, fin);
     const alertasDashboard = new Function(src + "; return alertasDashboard;")() as (a: unknown, n: unknown, o: string[], v: unknown) => Row[];
-    const v = { items: [{ key: "voucher:TK-SO-1927:a1", clave: "TK-SO-1927", texto: "Descuadre voucher TK-SO-1927", detalle: "Voucher $30.00 vs Ticket $15.00" }] };
-    const L = alertasDashboard(null, null, [], v);
-    assert.equal(L.length, 1); assert.equal(L[0].texto, "⚠️ Descuadre voucher TK-SO-1927"); assert.equal(L[0].href, "#/m/tickets/t/TK-SO-1927");
-    assert.equal(alertasDashboard(null, null, ["voucher:TK-SO-1927:a1"], v).length, 0);
-    assert.match(html, /api\("voucher_alertas"/);
+    const v = { items: [
+      { key: "voucher:TK-SO-1927:a1", tipo: "descuadre", clave: "TK-SO-1927", texto: "Descuadre voucher TK-SO-1927", detalle: "Voucher $30.00 vs Ticket $15.00" },
+      { key: "falta-factura", tipo: "falta_factura", texto: "Falta factura (10 tickets)" },
+      { key: "falta-factura:TK-SO-2000", tipo: "falta_factura", texto: "Falta factura TK-SO-2000 · Daniela" },
+    ] };
+    const notif = { items: [{ id: "aviso:tarde-2026-12-06", tipo: "aviso_equipo", titulo: "Desde hoy, los tickets deben subirse el mismo día de la atención.", leida: false }] };
+    const L = alertasDashboard(null, notif, [], v);
+    assert.equal(L.length, 1);
+    assert.match(String(L[0].texto), /Desde hoy/);
+    assert.ok(!L.some((x) => /Falta factura|Descuadre voucher/.test(String(x.texto))));
   });
   it("frontend: ficha de lectura, botón Leer voucher, autollenado y versión TK157", () => {
     const caja = file("mc-caja.js"), tk = file("mc-tickets.js"), html = file("index.html"), sw = file("sw.js");
     assert.match(caja, /🔍 Leer voucher/); assert.match(caja, /⚠️ Descuadre voucher: leído/); assert.match(caja, /✓ Leído: /); assert.match(caja, /Leído del voucher/);
     assert.match(tk, /MCOcr\.chip/);
-    assert.match(html, /sunsu-2026-11-26-ROLMOD/); assert.match(sw, /sunsu-2026-11-26-ROLMOD/);
+assert.match(html, /sunsu-2026-11-26-TK226/); assert.match(sw, /sunsu-2026-11-26-TK226/);
     assert.match(file("supabase/functions/api/sunsu_version.ts"), /TK157/);
   });
 });
