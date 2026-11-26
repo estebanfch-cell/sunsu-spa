@@ -14,7 +14,7 @@ describe("DEV-34 lista de Tickets compacta (opción 1)", () => {
     const enSw = (sw.match(/const CACHE = "([^"]+)"/) || [])[1];
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     assert.equal(enSw, enHtml);
-    assert.equal(enSw, "sunsu-2026-11-26-TK224");
+    assert.equal(enSw, "sunsu-2026-11-26-TK225");
     assert.match(html, /beta-screens\.js\?v=20261125dev34c/);
     assert.match(html, /mc-tickets\.js\?v=20261125dev34/);
   });

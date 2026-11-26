@@ -107,25 +107,13 @@
     set: function (f) { prevHook = f; },
   });
 
+  // TK225: el aviso al equipo ya no es un banner grande de 4 líneas.
+  // Va en la lista compacta arriba del Dashboard (y en el Inicio del personal).
+  // Aquí se retiran banners viejos en caché y se deja el enlace/prompt del ticket.
   function inyectar() {
     css();
-    var on = activo();
-    // Dashboard admin, Inicio de staff/recepción y Nuevo ticket.
-    var sitios = [document.querySelector(".dsh-wrap"), document.getElementById("mcsh-root")];
-    var b = document.getElementById("btn-env-tk");
-    var c = b && document.getElementById("content");
-    if (c && !window._tkEdicion && !window._esCotizacion) sitios.push(c);
-    sitios.forEach(function (el) {
-      if (!el) return;
-      var ya = el.querySelector(":scope > .sunsu-aviso-tarde");
-      if (!on) { if (ya) ya.remove(); return; }
-      if (ya) return;
-      var tmp = document.createElement("div"); tmp.innerHTML = bannerHtml();
-      var hola = el.id === "mcsh-root" ? el.querySelector(":scope > .mcsh-hola") : null;
-      if (hola) hola.parentNode.insertBefore(tmp.firstChild, hola.nextSibling);
-      else el.insertBefore(tmp.firstChild, el.firstChild);
-    });
-    if (b) pintarLink();
+    document.querySelectorAll(".sunsu-aviso-tarde").forEach(function (el) { el.remove(); });
+    if (document.getElementById("btn-env-tk")) pintarLink();
   }
   var pend = 0;
   function programar() { if (pend) return; pend = setTimeout(function () { pend = 0; try { inyectar(); } catch (e) {} }, 120); }

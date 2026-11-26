@@ -128,7 +128,7 @@ describe("TK224 · UI del dashboard", () => {
     assert.match(screens, /montarAvisosDash/);
   });
 
-  it("quita la tarjeta grande «Asignado a ti» y pone avisos compactos abajo, máx. 3 líneas, con ×", () => {
+  it("quita la tarjeta grande «Asignado a ti» y pone avisos compactos arriba, máx. 2 líneas, con ×", () => {
     const html = file("index.html");
     const conteo = file("mc-conteo.js");
     assert.doesNotMatch(conteo, /card-title">📋 Asignado a ti/);
@@ -136,8 +136,9 @@ describe("TK224 · UI del dashboard", () => {
     assert.doesNotMatch(html, /c\.prepend\(box\)/);
     assert.match(html, /function htmlDashAvisosFoot\(/);
     assert.match(html, /function montarAvisosDash\(/);
-    assert.match(html, /homeFail \+ pulso \+ ops \+ avisosFoot/);
-    assert.match(html, /-webkit-line-clamp: 3/);
+    assert.match(html, /homeFail \+ avisosHead \+ pulso \+ ops/);
+    assert.match(html, /-webkit-line-clamp: 2/);
+    assert.match(html, /insertAdjacentHTML\("afterbegin"/);
     assert.match(html, /class="dash-av-tx"/);
     assert.match(html, /class="dash-al-x dash-av-x"/);
     assert.match(html, /notif_leer/);
@@ -146,10 +147,10 @@ describe("TK224 · UI del dashboard", () => {
   it("cache al día en index.html y sw.js", () => {
     const html = file("index.html");
     const sw = file("sw.js");
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-26-TK224"/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-26-TK224"/);
-    assert.match(html, /beta-screens\.js\?v=20261126tk224/);
-    assert.match(html, /mc-conteo\.js\?v=20261126tk224/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-26-TK225"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-26-TK225"/);
+    assert.match(html, /beta-screens\.js\?v=20261126tk225/);
+    assert.match(html, /mc-conteo\.js\?v=20261126tk225/);
   });
 });
 
