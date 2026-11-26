@@ -81,6 +81,20 @@ function blobHasContacto(x: unknown): boolean {
 }
 
 describe("TK219 asociar / cambiar factura", () => {
+  it("factura más nueva que la última sincronizada: dice cuál es la última y desde cuándo no corre Migo", async () => {
+    const { db, h } = semilla();
+    db.tables.set("beta_migo_importes", [{ imported_at: "2026-11-23T01:42:33.748Z", max_seq: 3007 }]);
+    const r = await h("rec", "tk_factura_buscar", { clave: "TK-SO-1975", factura: "3020" });
+    assert.equal(r.ok, undefined);
+    assert.equal(r.pendiente_sync, true);
+    assert.equal(r.ultima_sincronizada, FAC);
+    assert.match(String(r.error), /No encontré la factura 001-001-000003020 en Migo/);
+    assert.match(String(r.error), /última factura sincronizada es la 001-001-000003007/);
+    assert.match(String(r.error), /no corre desde el 22\/11 20:42/);
+    const viejo = await h("rec", "tk_factura_buscar", { clave: "TK-SO-1975", factura: "2900" });
+    assert.equal(viejo.error, "No encontré la factura 001-001-000002900 en Migo");
+  });
+
   it("Alejandra busca una factura y ve si cuadra, sin datos de contacto", async () => {
     const { h } = semilla();
     const r = await h("rec", "tk_factura_buscar", { clave: "TK-SO-1975", factura: "3007" });

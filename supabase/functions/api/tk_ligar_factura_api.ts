@@ -96,6 +96,43 @@ function buscarFactura(vivo: Row[], borradores: Row[], fac: string): { vivo?: Ro
   return { vivo: v, borrador: b };
 }
 
+function seqDe(fac: string): number {
+  const m = /(\d+)$/.exec(fac);
+  return m ? Number(m[1]) : 0;
+}
+
+function horaGye(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const g = new Date(d.getTime() - 5 * 3600 * 1000);
+  const dd = String(g.getUTCDate()).padStart(2, "0");
+  const mm = String(g.getUTCMonth() + 1).padStart(2, "0");
+  const hh = String(g.getUTCHours()).padStart(2, "0");
+  const mi = String(g.getUTCMinutes()).padStart(2, "0");
+  return dd + "/" + mm + " " + hh + ":" + mi;
+}
+
+// Si la factura es más nueva que la última sincronizada, decirlo claro: no es que
+// el ticket esté mal, es que Migo todavía no la mandó a la app.
+async function noEncontrada(ctx: Ctx, vivo: Row[], fac: string): Promise<Row> {
+  const base = "No encontré la factura " + fac + " en Migo";
+  let maxSeq = 0;
+  for (const r of vivo) maxSeq = Math.max(maxSeq, n(r.seq) || seqDe(facturaNorm(r.factura) || ""));
+  const want = seqDe(fac);
+  if (!maxSeq || !want || want <= maxSeq) return { error: base, factura: fac };
+  let ult = "";
+  try {
+    const imps = await ctx.db.all("beta_migo_importes");
+    for (const i of imps) if (s(i.imported_at) > ult) ult = s(i.imported_at);
+  } catch { /* opcional */ }
+  const hace = ult ? (ctx.now.getTime() - new Date(ult).getTime()) / 60000 : 0;
+  const ultima = "001-001-" + String(maxSeq).padStart(9, "0");
+  let msg = base + ". Todavía no llega a la app: la última factura sincronizada es la " + ultima + ".";
+  if (ult && hace > 90) msg += " La sincronización con Migo no corre desde el " + horaGye(ult) + " (hora Ecuador); apenas vuelva, la factura aparece sola.";
+  else msg += " La sincronización corre cada hora; intenta de nuevo en un rato.";
+  return { error: msg, factura: fac, pendiente_sync: true, ultima_sincronizada: ultima, ultima_sync_at: ult || null };
+}
+
 async function cargarTicket(ctx: Ctx, want: string): Promise<{ t: Row; cab?: Row; link?: Row } | { error: string }> {
   const q = s(want).trim();
   if (!q) return { error: "Indica el ticket" };
@@ -126,7 +163,7 @@ async function preview(ctx: Ctx, ses: Ses, p: Row): Promise<Row> {
   const borradores = await todas(ctx, "beta_migo_borradores");
   const hit = buscarFactura(vivo, borradores, fac);
   const src = hit.vivo || hit.borrador;
-  if (!src) return { error: "No encontré la factura " + fac + " en Migo", factura: fac };
+  if (!src) return await noEncontrada(ctx, vivo, fac);
   const cat = await catalogoMap(ctx);
   const tickets = await todas(ctx, "tickets");
   const cabs = new Map((await todas(ctx, "beta_tickets")).map((c) => [s(c.clave), c]));
