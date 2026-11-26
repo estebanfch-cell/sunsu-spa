@@ -1,7 +1,11 @@
 // DEV-31c (Emilia t910u/t911u) · Roles (admin) rediseñado: el PRE-ROL de cada empleada siempre existe y se recalcula solo.
 //  - rol_pre_auto: crea el borrador del mes si no existe y lo recalcula con lo último (marcas, comisiones, anticipos, multas…).
 //    Si ya está aprobado devuelve ese rol tal cual. Las empleadas no ven nada hasta que se aprueba (rol_get/roles_lista lo exigen).
+//  - rol_pre_leer: lee el último snapshot guardado, sin recalcular (para abrir el Rol al instante).
+//  - El pre-rol se mantiene precalculado: programarRefrescoPreRol corre en fondo al guardar un ticket o una marca.
 //  - rol_pre_todos: lo mismo para todas las empleadas activas (PDF de Contabilidad de todas).
+//    Con recargar:false y periodo, solo lee los roles ya guardados (borradores y aprobados)
+//    de ese mes, sin recalcular ni escribir. Así el «PDF de todas» es rápido y no se bloquea en el celular.
 //  - rol_contab: estado opcional ante Contabilidad (sin enviar / enviado / ok). No envía nada por sí mismo.
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
@@ -11,6 +15,8 @@ import { esAdmin } from "./permisos.ts";
 import { clavePeriodo, etiquetaPeriodo } from "./roles_api.ts";
 import { aplicarAjustes, armarEntrada, periodoDe, vista } from "./roles_crear_api.ts";
 import { empleadasDelRol } from "./rol_config_api.ts";
+import { firmaDeRol, vistaFirma } from "./rol_descuentos_api.ts";
+import { mismaPersonaRol } from "./roles_api.ts";
 
 function esTest(ses: Ses): boolean { return !!ses.prueba; }
 
@@ -107,16 +113,111 @@ extend("rol_pre_auto", "any", async (p, ctx, ses) => {
   }
 });
 
-extend("rol_pre_todos", "any", async (_p, ctx, ses) => {
+function mismaEmpleadaRol(a: string, b: string): boolean {
+  const x = s(a).trim(), y = s(b).trim();
+  if (!x || !y) return false;
+  if (x === y) return true;
+  return mismaPersonaRol(x, y);
+}
+
+/** Nombres de administración que nunca van en el rol ni en el PDF de todas. */
+export function esAdminNombreRol(nombre: unknown): boolean {
+  const k = s(nombre).trim().toLowerCase();
+  if (!k) return false;
+  if (k === "efch" || k === "emi" || k === "e.m.i.") return true;
+  if (/^efch\b/.test(k) || /^emi\b/.test(k)) return true;
+  if (/ferlito/.test(k)) return true;
+  return false;
+}
+
+/** Recalcula pre-roles en segundo plano (no bloquea tickets ni marcas). */
+export function programarRefrescoPreRol(ctx: Ctx, ses: Ses, nombres?: string[]): void {
+  try {
+    const nombreDb = (ctx.db as { constructor?: { name?: string } }).constructor?.name || "";
+    // En los tests (MemoryDb) no disparamos recálculos en fondo: pelearían con el caso y dejarían promesas abiertas.
+    if (nombreDb === "MemoryDb" && !(ses as { forzarPreRol?: boolean }).forzarPreRol) return;
+  } catch { /* sigue en producción */ }
+  const run = async () => {
+    try {
+      const lista = (nombres && nombres.length)
+        ? nombres.filter((n) => n && !esAdminNombreRol(n))
+        : (await empleadasDelRol(ctx)).map((e) => e.nombre).filter((n) => !esAdminNombreRol(n));
+      for (const n of lista) {
+        await asegurarPreRol(ctx, ses, n).catch(() => null);
+      }
+    } catch {
+      /* el ticket o la marca ya quedaron; el pre-rol se actualizará al abrir Roles o en el siguiente ciclo */
+    }
+  };
+  try {
+    const er = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+    if (er && typeof er.waitUntil === "function") { er.waitUntil(run()); return; }
+  } catch { /* */ }
+  void run();
+}
+
+extend("rol_pre_leer", "any", async (p, ctx, ses) => {
   if (!esAdmin(ses.rol)) return { error: "Solo administración ve el pre-rol." };
+  const nombre = s(p.persona || p.nombre);
+  if (!nombre) return { error: "Elige a la empleada." };
+  if (esAdminNombreRol(nombre)) return { error: "EFCH y Emi son administradoras: no tienen rol de pagos." };
+  const hoy = ecuadorParts(ctx.now).ymd;
+  const actual = periodoDe(Number(hoy.slice(0, 4)), Number(hoy.slice(5, 7)));
+  const periodo = clavePeriodo(s(p.periodo)) || actual;
+  const origin = esTest(ses) ? "test" : "beta";
+  const row = (await ctx.db.all("beta_roles").catch(() => [] as Row[])).find((r) =>
+    clavePeriodo(r.periodo) === periodo
+    && mismaEmpleadaRol(s(r.persona), nombre)
+    && (s(r.origin || "beta") === "test") === (origin === "test")
+  );
+  if (!row) return { ok: true, vacio: true, persona: nombre, periodo, etiqueta: etiquetaPeriodo(periodo) };
+  const snap = (row.snapshot && typeof row.snapshot === "object") ? row.snapshot as Row : {};
+  const firma = vistaFirma(await firmaDeRol(ctx, s(row.id)), true);
+  return { ...vista(row, snap, true), firma, deCache: true, vacio: false };
+});
+
+extend("rol_pre_refrescar_todas", "any", async (_p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo administración actualiza el pre-rol de todas." };
+  const emps = (await empleadasDelRol(ctx)).filter((e) => !esAdminNombreRol(e.nombre));
   const items: Row[] = [];
   const errores: Row[] = [];
-  for (const e of await empleadasDelRol(ctx)) {
+  for (const e of emps) {
     const r = await asegurarPreRol(ctx, ses, e.nombre);
     if (r.error) errores.push({ persona: e.nombre, error: r.error });
     else items.push(r);
   }
   return { ok: true, items, errores, hoy: ecuadorParts(ctx.now).ymd };
+});
+
+extend("rol_pre_todos", "any", async (p, ctx, ses) => {
+  if (!esAdmin(ses.rol)) return { error: "Solo administración ve el pre-rol." };
+  const hoy = ecuadorParts(ctx.now).ymd;
+  const actual = periodoDe(Number(hoy.slice(0, 4)), Number(hoy.slice(5, 7)));
+  const periodo = clavePeriodo(s(p.periodo)) || actual;
+  const recargar = p.recargar !== false && p.recalcular !== false;
+  const emps = (await empleadasDelRol(ctx)).filter((e) => !esAdminNombreRol(e.nombre));
+  const items: Row[] = [];
+  const errores: Row[] = [];
+  if (!recargar) {
+    const origin = esTest(ses) ? "test" : "beta";
+    const roles = (await ctx.db.all("beta_roles").catch(() => [] as Row[])).filter((r) =>
+      clavePeriodo(r.periodo) === periodo && (s(r.origin || "beta") === "test") === (origin === "test") && !esAdminNombreRol(r.persona)
+    );
+    for (const e of emps) {
+      const row = roles.find((r) => mismaEmpleadaRol(s(r.persona), e.nombre));
+      if (!row) { errores.push({ persona: e.nombre, error: "Todavía no hay un rol guardado de este período." }); continue; }
+      const snap = (row.snapshot && typeof row.snapshot === "object") ? row.snapshot as Row : {};
+      const firma = vistaFirma(await firmaDeRol(ctx, s(row.id)), true);
+      items.push({ ...vista(row, snap, true), firma });
+    }
+    return { ok: true, items, errores, periodo, etiqueta: etiquetaPeriodo(periodo), hoy };
+  }
+  for (const e of emps) {
+    const r = await asegurarPreRol(ctx, ses, e.nombre);
+    if (r.error) errores.push({ persona: e.nombre, error: r.error });
+    else items.push(r);
+  }
+  return { ok: true, items, errores, periodo: actual, etiqueta: etiquetaPeriodo(actual), hoy };
 });
 
 const ESTADOS_CONTAB = new Set(["", "enviado", "ok"]);
