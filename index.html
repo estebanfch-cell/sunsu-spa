@@ -926,6 +926,12 @@
   .dash-al-tx small { font-size: .72rem; color: #6B7280; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .dash-al-x { flex: 0 0 34px; width: 34px; height: 34px; margin: 4px 2px; border: 0; border-radius: 50%; background: #F3F4F6; color: #374151; font-size: 1.15rem; line-height: 1; cursor: pointer; }
   .dash-al-x:active { background: #FEE2E2; color: #B91C1C; }
+  /* TK224: avisos compactos al pie del dashboard (máx. 3 líneas, × persistente). */
+  .dash-av { max-width: 760px; margin: 10px auto 8px; padding: 0; width: 100%; box-sizing: border-box; }
+  .dash-av-it { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; padding: 6px 8px; border: 1px solid var(--cream-d, #E8DCC8); border-radius: 10px; background: #fff; box-sizing: border-box; }
+  .dash-av-go { flex: 1 1 auto; min-width: 0; background: none; border: 0; padding: 0; text-align: left; font: inherit; cursor: pointer; color: var(--navy-d, #2E4A66); }
+  .dash-av-tx { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; text-overflow: ellipsis; font-size: 0.7rem; font-weight: 650; line-height: 1.3; max-height: calc(1.3em * 3); }
+  .dash-av-x { flex: 0 0 28px; width: 28px; height: 28px; margin: 0; font-size: 1rem; }
   .ver-como-nav { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
   .top-user .dot { width: 8px; height: 8px; border-radius: 99px; margin-right: 6px; flex: 0 0 8px; background: #F4E3B2; }
   .aviso-pin-5d {
@@ -2550,7 +2556,7 @@ async function api(accion, body = {}) {
   return data;
 }
 
-const SWR_ACCIONES = new Set(["staff_home", "lugares_list", "bootstrap", "tk_historial", "tk_get", "mcprod_list", "prod_list", "getDashCosm", "asis_hoy", "asis_calendario", "whoami"]);
+const SWR_ACCIONES = new Set(["staff_home", "lugares_list", "bootstrap", "tk_historial", "tk_get", "mcprod_list", "prod_list", "getDashCosm", "asis_hoy", "asis_calendario", "whoami", "getDashboard", "getDashboardHoy"]);
 function swrKey(accion, body) {
   const b = { ...(body || {}) };
   delete b.token;
@@ -3719,16 +3725,9 @@ async function avisoMarcajes() {
   box.innerHTML = `<div class="card-title">Marcaje faltante</div><p class="note">Asistió a un ticket y no marcó entrada. No descuenta el sueldo.</p>${lineas.join("")}`;
   main.appendChild(box);
 }
-// Tarjeta «Asignado a ti» arriba del dashboard (conteos físicos asignados + avisos sin leer).
+// TK224: los avisos van al pie, compactos. Ya no se antepone la tarjeta «Asignado a ti».
 async function tarjetaAsignado(c) {
-  if (!window.MCConteo || state.vista) return;
-  let html = "";
-  try { html = await window.MCConteo.tarjetaInicio(); } catch { html = ""; }
-  if (!html || !c.isConnected || document.getElementById("mccf-dash")) return;
-  const box = document.createElement("div");
-  box.style.padding = "12px 16px 0";
-  box.innerHTML = html;
-  c.prepend(box);
+  if (typeof montarAvisosDash === "function") return montarAvisosDash(c);
 }
 async function montarSunsu(tab) {
   CU = cuSunsu();
@@ -4181,12 +4180,16 @@ function descartarAlerta(key, notifId) {
   if (L.indexOf(key) < 0) L.push(key);
   try { localStorage.setItem(alertasKeyLS(), JSON.stringify(L.slice(-300))); } catch (e) {}
   if (notifId != null && notifId !== "" && typeof api === "function") { try { Promise.resolve(api("notif_leer", { id: notifId })).then(() => { if (typeof pintarBadgeNotif === "function") pintarBadgeNotif(); }).catch(() => {}); } catch (e2) {} }
-  const it = document.querySelector(`[data-al-key="${CSS && CSS.escape ? CSS.escape(key) : key}"]`);
-  if (it) it.remove();
+  const selAl = `[data-al-key="${CSS && CSS.escape ? CSS.escape(key) : key}"]`;
+  const listAl = typeof document.querySelectorAll === "function" ? document.querySelectorAll(selAl) : null;
+  if (listAl && listAl.length) Array.from(listAl).forEach((it) => it.remove());
+  else { const it = document.querySelector(selAl); if (it) it.remove(); }
   const dd = document.getElementById("dash-al-dd"), nEl = document.getElementById("dash-al-n"), box = document.getElementById("dash-al");
   const n = dd ? dd.querySelectorAll("[data-al-key]").length : 0;
   if (nEl) nEl.textContent = String(n);
   if (box && !n) box.hidden = true;
+  const foot = document.getElementById("dash-av");
+  if (foot && !foot.querySelector("[data-al-key], .dash-av-it")) foot.remove();
 }
 if (!window._dashAlWired) {
   window._dashAlWired = true;
@@ -4205,6 +4208,43 @@ if (!window._dashAlWired) {
     if (dd0 && !dd0.hidden && !t.closest("#dash-al")) dd0.hidden = true;
   });
 }
+/** TK224: avisos al pie del dashboard, compactos (máx. 3 líneas), con × y toque para abrir. */
+function htmlDashAvisosFoot(alertas, conteos) {
+  const av = (alertas || []).map((a) =>
+    `<div class="dash-av-it" data-al-key="${esc(a.key)}"${a.notifId != null ? ` data-al-notif="${esc(a.notifId)}"` : ""}>` +
+    `<button type="button" class="dash-av-go" data-al-go="${esc(a.href || "")}"><span class="dash-av-tx">${esc([a.texto, a.detalle].filter(Boolean).join(" — "))}</span></button>` +
+    `<button type="button" class="dash-al-x dash-av-x" data-al-x="${esc(a.key)}" title="Descartar" aria-label="Descartar">×</button></div>`
+  ).join("");
+  const cf = (conteos || []).map((c) =>
+    `<div class="dash-av-it">` +
+    `<button type="button" class="dash-av-go" data-al-go="#/m/conteos/cf/${encodeURIComponent(c.id)}">` +
+    `<span class="dash-av-tx">Conteo físico ${esc(c.numero)} · ${esc(c.bodegaNombre || "")}${c.lineas ? " · " + esc(c.contadas) + "/" + esc(c.lineas) : ""}</span>` +
+    `</button></div>`
+  ).join("");
+  if (!av && !cf) return "";
+  return `<div class="dash-av" id="dash-av">${cf}${av}</div>`;
+}
+async function montarAvisosDash(c) {
+  if (!c || !c.isConnected) return;
+  const root = c.querySelector(".dsh-wrap") || c;
+  let apr = null, notif = null, vch = null, mios = [];
+  try {
+    const r = await Promise.all([
+      typeof api === "function" ? api("aprobaciones_pendientes", {}).catch(() => null) : null,
+      typeof api === "function" ? api("notif_mias", {}).catch(() => null) : null,
+      typeof api === "function" ? Promise.resolve(api("voucher_alertas", {})).catch(() => null) : null,
+      typeof api === "function" ? api("cf_list", { mios: true }).catch(() => null) : null,
+    ]);
+    apr = r[0]; notif = r[1]; vch = r[2];
+    mios = (r[3] && r[3].items) || [];
+  } catch (eAv) {}
+  if (!c.isConnected) return;
+  const html = htmlDashAvisosFoot(typeof alertasDashboard === "function" ? alertasDashboard(apr, notif, alertasOcultas(), vch) : [], mios);
+  const box = c.querySelector("#dash-av") || document.getElementById("dash-av");
+  if (!html) { if (box) box.remove(); return; }
+  if (box) box.outerHTML = html;
+  else root.insertAdjacentHTML("beforeend", html);
+}
 async function renderInicioBeta() {
   if (esVisorRol()) {
     return '<div class="dash-head"><div class="hola">Hola, ' + esc((state.user && (state.user.name || state.user.nombre)) || "Skin Analysis") + '</div></div>' +
@@ -4216,24 +4256,25 @@ async function renderInicioBeta() {
   const data = await api("home");
   const homeFail = data.error && !data.bajos ? fail(data) + `<p class="note">Inicio lee el inventario ERP. Si la base todavía no tiene 0009, el resto de módulos de hoja sigue disponible.</p>` : "";
   let pulso = htmlStaffHome();
+  let apr = null, notif = null, vch = null;
   if (state.admin) {
-    const [dash, apr, notif, vch] = await Promise.all([api("getDashboardHoy", {}), api("aprobaciones_pendientes", {}), api("notif_mias", {}).catch(() => null), Promise.resolve(api("voucher_alertas", {})).catch(() => null)]);
-    if (dash.error || !dash.hoy) pulso = fail(dash);
-    else pulso = htmlDashboard(Object.assign({}, dash, { aprobaciones: apr && !apr.error ? apr : { total: 0, grupos: [] } }));
+    const cached = typeof sunsuSwrGet === "function" ? sunsuSwrGet("getDashboardHoy", {}) : null;
+    const pack = await Promise.all([api("getDashboardHoy", {}), api("aprobaciones_pendientes", {}), api("notif_mias", {}).catch(() => null), Promise.resolve(api("voucher_alertas", {})).catch(() => null)]);
+    const dash = (pack[0] && !pack[0].error && pack[0].hoy) ? pack[0] : (cached && cached.d && cached.d.hoy ? cached.d : pack[0]);
+    apr = pack[1]; notif = pack[2]; vch = pack[3];
+    if (dash && !dash.error && dash.hoy) {
+      if (typeof sunsuSwrSet === "function") sunsuSwrSet("getDashboardHoy", {}, dash);
+      pulso = htmlDashboard(Object.assign({}, dash, { aprobaciones: apr && !apr.error ? apr : { total: 0, grupos: [] } }));
+    } else pulso = fail(dash);
     // TK156 (Emilia t693u): arriba en el Dashboard «👁 Ver como…» y «⚠️ Alertas (N) ▾» con × para descartar.
     pulso = htmlDashTop(alertasDashboard(apr, notif, alertasOcultas(), vch)) + pulso;
   }
   const bajos = (data.bajos || []).slice(0, 8).map((b) => `<div class="row"><div class="sku">${esc(b.sku)}</div><div><div class="name">${esc(b.nombre)}</div></div><div class="meta">${esc(b.bodega)} · ${esc(b.stock)} / mín ${esc(b.stock_min)}</div></div>`).join("");
   const oc = acceso("compras") !== "no" ? `<div class="card"><div class="k">Órdenes abiertas</div><div class="v">${esc(data.ocAbiertas ?? 0)}</div></div>` : "";
   const ops = data.error && !data.bajos ? "" : `<div class="grid">${oc}<div class="card"><div class="k">Bajo mínimo</div><div class="v">${esc((data.bajos || []).length)}</div></div><div class="card"><div class="k">Avisos</div><div class="v">${esc((data.avisos || []).length)}</div></div></div><h2>Para reponer</h2><div class="list">${bajos || `<p class="note">Nada bajo el mínimo, o los mínimos todavía no están cargados.</p>`}</div>`;
-  let tareas = "";
-  // Tarjeta «Asignado a ti» (conteos físicos asignados + avisos sin leer). Reemplaza la de conteos anteriores.
-  if (window.MCConteo) {
-    try { tareas = await window.MCConteo.tarjetaInicio(); } catch { tareas = ""; }
-  } else if (typeof renderConteoTareas === "function") {
-    try { tareas = await renderConteoTareas(); } catch { tareas = ""; }
-  }
-  return homeFail + tareas + pulso + ops;
+  // TK224: avisos compactos abajo, nunca la tarjeta grande «Asignado a ti» arriba.
+  const avisosFoot = state.admin ? htmlDashAvisosFoot(alertasDashboard(apr, notif, alertasOcultas(), vch), []) : "";
+  return homeFail + pulso + ops + avisosFoot;
 }
 
 function codigoCat(sku) {
@@ -9016,7 +9057,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-25-DEV31M"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-26-TK224"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -9197,14 +9238,14 @@ window.SunsuUpdate.init();
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk195"></script>
-<script src="beta-screens.js?v=20261125dev37"></script>
+<script src="beta-screens.js?v=20261126tk224"></script>
 <script src="mc-rol.js?v=20261125tk232"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
 <script src="mc-nav.js?v=20261123tk216"></script>
 <script src="mc-permisos.js?v=20261120tk179"></script>
 <script src="mc-protocolos.js?v=20261120tk179"></script>
-<script src="mc-conteo.js?v=20261120tk203"></script>
+<script src="mc-conteo.js?v=20261126tk224"></script>
 <script src="mc-transferencias.js?v=20261120tk179"></script>
 <script src="mc-ajustes.js?v=20261120tk179"></script>
 <script src="vendor-qrcode.js?v=20261120tk179"></script>
