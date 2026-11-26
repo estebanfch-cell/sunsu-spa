@@ -1,8 +1,11 @@
 // DEV-31 (Emilia t900u) · Rol de pagos: anticipos y préstamos internos, pre-rol de todas al día de hoy,
 // firma con el dedo de la empleada y resumen del período.
 //  - Anticipo: se descuenta COMPLETO en el rol del mes siguiente (o el mes que elija administración).
-//  - Préstamo: monto ÷ cuotas, una cuota por rol desde el mes elegido hasta pagarlo. Saldo = monto − cuotas de
-//    roles ya aprobados. Sirve también para quien no está afiliada al IESS.
+//  - Préstamo: una cuota por rol desde el mes de la 1ª cuota. Se puede armar por número de cuotas
+//    (total/n, última ajusta centavos) o por monto de cuota (residuo: cuota extra o sumar al último).
+//    "Cuotas ya pagadas" sirve para un préstamo a mitad de camino. Saldo = monto − cuotas pagadas
+//    (marcadas o de roles ya aprobados). La línea del rol muestra el motivo, p.ej.
+//    "Préstamo — Tratamiento Peeling ($101.50) — cuota 2/5". Sirve también sin IESS.
 //  - Todo cambio (crear, editar, anular) queda en beta_rol_descuentos_log y en la bitácora.
 import { extend } from "./handlers.ts";
 import type { Ctx, Ses } from "./lib.ts";
@@ -34,22 +37,75 @@ export function periodoSiguiente(fecha: string): string {
   return sumarMeses(periodoKey(y, m), 1);
 }
 
-/** Calendario de descuentos: una fila por rol. Anticipo = 1 cuota; préstamo = N cuotas (la última ajusta centavos). */
+/** Reparto del monto del préstamo.
+ *  modo numero_cuotas (defecto): total/n, la última ajusta centavos.
+ *  modo monto_cuota: n = ceil(total/cuota); resto_modo "cuota_extra" deja el residuo
+ *  como cuota final; "sumar_ultimo" lo agrega a la última cuota llena
+ *  (p.ej. 101.50 / 20 → 20, 20, 20, 20, 21.50). */
+export function planMontosPrestamo(opts: {
+  monto?: unknown;
+  modo?: unknown;
+  cuotas?: unknown;
+  montoCuota?: unknown;
+  restoModo?: unknown;
+}): number[] {
+  const monto = round2(n(opts.monto));
+  if (!(monto > 0)) return [];
+  const modo = s(opts.modo) === "monto_cuota" ? "monto_cuota" : "numero_cuotas";
+  if (modo !== "monto_cuota") {
+    const cuotas = Math.max(1, Math.min(60, Math.round(n(opts.cuotas) || 1)));
+    const base = Math.floor((monto / cuotas) * 100) / 100;
+    const out: number[] = [];
+    let acum = 0;
+    for (let i = 0; i < cuotas; i++) {
+      const v = i === cuotas - 1 ? round2(monto - acum) : base;
+      acum = round2(acum + v);
+      out.push(v);
+    }
+    return out;
+  }
+  const cuota = round2(n(opts.montoCuota));
+  if (!(cuota > 0)) return [];
+  if (cuota >= monto) return [monto];
+  const cuotaC = Math.round(cuota * 100);
+  const montoC = Math.round(monto * 100);
+  const llenas = Math.floor(montoC / cuotaC);
+  const remC = montoC - llenas * cuotaC;
+  const rem = remC / 100;
+  if (remC <= 0) return Array.from({ length: llenas }, () => cuota);
+  const resto = s(opts.restoModo) === "sumar_ultimo" ? "sumar_ultimo" : "cuota_extra";
+  if (resto === "sumar_ultimo") {
+    if (llenas < 1) return [monto];
+    if (llenas > 60) return [];
+    return [...Array.from({ length: llenas - 1 }, () => cuota), round2(cuota + rem)];
+  }
+  if (llenas + 1 > 60) return [];
+  return [...Array.from({ length: llenas }, () => cuota), rem];
+}
+
+/** Línea que se ve en el rol, p.ej. "Préstamo — Tratamiento Peeling ($101.50) — cuota 2/5". */
+export function etiquetaCuotaPrestamo(d: Row, c: { n: number; monto: number }, total: number): string {
+  const mot = s(d.motivo).trim();
+  const tot = round2(n(d.monto)).toFixed(2);
+  const tail = `cuota ${c.n}/${total}`;
+  if (mot) return `Préstamo — ${mot} ($${tot}) — ${tail}`;
+  return `Préstamo ($${tot}) — ${tail}`;
+}
+
+/** Calendario de descuentos: una fila por rol. Anticipo = 1 cuota; préstamo = N cuotas según planMontosPrestamo. */
 export function planDe(d: Row): { periodo: string; n: number; monto: number }[] {
   const monto = round2(n(d.monto));
-  const inicio = clavePeriodo(d.primer_periodo);
+  const inicio = clavePeriodo(d.primer_periodo ?? d.primerPeriodo);
   if (!(monto > 0) || !partesPeriodo(inicio)) return [];
   if (s(d.tipo) !== "prestamo") return [{ periodo: inicio, n: 1, monto }];
-  const cuotas = Math.max(1, Math.min(60, Math.round(n(d.cuotas) || 1)));
-  const base = Math.floor((monto / cuotas) * 100) / 100;
-  const out = [];
-  let acum = 0;
-  for (let i = 0; i < cuotas; i++) {
-    const v = i === cuotas - 1 ? round2(monto - acum) : base;
-    acum = round2(acum + v);
-    out.push({ periodo: sumarMeses(inicio, i), n: i + 1, monto: v });
-  }
-  return out;
+  const montos = planMontosPrestamo({
+    monto,
+    modo: d.modo,
+    cuotas: d.cuotas,
+    montoCuota: d.monto_cuota ?? d.montoCuota,
+    restoModo: d.resto_modo ?? d.restoModo,
+  });
+  return montos.map((v, i) => ({ periodo: sumarMeses(inicio, i), n: i + 1, monto: v }));
 }
 
 function mismaPersona(a: string, b: string): boolean {
@@ -64,11 +120,13 @@ async function rolesAprobados(ctx: Ctx): Promise<Row[]> {
   return (await ctx.db.all("beta_roles").catch(() => [] as Row[])).filter((r) => s(r.estado) === "aprobado");
 }
 
-/** Vista de un anticipo/préstamo con su calendario y saldo (las cuotas de roles ya aprobados cuentan como pagadas). */
+/** Vista de un anticipo/préstamo con su calendario y saldo (cuotas ya pagadas + roles aprobados). */
 export function vistaDescuento(d: Row, aprobados: Row[]): Row {
+  const pagadasInit = Math.max(0, Math.round(n(d.cuotas_pagadas ?? d.cuotasPagadas) || 0));
   const plan = planDe(d).map((c) => {
-    const pagada = aprobados.some((r) => clavePeriodo(r.periodo) === c.periodo && mismaPersona(s(r.persona), s(d.persona)) && (s(r.origin) === "test") === (s(d.origin) === "test"));
-    return { ...c, etiqueta: etiquetaPeriodo(c.periodo), pagada };
+    const pagadaRol = aprobados.some((r) => clavePeriodo(r.periodo) === c.periodo && mismaPersona(s(r.persona), s(d.persona)) && (s(r.origin) === "test") === (s(d.origin) === "test"));
+    const pagada = c.n <= pagadasInit || pagadaRol;
+    return { ...c, etiqueta: etiquetaPeriodo(c.periodo), pagada, pagadaRol };
   });
   const anulado = s(d.estado) === "anulado";
   const pagado = round2(plan.filter((c) => c.pagada).reduce((a, c) => a + c.monto, 0));
@@ -77,6 +135,10 @@ export function vistaDescuento(d: Row, aprobados: Row[]): Row {
     id: d.id, persona: d.persona, tipo: d.tipo, monto: round2(n(d.monto)), cuotas: s(d.tipo) === "prestamo" ? plan.length : 1,
     cuota: plan.length ? plan[0].monto : 0, fecha: s(d.fecha).slice(0, 10), primerPeriodo: clavePeriodo(d.primer_periodo),
     primerEtiqueta: etiquetaPeriodo(clavePeriodo(d.primer_periodo)), motivo: s(d.motivo), estado: s(d.estado) || "activo",
+    modo: s(d.modo) === "monto_cuota" ? "monto_cuota" : "numero_cuotas",
+    montoCuota: d.monto_cuota != null ? n(d.monto_cuota) : (d.montoCuota != null ? n(d.montoCuota) : null),
+    restoModo: s(d.resto_modo ?? d.restoModo) === "sumar_ultimo" ? "sumar_ultimo" : "cuota_extra",
+    cuotasPagadas: pagadasInit,
     plan, pagado, saldo, terminado: !anulado && saldo <= 0.004, prueba: s(d.origin) === "test",
     creadoPor: s(d.creado_por), createdAt: d.created_at, anuladoPor: s(d.anulado_por), motivoAnulacion: s(d.motivo_anulacion),
   };
@@ -88,12 +150,15 @@ export async function descuentosDelPeriodo(ctx: Ctx, persona: string, periodo: s
   const rows = (await descuentosDe(ctx)).filter((d) => s(d.estado || "activo") === "activo" && mismaPersona(s(d.persona), persona) && (s(d.origin || "beta") === "test") === (origin === "test"));
   const detalle: Row[] = [];
   for (const d of rows) {
-    for (const c of planDe(d)) {
+    const plan = planDe(d);
+    const pagadasInit = Math.max(0, Math.round(n(d.cuotas_pagadas ?? d.cuotasPagadas) || 0));
+    for (const c of plan) {
       if (c.periodo !== clave) continue;
+      if (c.n <= pagadasInit) continue;
       const prest = s(d.tipo) === "prestamo";
       detalle.push({
-        id: d.id, tipo: prest ? "prestamo" : "anticipo", monto: c.monto, cuota: c.n, cuotas: prest ? planDe(d).length : 1,
-        etiqueta: prest ? `Préstamo Sunsu (cuota ${c.n} de ${planDe(d).length})` : `Anticipo de sueldo${s(d.fecha) ? " del " + s(d.fecha).slice(0, 10) : ""}`,
+        id: d.id, tipo: prest ? "prestamo" : "anticipo", monto: c.monto, cuota: c.n, cuotas: prest ? plan.length : 1,
+        etiqueta: prest ? etiquetaCuotaPrestamo(d, c, plan.length) : `Anticipo de sueldo${s(d.fecha) ? " del " + s(d.fecha).slice(0, 10) : ""}`,
       });
     }
   }
@@ -130,7 +195,7 @@ extend("rol_desc_lista", "any", async (p, ctx, ses) => {
   const hoy = ecuadorParts(ctx.now).ymd;
   const actual = periodoKey(Number(hoy.slice(0, 4)), Number(hoy.slice(5, 7)));
   const periodos = [];
-  for (let k = 0; k <= 12; k++) { const c = sumarMeses(actual, k); periodos.push({ periodo: c, etiqueta: etiquetaPeriodo(c) }); }
+  for (let k = -12; k <= 12; k++) { const c = sumarMeses(actual, k); periodos.push({ periodo: c, etiqueta: etiquetaPeriodo(c) }); }
   const log = s(p.id)
     ? (await ctx.db.all("beta_rol_descuentos_log").catch(() => [] as Row[])).filter((r) => s(r.descuento_id) === s(p.id))
       .sort((a, b) => s(a.created_at).localeCompare(s(b.created_at)))
@@ -145,8 +210,22 @@ extend("rol_desc_guardar", "any", async (p, ctx, ses) => {
   if (!tipo) return { error: "Elige si es anticipo o préstamo." };
   const monto = round2(n(p.monto));
   if (!(monto > 0) || monto > 20000) return { error: "Escribe un monto válido." };
-  const cuotas = tipo === "prestamo" ? Math.round(n(p.cuotas)) : 1;
-  if (tipo === "prestamo" && (!(cuotas >= 1) || cuotas > 60)) return { error: "El préstamo va de 1 a 60 cuotas." };
+  const modo = tipo === "prestamo" && s(p.modo) === "monto_cuota" ? "monto_cuota" : "numero_cuotas";
+  const restoModo = s(p.restoModo ?? p.resto_modo) === "sumar_ultimo" ? "sumar_ultimo" : "cuota_extra";
+  const montoCuota = modo === "monto_cuota" ? round2(n(p.montoCuota ?? p.monto_cuota)) : null;
+  if (tipo === "prestamo" && modo === "monto_cuota" && (!(Number(montoCuota) > 0) || Number(montoCuota) > 20000)) {
+    return { error: "Escribe el monto de cada cuota." };
+  }
+  let cuotas = tipo === "prestamo" ? Math.round(n(p.cuotas)) : 1;
+  if (tipo === "prestamo" && modo === "numero_cuotas" && (!(cuotas >= 1) || cuotas > 60)) return { error: "El préstamo va de 1 a 60 cuotas." };
+  const montosPlan = tipo === "prestamo"
+    ? planMontosPrestamo({ monto, modo, cuotas, montoCuota, restoModo })
+    : [monto];
+  if (tipo === "prestamo" && !montosPlan.length) return { error: "No se pudo armar el plan de cuotas. Revisa el monto y las cuotas." };
+  cuotas = tipo === "prestamo" ? montosPlan.length : 1;
+  if (cuotas > 60) return { error: "Demasiadas cuotas (máximo 60)." };
+  const cuotasPagadas = tipo === "prestamo" ? Math.max(0, Math.round(n(p.cuotasPagadas ?? p.cuotas_pagadas) || 0)) : 0;
+  if (tipo === "prestamo" && cuotasPagadas >= cuotas) return { error: "Las cuotas ya pagadas tienen que ser menos que el total de cuotas." };
   const hoy = ecuadorParts(ctx.now).ymd;
   const fecha = /^\d{4}-\d{2}-\d{2}$/.test(s(p.fecha)) ? s(p.fecha) : hoy;
   const primer = clavePeriodo(s(p.primerPeriodo || p.primer_periodo) || periodoSiguiente(fecha));
@@ -159,22 +238,30 @@ extend("rol_desc_guardar", "any", async (p, ctx, ses) => {
   const yaAprobado = (per: string) => aprobados.some((r) => clavePeriodo(r.periodo) === per && mismaPersona(s(r.persona), emp.nombre) && s(r.origin || "beta") !== "test");
   const now = ctx.now.toISOString();
   const motivo = s(p.motivo).slice(0, 300);
+  const plan = planDe({ tipo, monto, cuotas, modo, monto_cuota: montoCuota, resto_modo: restoModo, primer_periodo: primer, cuotas_pagadas: cuotasPagadas });
+  const primeraPendiente = plan.find((c) => c.n > cuotasPagadas);
   if (s(p.id)) {
     const prev = (await descuentosDe(ctx)).find((d) => s(d.id) === s(p.id));
     if (!prev) return { error: "No encuentro ese registro." };
     if (s(prev.estado) === "anulado") return { error: "Ese registro está anulado." };
-    const pagadas = (vistaDescuento(prev, aprobados).plan as Row[]).filter((c) => c.pagada);
-    if (pagadas.length) return { error: "Ya hay cuotas descontadas en un rol aprobado. Anúlalo y registra el saldo como uno nuevo." };
-    if (yaAprobado(primer)) return { error: "El rol de " + etiquetaPeriodo(primer) + " ya está aprobado. Elige un mes posterior." };
-    const cambios = { persona: emp.nombre, tipo, monto, cuotas, fecha, primer_periodo: primer, motivo, updated_at: now };
+    const pagadasRol = (vistaDescuento(prev, aprobados).plan as Row[]).filter((c) => c.pagadaRol);
+    if (pagadasRol.length) return { error: "Ya hay cuotas descontadas en un rol aprobado. Anúlalo y registra el saldo como uno nuevo." };
+    if (primeraPendiente && yaAprobado(primeraPendiente.periodo)) return { error: "El rol de " + etiquetaPeriodo(primeraPendiente.periodo) + " ya está aprobado. Elige un mes posterior o marca las cuotas ya pagadas." };
+    const cambios = {
+      persona: emp.nombre, tipo, monto, cuotas, fecha, primer_periodo: primer, motivo, updated_at: now,
+      modo: tipo === "prestamo" ? modo : null, monto_cuota: tipo === "prestamo" ? montoCuota : null,
+      resto_modo: tipo === "prestamo" && modo === "monto_cuota" ? restoModo : null, cuotas_pagadas: cuotasPagadas,
+    };
     await ctx.db.write(actorOf(ses), "beta_rol_descuentos", "update", { id: prev.id }, cambios);
     const saved = { ...prev, ...cambios };
     await logDesc(ctx, ses, s(prev.id), "editar", prev, saved, s(p.motivoCambio));
     return { ok: true, item: vistaDescuento(saved, aprobados) };
   }
-  if (yaAprobado(primer)) return { error: "El rol de " + etiquetaPeriodo(primer) + " ya está aprobado. Elige un mes posterior." };
+  if (primeraPendiente && yaAprobado(primeraPendiente.periodo)) return { error: "El rol de " + etiquetaPeriodo(primeraPendiente.periodo) + " ya está aprobado. Elige un mes posterior o marca las cuotas ya pagadas." };
   const row = {
     id: crypto.randomUUID(), persona: emp.nombre, tipo, monto, cuotas, fecha, primer_periodo: primer, motivo,
+    modo: tipo === "prestamo" ? modo : null, monto_cuota: tipo === "prestamo" ? montoCuota : null,
+    resto_modo: tipo === "prestamo" && modo === "monto_cuota" ? restoModo : null, cuotas_pagadas: cuotasPagadas,
     estado: "activo", origin, creado_por: actorOf(ses), created_at: now, updated_at: now,
   };
   await ctx.db.write(actorOf(ses), "beta_rol_descuentos", "insert", {}, row);
