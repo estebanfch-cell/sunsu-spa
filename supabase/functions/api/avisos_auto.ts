@@ -1,6 +1,8 @@
-// TK223 (Emilia): un aviso resuelto se apaga solo. Las filas de beta_notificaciones
+// TK223 / TK224 (Emilia): un aviso resuelto se apaga solo. Las filas de beta_notificaciones
 // y los erp_avisos de bajo mínimo se reevalúan al cargar y al resolver, sin
 // esperar a que alguien pulse ×. El dismiss manual (notif_leer / ×) se mantiene.
+// TK224: si el ticket ya está cancelado o no existe, la solicitud pendiente
+// y su aviso (incluido el virtual sol:) también se apagan. No se toca el ticket.
 import type { Ctx } from "./lib.ts";
 import { s, type Row } from "./domain.ts";
 
@@ -11,9 +13,9 @@ export const AVISOS_FYI = new Set([
   "conteo_aprobado", "conteo_devuelto",
 ]);
 
-export type DatosAvisos = { solicitudes: Row[]; permisos: Row[]; conteos: Row[] };
+export type DatosAvisos = { solicitudes: Row[]; permisos: Row[]; conteos: Row[]; ticketsInactivos?: Set<string> };
 
-function ticketDeLink(link: string): string {
+export function ticketDeLink(link: string): string {
   const m = s(link).match(/#\/m\/tickets\/t\/([^/?#]+)/);
   return m ? decodeURIComponent(m[1]) : "";
 }
@@ -38,6 +40,10 @@ export function permisoDeAviso(n: Row, permisos: Row[]): Row | undefined {
   });
 }
 
+function ticketDeAviso(n: Row, sol?: Row): string {
+  return s(sol && sol.fila) || ticketDeLink(s(n.link || n.ruta));
+}
+
 /** true = el aviso todavía describe un pendiente; false = ya se resolvió y debe apagarse. */
 export function avisoSigueVigente(n: Row, data: DatosAvisos): boolean {
   const tipo = s(n.tipo);
@@ -45,8 +51,9 @@ export function avisoSigueVigente(n: Row, data: DatosAvisos): boolean {
   if (tipo === "edicion_ticket" || tipo === "solicitud") {
     const id = s(n.ref_id) || s(n.id).replace(/^sol:/, "");
     const sol = data.solicitudes.find((r) => s(r.id) === id);
+    const fila = ticketDeAviso(n, sol);
+    if (fila && data.ticketsInactivos && data.ticketsInactivos.has(fila)) return false;
     if (sol) return s(sol.estado) === "pendiente" && sol.prueba !== true;
-    const fila = ticketDeLink(s(n.link || n.ruta));
     if (!fila) return false;
     return data.solicitudes.some((r) => s(r.fila) === fila && s(r.estado) === "pendiente" && r.prueba !== true);
   }
@@ -70,17 +77,59 @@ async function todas(ctx: Ctx, t: string): Promise<Row[]> {
   try { return await ctx.db.all(t); } catch { return []; }
 }
 
+export async function cargarTicketsInactivos(ctx: Ctx): Promise<Set<string>> {
+  const out = new Set<string>();
+  const add = (v: string) => { if (v) out.add(v); };
+  for (const r of await todas(ctx, "beta_ticket_cancelados")) {
+    add(s(r.clave)); add(s(r.so_num));
+  }
+  for (const t of ["tickets", "beta_tickets"]) {
+    for (const r of await todas(ctx, t)) {
+      const o = r.orig && typeof r.orig === "object" ? r.orig as Row : {};
+      if (o.anulado === true || o.cancelado === true || r.anulado === true || r.cancelado === true) {
+        add(s(r.clave)); add(s(r.so_num));
+      }
+    }
+  }
+  return out;
+}
+
 export async function cargarDatosAvisos(ctx: Ctx): Promise<DatosAvisos> {
-  const [solicitudes, permisos, conteos] = await Promise.all([
+  const [solicitudes, permisos, conteos, ticketsInactivos] = await Promise.all([
     todas(ctx, "solicitudes_cambio"),
     todas(ctx, "permisos"),
     todas(ctx, "beta_conteos"),
+    cargarTicketsInactivos(ctx),
   ]);
-  return { solicitudes, permisos, conteos };
+  return { solicitudes, permisos, conteos, ticketsInactivos };
 }
 
-/** Marca leídas las notificaciones cuya condición ya no aplica. No toca otro dato de negocio. */
+/** Cierra solicitudes de ticket que ya están cancelados. No toca el ticket. */
+export async function cerrarSolicitudesTicketInactivo(ctx: Ctx, actor: string, inactivos?: Set<string>): Promise<number> {
+  const inact = inactivos || await cargarTicketsInactivos(ctx);
+  if (!inact.size) return 0;
+  const sols = await todas(ctx, "solicitudes_cambio");
+  const now = ctx.now.toISOString();
+  let n = 0;
+  for (const r of sols) {
+    if (s(r.tabla) !== "ticket_detalle" || s(r.estado) !== "pendiente" || r.prueba === true) continue;
+    if (!inact.has(s(r.fila))) continue;
+    try {
+      await ctx.db.write(actor, "solicitudes_cambio", "update", { id: r.id }, {
+        estado: "aprobado",
+        resuelto_at: now,
+        resuelto_por: actor,
+        comentario: "auto: el ticket ya estaba cancelado o eliminado",
+      });
+      n++;
+    } catch { /* no frena la lista */ }
+  }
+  return n;
+}
+
+/** Marca leídas las notificaciones cuya condición ya no aplica. No borra tickets. */
 export async function resolverAvisosObsoletos(ctx: Ctx, actor: string): Promise<number> {
+  try { await cerrarSolicitudesTicketInactivo(ctx, actor); } catch { /* sigue con los avisos */ }
   const rows = await todas(ctx, "beta_notificaciones");
   if (!rows.length) return 0;
   const data = await cargarDatosAvisos(ctx);
