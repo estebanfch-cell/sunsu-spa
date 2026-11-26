@@ -106,7 +106,7 @@ describe("TK209 · pantallas", () => {
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     const enSw = (sw.match(/const CACHE = "([^"]+)"/) || [])[1];
     assert.equal(enHtml, enSw);
-assert.equal(enSw, "sunsu-2026-11-26-PAQ1215");
+assert.equal(enSw, "sunsu-2026-11-26-CONSUI");
   });
   it("la lista de tickets conserva el scroll al refrescar y al volver del detalle; lo mismo en clientes, pagos e inventario", () => {
     const js = file("beta-screens.js"), html = file("index.html"), cli = file("mc-clientes.js"), caja = file("mc-caja.js");
