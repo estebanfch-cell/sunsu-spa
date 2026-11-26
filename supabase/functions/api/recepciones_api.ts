@@ -105,6 +105,8 @@ extend("rcp_recibir", "any", async (p, ctx, ses) => {
     let bodega = s(it.bodega_id) || s(g.bodega_id);
     const b = bods.find((x) => x.id === bodega);
     if (!b || !BODEGAS_OK.includes(s(b.codigo))) bodega = s(g.bodega_id);
+    // t974u: un producto de consignación siempre entra a CONSIGNACION, no a Venta.
+    if (s(g.origen) === "consignacion") bodega = s(g.bodega_id);
     for (const r of repartir(L.filter((x) => x.producto_id === g.producto_id), q)) recibir.push({ oc_linea_id: r.id, cantidad: r.cantidad, bodega_id: bodega });
     log.push(`${s(g.sku)} +${q} → ${s(bods.find((x) => x.id === bodega)?.nombre || bodega)}`);
   }
