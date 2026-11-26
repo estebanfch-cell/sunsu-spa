@@ -170,11 +170,12 @@ describe("DEV-31 rol de pagos", () => {
 
   it("front: pre-rol en tabla, botón Anticipos y préstamos, firma con el dedo, sin «ligar»", () => {
     const js = readFileSync(new URL("../../../mc-rol.js", import.meta.url), "utf8");
+    new Function(js);
     const html = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
     assert.match(js, /Anticipos y préstamos/);
     assert.match(js, /pointerdown/);
     assert.match(js, /rol_firmar/);
-    assert.match(html, /mc-rol\.js\?v=20261126pdftodas/);
+    assert.match(html, /mc-rol\.js\?v=20261126rolmod/);
     assert.match(html, /touch-action:none/);
     assert.doesNotMatch(js, /ligar/i);
   });

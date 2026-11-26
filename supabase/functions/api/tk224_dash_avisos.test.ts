@@ -147,8 +147,8 @@ describe("TK224 · UI del dashboard", () => {
   it("cache al día en index.html y sw.js", () => {
     const html = file("index.html");
     const sw = file("sw.js");
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-26-PDFTODAS"/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-26-PDFTODAS"/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-26-ROLMOD"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-26-ROLMOD"/);
     assert.match(html, /beta-screens\.js\?v=20261126tk225/);
     assert.match(html, /mc-conteo\.js\?v=20261126tk225/);
   });
