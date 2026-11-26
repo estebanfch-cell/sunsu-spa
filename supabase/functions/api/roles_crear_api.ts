@@ -317,20 +317,25 @@ export async function armarEntrada(ctx: Ctx, nombre: string, periodoRaw: string,
   const afiliada = cfgRol ? cfgRol.afiliada : afiliadaSegunOverlay(overlays, persona);
   const iessFicha = await fichaIessDe(ctx, persona, per.cicloHasta);
   const { nomina, horas, asumidoDesde, ultimoDato } = await horasRolDe(ctx, persona, per.anio, per.mes, { ingreso: ingresoCfg || null, asumirSinMarcajes: !!(cfgRol && cfgRol.asumirSinMarcajes) });
-  const { comisionesDeTablas } = await import("./handlers_extra.ts");
-  const com = await comisionesDeTablas(ctx, persona, per.anio, per.mes);
-  // DEV-31: las comisiones del rol son las MISMAS de la pantalla Comisiones (mismo ciclo 26→25); multas igual que antes.
+  // Un solo cálculo de comisiones: la pantalla (ciclo 26→25). Antes se corría
+  // también comisionesDeTablas (todos los tickets + snapshots + recepción) y
+  // luego se pisaban las cifras, y el Edge Function se quedaba sin CPU (HTTP 546).
+  let com = { comFaciales: 0, comExtras: 0, comRecepcion: 0, comProductos: 0, comPaquetes: 0, multas: 0 };
   try {
     const { comisionesComoPantalla } = await import("./handlers.ts");
     const pant = await comisionesComoPantalla(ctx, persona, per.cicloDesde);
     com.comFaciales = pant.comFaciales; com.comPaquetes = pant.comPaquetes; com.comProductos = pant.comProductos;
     com.comExtras = pant.comExtras; com.comRecepcion = pant.comRecepcion;
-  } catch { /* si falla, queda el cálculo anterior */ }
+  } catch {
+    const { comisionesDeTablas } = await import("./handlers_extra.ts");
+    com = await comisionesDeTablas(ctx, persona, per.anio, per.mes);
+  }
   const { multasBetaRol, detalleMultasSistema } = await import("./multas_beta_api.ts");
   const mBeta = await multasBetaRol(ctx.db, persona, per.cicloDesde, per.cicloHasta).catch(() => ({ total: 0, detalle: [] as Row[] }));
   let mSis: Row[] = [];
   try { mSis = await detalleMultasSistema(ctx.db, persona, per.cicloDesde, per.cicloHasta); } catch { mSis = []; }
-  com.multas = round2(n(com.multas) + mBeta.total);
+  const sheetMultas = mSis.reduce((a, r) => a + n(r.monto), 0);
+  com.multas = round2(sheetMultas + mBeta.total);
   const finMes = `${per.anio}-${String(per.mes).padStart(2, "0")}-28`;
   const last = new Date(Date.UTC(per.anio, per.mes, 0)).toISOString().slice(0, 10);
   const cfg = cfgRol ? null : await pagoVigenteDe(ctx, persona, last);
