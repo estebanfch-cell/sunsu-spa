@@ -394,8 +394,8 @@ describe("TK154 fotitos de la lista en lote y con caché", () => {
 
 describe("TK154 versión", () => {
   it("caché y motor en TK154", () => {
-assert.match(file("sw.js"), /const CACHE = "sunsu-2026-11-26-TK226"/);
-    assert.match(file("index.html"), /window\.SUNSU_CACHE = "sunsu-2026-11-26-TK226"/);
+assert.match(file("sw.js"), /const CACHE = "sunsu-2026-11-26-PAQ1215"/);
+    assert.match(file("index.html"), /window\.SUNSU_CACHE = "sunsu-2026-11-26-PAQ1215"/);
     assert.match(file("supabase/functions/api/sunsu_version.ts"), /sunsu-engine-2026-11-19-TK157/);
   });
 });

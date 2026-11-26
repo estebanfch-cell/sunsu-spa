@@ -250,15 +250,25 @@ export async function comisionesDeTablas(ctx: Ctx, nombreApp: string, anio: numb
   const fin = cicloFin(ciclo);
   const cat0 = await ctx.db.all("catalogo").catch(() => [] as R[]);
   const cmap0 = new Map(cat0.map((r) => [skuCode(s(r.sku)), r]));
-  const ovb = await (await import("./ticket_beta.ts")).overlayDe(ctx.db);
+  const ovMod = await import("./ticket_beta.ts");
+  const ovb = await ovMod.overlayDe(ctx.db);
   const { aplicarSnapsATicket, snapsPorClave, asegurarSnapshots } = await import("./costos_reales.ts");
-  const { claveDe } = await import("./ticket_beta.ts");
+  const { claveDe } = ovMod;
   const { leerSerie } = await import("./series.ts");
   const rowsTk = (await ctx.db.all("tickets")).filter((r) => r.timestamp && !esCancelado(r));
   const claveTk = (r: R) => claveDe(r, leerSerie(r, "so_num"));
   try { await asegurarSnapshots(ctx.db, "sistema-tk114", false, rowsTk, claveTk); } catch { /* ok */ }
   const snaps = await snapsPorClave(ctx.db);
-  const tks = rowsTk.map((r) => aplicarSnapsATicket(ovb(r, ticketIn(r, cmap0)), snaps.get(claveTk(r))));
+  const factVivo = await ctx.db.all("beta_migo_facturas_vivo").catch(() => [] as R[]);
+  const mapaMigo = ovMod.mapaSubtotalMigoPaquetes(factVivo);
+  const cabs = await ctx.db.all("beta_tickets").catch(() => [] as R[]);
+  const cabBy = new Map(cabs.map((c) => [s(c.clave), c]));
+  const tks = rowsTk.map((r) => ovMod.aplicarNetosRealesPaquete(
+    aplicarSnapsATicket(ovb(r, ticketIn(r, cmap0)), snaps.get(claveTk(r))),
+    r,
+    mapaMigo,
+    cabBy.get(claveTk(r)),
+  ));
   const key = normNombre(nombreApp).split(" ")[0] || normNombre(nombreApp);
   const users = await ctx.db.all("usuarios");
   const admins = users.filter((u) => s(u.rol) === "admin" || s(u.rol) === "super_admin").map((u) => ({ nombre: s(u.nombre), short: s(u.short), id: s(u.id) }));

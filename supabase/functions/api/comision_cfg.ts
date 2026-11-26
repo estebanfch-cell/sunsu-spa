@@ -6,7 +6,7 @@ import type { Ctx, Ses } from "./lib.ts";
 import { actorOf, kvGet, kvSet, logAccion } from "./lib.ts";
 import { esAdmin } from "./permisos.ts";
 import {
-  FACIALES_2, FACIALES_3, TRAMOS_PAQUETE, cfgDesdeReglas, cicloInicio, ecuadorParts, facialSku, n, s, skuCode,
+  CICLO_TRAMOS_121520_DESDE, FACIALES_2, FACIALES_3, TRAMOS_PAQUETE, TRAMOS_PAQUETE_121520, cfgDesdeReglas, cicloInicio, ecuadorParts, facialSku, n, s, skuCode, tramosPorCiclo,
   type ReglaCom, type Row, type TipoReglaCom, type TramoPaquete,
 } from "./domain.ts";
 
@@ -69,7 +69,7 @@ async function anotar(ctx: Ctx, ses: Ses, fila: string, accion: "INSERT" | "UPDA
 function clonarTramos(vigente: string, reglas: ReglaCom[]): ReglaCom[] {
   const previos = reglas.filter((r) => r.tipo === "tramo" && s(r.vigente_desde).slice(0, 10) <= vigente);
   const fecha = previos.map((r) => s(r.vigente_desde).slice(0, 10)).sort().pop();
-  const base = fecha ? previos.filter((r) => s(r.vigente_desde).slice(0, 10) === fecha) : TRAMOS_PAQUETE.map((t) => ({
+  const base = fecha ? previos.filter((r) => s(r.vigente_desde).slice(0, 10) === fecha) : tramosPorCiclo(vigente).map((t) => ({
     tipo: "tramo" as const, clave: String(t.desde), vigente_desde: vigente,
     desde: t.desde, hasta: t.hasta, modo: t.modo, valor: t.valor,
   }));
@@ -222,9 +222,15 @@ export async function vistaConfig(ctx: Ctx): Promise<Row> {
       valor: r.modo === "fijo" ? n(r.valor) : Math.round(n(r.valor) * 1000) / 10,
       vigente: s(r.vigente_desde).slice(0, 10), fila: filaDe(r), fabrica: false,
     }))
-    : TRAMOS_PAQUETE.map((t) => ({
-      desde: t.desde, hasta: t.hasta >= 100000 ? "" : t.hasta, modo: t.modo,
-      valor: Math.round(t.valor * 1000) / 10, vigente: "", fila: "def|tramo|" + t.desde, fabrica: true,
-    }));
+    : [
+      ...TRAMOS_PAQUETE.map((t) => ({
+        desde: t.desde, hasta: t.hasta >= 100000 ? "" : t.hasta, modo: t.modo,
+        valor: Math.round(t.valor * 1000) / 10, vigente: "2026-10-26", fila: "def|tramo|2026-10-26|" + t.desde, fabrica: true,
+      })),
+      ...TRAMOS_PAQUETE_121520.map((t) => ({
+        desde: t.desde, hasta: t.hasta >= 100000 ? "" : t.hasta, modo: t.modo,
+        valor: Math.round(t.valor * 1000) / 10, vigente: CICLO_TRAMOS_121520_DESDE, fila: "def|tramo|" + CICLO_TRAMOS_121520_DESDE + "|" + t.desde, fabrica: true,
+      })),
+    ];
   return { faciales, productos, base, extra, recepcion, tramos };
 }
