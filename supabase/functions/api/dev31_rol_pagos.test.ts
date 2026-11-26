@@ -13,7 +13,7 @@ import "./roles_api.ts";
 import "./roles_crear_api.ts";
 import "./rol_descuentos_api.ts";
 import "./empleados_api.ts";
-import { planDe, periodoSiguiente } from "./rol_descuentos_api.ts";
+import { planDe, planMontosPrestamo, etiquetaCuotaPrestamo, periodoSiguiente } from "./rol_descuentos_api.ts";
 import { historicoVigente } from "./asistencia_api.ts";
 import type { Row } from "./domain.ts";
 
@@ -53,6 +53,19 @@ describe("DEV-31 rol de pagos", () => {
     const p = planDe({ tipo: "prestamo", monto: 100, cuotas: 3, primer_periodo: "DICIEMBRE_2026" });
     assert.deepEqual(p.map((x) => x.periodo), ["DICIEMBRE_2026", "ENERO_2027", "FEBRERO_2027"]);
     assert.deepEqual(p.map((x) => x.monto), [33.33, 33.33, 33.34]);
+    assert.deepEqual(planMontosPrestamo({ monto: 100, cuotas: 3 }), [33.33, 33.33, 33.34]);
+  });
+
+  it("préstamo por monto de cuota: sumar al último o cuota extra; cuotas ya pagadas; etiqueta con motivo", () => {
+    assert.deepEqual(planMontosPrestamo({ monto: 101.50, modo: "monto_cuota", montoCuota: 20, restoModo: "sumar_ultimo" }), [20, 20, 20, 20, 21.50]);
+    assert.deepEqual(planMontosPrestamo({ monto: 101.50, modo: "monto_cuota", montoCuota: 20, restoModo: "cuota_extra" }), [20, 20, 20, 20, 20, 1.50]);
+    const p = planDe({ tipo: "prestamo", monto: 101.50, modo: "monto_cuota", monto_cuota: 20, resto_modo: "sumar_ultimo", primer_periodo: "OCTUBRE_2026" });
+    assert.deepEqual(p.map((x) => x.periodo), ["OCTUBRE_2026", "NOVIEMBRE_2026", "DICIEMBRE_2026", "ENERO_2027", "FEBRERO_2027"]);
+    assert.deepEqual(p.map((x) => x.monto), [20, 20, 20, 20, 21.50]);
+    assert.equal(
+      etiquetaCuotaPrestamo({ tipo: "prestamo", monto: 101.50, motivo: "Tratamiento Peeling" }, { n: 2, monto: 20 }, 5),
+      "Préstamo — Tratamiento Peeling ($101.50) — cuota 2/5",
+    );
   });
 
   it("registrar anticipo y préstamo; se descuentan en el rol del mes que toca (también sin IESS)", async () => {
@@ -79,7 +92,7 @@ describe("DEV-31 rol de pagos", () => {
     const rol = await handle("rol_crear", { token: "t-emi", persona: "Evelyn", periodo: "NOVIEMBRE_2026" }, c) as Row;
     const det = ((rol.data as Row).descuentosInternos as Row[]);
     assert.equal(det.length, 1);
-    assert.match(String(det[0].etiqueta), /Préstamo Sunsu \(cuota 1 de 3\)/);
+    assert.match(String(det[0].etiqueta), /Préstamo \(\$90\.00\) — cuota 1\/3/);
   });
 
   it("aprobar → la empleada lo ve, firma con el dedo una vez; otra empleada no lo ve ni lo firma; admin ve el estado", async () => {
@@ -104,6 +117,29 @@ describe("DEV-31 rol de pagos", () => {
     const res = await handle("rol_resumen_periodo", { token: "t-emi", periodo: "NOVIEMBRE_2026" }, c) as Row;
     assert.equal(((res.items as Row[])[0].firma as Row).firmado, true);
     // Con una cuota en un rol aprobado, el préstamo ya no se edita (se anula y se registra el saldo).
+  });
+
+
+  it("préstamo a mitad de camino: cuota 1 pagada en octubre, noviembre descuenta cuota 2 con motivo en la línea", async () => {
+    const db = seed(); const c = ctx(db);
+    const pr = await handle("rol_desc_guardar", {
+      token: "t-emi", persona: "Evelyn", tipo: "prestamo", monto: 101.50,
+      modo: "monto_cuota", montoCuota: 20, restoModo: "sumar_ultimo",
+      primerPeriodo: "OCTUBRE_2026", cuotasPagadas: 1, motivo: "Tratamiento Peeling",
+    }, c) as Row;
+    assert.equal(pr.ok, true, String(pr.error || ""));
+    const item = pr.item as Row;
+    assert.equal(item.cuotas, 5);
+    assert.equal(item.cuotasPagadas, 1);
+    assert.equal(item.saldo, 81.50);
+    const nov = await handle("rol_prerol_resumen", { token: "t-emi", periodo: "NOVIEMBRE_2026" }, c) as Row;
+    const ev = (nov.filas as Row[]).find((x) => x.nombre === "Evelyn")!;
+    assert.equal(ev.prestamos, 20);
+    const rol = await handle("rol_crear", { token: "t-emi", persona: "Evelyn", periodo: "NOVIEMBRE_2026" }, c) as Row;
+    const det = ((rol.data as Row).descuentosInternos as Row[]);
+    assert.equal(det.length, 1);
+    assert.equal(det[0].monto, 20);
+    assert.equal(det[0].etiqueta, "Préstamo — Tratamiento Peeling ($101.50) — cuota 2/5");
   });
 
   it("préstamo: saldo baja con cada rol aprobado; anular deja historial; visor y personal no tocan nada", async () => {
@@ -138,7 +174,7 @@ describe("DEV-31 rol de pagos", () => {
     assert.match(js, /Anticipos y préstamos/);
     assert.match(js, /pointerdown/);
     assert.match(js, /rol_firmar/);
-    assert.match(html, /mc-rol\.js\?v=20261125tk232/);
+    assert.match(html, /mc-rol\.js\?v=20261126prestamo/);
     assert.match(html, /touch-action:none/);
     assert.doesNotMatch(js, /ligar/i);
   });

@@ -1659,6 +1659,13 @@ b + p.mcpq-hist { margin-top: 8px; border-top: 0; }
   .desc-form label { display:flex; flex-direction:column; gap:3px; font-size:.78rem; }
   .desc-form .full { grid-column:1/-1; }
   .desc-item { border-top:1px solid var(--cream-d,#E6DCCB); padding:8px 0; font-size:.84rem; }
+  .desc-prestamo { display:flex; flex-direction:column; gap:10px; padding:8px 0 2px; }
+  .desc-prestamo-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px 12px; }
+  .desc-modo, .desc-resto { display:flex; flex-direction:column; gap:4px; font-size:.78rem; }
+  .desc-form .desc-modo label, .desc-form .desc-resto label { flex-direction:row; align-items:center; gap:6px; }
+  .desc-preview table { width:100%; border-collapse:collapse; margin-top:4px; font-size:.8rem; }
+  .desc-preview th, .desc-preview td { text-align:left; padding:3px 6px; border-bottom:1px solid var(--cream-d,#E6DCCB); vertical-align:top; }
+  .desc-preview tr.desc-pagada td { color:var(--gray,#7a7268); }
   .rol-firma, .rol-firma-ok { margin-top:12px; padding:10px; border:1.5px dashed var(--gold,#C4943A); border-radius:12px; background:#fff; }
   .rol-firma-canvas { width:100%; aspect-ratio:600/190; display:block; background:#fff; border:1px solid var(--cream-d,#E6DCCB); border-radius:8px; touch-action:none; -webkit-user-select:none; user-select:none; }
   .rol-firma-img { width:100%; max-width:360px; display:block; background:#fff; border-radius:6px; }
@@ -9073,7 +9080,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-26-COMKPI"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-26-PRESTAMO"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -9254,8 +9261,8 @@ window.SunsuUpdate.init();
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk195"></script>
-<script src="beta-screens.js?v=20261126comkpi"></script>
-<script src="mc-rol.js?v=20261126comkpi"></script>
+<script src="beta-screens.js?v=20261126prestamo"></script>
+<script src="mc-rol.js?v=20261126prestamo"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
 <script src="mc-nav.js?v=20261123tk216"></script>
