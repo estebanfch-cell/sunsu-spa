@@ -7648,7 +7648,7 @@ function _dashCss(){
     +'.dsh-tbl{width:100%;border-collapse:collapse;font-size:0.62rem}.dsh-tbl th{color:var(--gray);font-weight:800;text-align:right;padding:4px 3px;border-bottom:1.2px solid var(--cream-d);position:sticky;top:0;background:#fff}.dsh-tbl th:first-child,.dsh-tbl td:first-child{text-align:left}.dsh-tbl td{padding:4px 3px;text-align:right;border-bottom:1px solid var(--gray-l);color:var(--text);font-weight:700}'
     +'.dsh-ptabs{display:flex;gap:3px;background:var(--blue-l);border-radius:10px;padding:3px;margin:6px 0}.dsh-ptabs button{flex:1;border:0;background:transparent;font-size:0.6rem;font-weight:800;color:var(--gray);padding:6px 2px;border-radius:8px;cursor:pointer}.dsh-ptabs button.on{background:var(--navy);color:#fff}'
     +'.dsh-ov{position:fixed;inset:0;background:rgba(20,30,50,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px}.dsh-ovb{background:#fff;border-radius:14px;max-width:860px;width:100%;max-height:88vh;overflow:hidden;padding:12px 14px;box-shadow:0 12px 40px rgba(0,0,0,.25)}.dsh-x{border:0;background:var(--blue-l);border-radius:50%;width:30px;height:30px;font-size:1.1rem;cursor:pointer}.dsh-dd:hover{background:var(--blue-l);border-radius:8px}.dsh-ovb .dsh-tbl td:nth-child(2),.dsh-ovb .dsh-tbl td:nth-child(3),.dsh-ovb .dsh-tbl th:nth-child(3),.dsh-ovb .dsh-tbl th:nth-child(4){text-align:left}'
-    +'.dash-av{max-width:760px;margin:10px auto 8px;padding:0;width:100%;box-sizing:border-box}.dash-av-it{display:flex;align-items:center;gap:6px;margin:0 0 6px;padding:6px 8px;border:1px solid var(--cream-d,#E8DCC8);border-radius:10px;background:#fff;box-sizing:border-box}.dash-av-go{flex:1 1 auto;min-width:0;background:none;border:0;padding:0;text-align:left;font:inherit;cursor:pointer;color:var(--navy-d,#2E4A66)}.dash-av-tx{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden;text-overflow:ellipsis;font-size:0.7rem;font-weight:650;line-height:1.3;max-height:calc(1.3em * 3)}.dash-av-x{flex:0 0 28px;width:28px;height:28px;margin:0;font-size:1rem}@media(max-width:520px){.dsh-grid{grid-template-columns:1fr}.dsh-v{font-size:1.3rem}}';
+    +'.dash-av{max-width:760px;margin:0 auto 8px;padding:8px 0 2px;width:100%;box-sizing:border-box}.dash-av-it{display:flex;align-items:flex-start;gap:6px;margin:0 0 4px;padding:5px 8px;border:1px solid var(--cream-d,#E8DCC8);border-radius:10px;background:#fff;box-sizing:border-box}.dash-av-it.dash-av-eq{background:#FFF8E6;border-color:#E8C468}.dash-av-it:last-child{margin-bottom:0}.dash-av-go{flex:1 1 auto;min-width:0;background:none;border:0;padding:0;text-align:left;font:inherit;cursor:pointer;color:var(--navy-d,#2E4A66)}.dash-av-tx{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;text-overflow:ellipsis;font-size:0.68rem;font-weight:650;line-height:1.3;max-height:calc(1.3em * 2)}.dash-av-it.exp .dash-av-tx{-webkit-line-clamp:unset;line-clamp:unset;max-height:none;overflow:visible}.dash-av-x{flex:0 0 28px;width:28px;height:28px;margin:0;font-size:1rem}@media(max-width:520px){.dsh-grid{grid-template-columns:1fr}.dsh-v{font-size:1.3rem}}';
   document.head.appendChild(st);
 }
 function dashPeriodo(p){ _dashSt.periodo=p; renderInicio(document.getElementById('content')); }
@@ -16975,12 +16975,13 @@ function _rolDiasLinea(d){
   var n=function(v){ var x=parseFloat(v); return isFinite(x)?Math.round(x):0; };
   var dt=n(d.diasTrabajados), df=n(d.diasFest), dd=n(d.diasDesc), da=n(d.diasAsumidos);
   var tot=dt+df+dd+da;
-  var parts=[
-    (dt===1?'Día trabajado ':'Días trabajados ')+dt,
-    (df===1?'Día feriado (trabajado) ':'Días feriado (trabajados) ')+df,
-    (dd===1?'Día descanso (trabajado) ':'Días descanso (trabajados) ')+dd,
-    (da===1?'Día asumido ':'Días asumidos ')+da
-  ];
+  // Emilia 2026-11-26: en la línea DÍAS (pantalla y PDF) solo salen componentes con valor > 0.
+  var parts=[];
+  if(dt>0) parts.push((dt===1?'Día trabajado ':'Días trabajados ')+dt);
+  if(df>0) parts.push((df===1?'Día feriado (trabajado) ':'Días feriado (trabajados) ')+df);
+  if(dd>0) parts.push((dd===1?'Día descanso (trabajado) ':'Días descanso (trabajados) ')+dd);
+  if(da>0) parts.push((da===1?'Día asumido ':'Días asumidos ')+da);
+  if(!parts.length) return 'Total '+tot+' '+(tot===1?'día':'días');
   return parts.join(' + ')+' = Total '+tot+' '+(tot===1?'día':'días');
 }
 

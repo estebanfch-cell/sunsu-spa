@@ -13,7 +13,7 @@ describe("TK180 el banner de actualización nunca se queda pegado", () => {
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     assert.ok(enSw && enHtml);
     assert.equal(enHtml, enSw);
-    assert.equal(enSw, "sunsu-2026-11-26-TK224");
+    assert.equal(enSw, "sunsu-2026-11-26-TK225");
   });
   it("en la app nativa (TestFlight) no hay banner ni chequeo de SW", () => {
     assert.match(upd, /Capacitor\.isNativePlatform\(\)/);

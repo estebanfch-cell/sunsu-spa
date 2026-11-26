@@ -10,6 +10,7 @@ export const FACTOR_SUBIDO_TARDE = 0.5;
 export const ETIQUETA_TARDE = "Subido tarde · 50%";
 /** Aviso al equipo: 15 días desde el deploy (21/11/2026), se apaga solo después de este día (Ecuador). */
 export const AVISO_TARDE_HASTA = "2026-12-06";
+export const AVISO_TARDE_ID = "aviso:tarde-2026-12-06";
 export const AVISO_TARDE_TEXTO = "Desde hoy, los tickets deben subirse el mismo día de la atención. Los tickets subidos al día siguiente o después pagarán el 50% de la comisión.";
 export const PROMPT_TARDE_TEXTO = "Este ticket se paga al 50% de comisión por subirse tarde.";
 /** Más atrás que esto no se acepta como fecha de atención (error de tipeo). */
