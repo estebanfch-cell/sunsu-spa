@@ -137,9 +137,10 @@ describe("TK223 · notif_mias apaga avisos resueltos", () => {
     db.tables.set("beta_notificaciones", [
       { id: "n-fyi", usuario: "emi", tipo: "solicitud_aprobada", titulo: "Solicitud aprobada", cuerpo: "Listo.", created_at: "2026-11-25T12:00:00Z" },
     ]);
-    assert.equal((await h("notif_mias", "adm")).sinLeer, 1);
+    const unread = (r: { items?: { id?: string; leida?: boolean }[] }) => ((r.items || []) as { id?: string; leida?: boolean }[]).filter((x) => x.id === "n-fyi" && !x.leida);
+    assert.equal(unread(await h("notif_mias", "adm") as { items?: { id?: string; leida?: boolean }[] }).length, 1);
     await h("notif_leer", "adm", { id: "n-fyi" });
-    assert.equal((await h("notif_mias", "adm")).sinLeer, 0);
+    assert.equal(unread(await h("notif_mias", "adm") as { items?: { id?: string; leida?: boolean }[] }).length, 0);
   });
 });
 
@@ -169,8 +170,8 @@ describe("TK223 · UI", () => {
     assert.match(html, /api\("voucher_alertas"/);
     assert.match(html, /asis_permiso_resolver[\s\S]{0,400}pintarBadgeNotif/);
     assert.match(html, /solicitud_resolver[\s\S]{0,250}pintarBadgeNotif/);
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-26-ROLMOD"/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-26-ROLMOD"/);
+assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-26-TK226"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-26-TK226"/);
   });
 });
 

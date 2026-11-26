@@ -154,15 +154,15 @@ describe("TK208 · pantallas", () => {
     assert.match(tk, /t: "Falta factura", tone: "rojo"/);
     assert.match(tk, /background:#FCA5A5/);
   });
-  it("Dashboard e Inicio de recepción piden voucher_alertas; iPhone tiene rojo saturado", () => {
+  it("Dashboard e Inicio ya no listan Falta factura como aviso; iPhone tiene rojo saturado", () => {
     const html = file("index.html"), sw = file("sw.js"), home = file("mc-staff-home.js");
-    assert.match(html, /api\("voucher_alertas"/);
-    assert.match(home, /voucher_alertas/);
+    assert.match(html, /Falta factura y Descuadre voucher no van en avisos/);
+    assert.doesNotMatch(home, /voucher_alertas/);
     assert.match(html, /-webkit-touch-callout: none/);
     assert.match(html, /\.mob-card\.tk-flagged \{ background: #FCA5A5;/);
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     const enSw = (sw.match(/const CACHE = "([^"]+)"/) || [])[1];
     assert.equal(enHtml, enSw);
-    assert.equal(enSw, "sunsu-2026-11-26-ROLMOD");
+assert.equal(enSw, "sunsu-2026-11-26-TK226");
   });
 });
