@@ -173,7 +173,7 @@ extend("ag_citas", "any", async (p, ctx, ses) => {
     const f = fechaCita(a), ln = links.find((x) => s(x.appointment_id) === s(a.id));
     const tk = ln ? null : tks.find((t) => ymdUtc(t.timestamp) === f && citaDeNombre([a], s(t.nombre), s(t.apellido)));
     const et = etiquetaDe(a).toUpperCase();
-    const ficha = fichaDeCita(regs, s(a.firstName), s(a.lastName));
+    const ficha = fichaDeCita(regs, s(a.firstName), s(a.lastName), a.phone);
     const ced = ficha ? normCedula(ficha.cedula) : "";
     const nueva = !visitasPrevias(tksAll, s(a.firstName), s(a.lastName), f || desde, ced);
     return sinTelefono(vistaCita(a, {
@@ -189,15 +189,46 @@ extend("ag_citas", "any", async (p, ctx, ses) => {
   return { ok: true, desde, hasta, citas, porDia };
 });
 
-/** Ficha de REGISTRO por nombre, con la regla estricta del sistema viejo (sin usar el teléfono como cédula). */
-export function fichaDeCita(regs: Row[], nombre: string, apellido: string): Row | null {
+/** Ficha de REGISTRO por nombre, con la regla estricta del sistema viejo (sin usar el teléfono como cédula).
+ *  Emilia 26/11: si la regla estricta no encuentra (Acuity «Lorena Garces» vs registro «María Lorena Garcés Rivadeneira»,
+ *  o «Buenaño.» con punto), se busca por palabras: un nombre y un apellido en común, sin tildes ni signos. Si aun así
+ *  hay más de una clienta, el teléfono de la cita (solo backend, nunca se devuelve) decide. */
+export function fichaDeCita(regs: Row[], nombre: string, apellido: string, telefono?: unknown): Row | null {
   const full = normNombre(nombre + " " + apellido), pn = normNombre(nombre).split(" ")[0], ap = normNombre(apellido).split(" ").filter((x) => x.length > 2);
   const exact = regs.filter((r) => normNombre(s(r.nombre) + " " + s(r.apellido)) === full);
   const keys = (L: Row[]) => [...new Set(L.map(claveRegistro))];
-  if (exact.length && keys(exact).length === 1) return exact.sort((a, b) => s(b.timestamp).localeCompare(s(a.timestamp)))[0];
-  if (!pn || !ap.length) return null;
-  const parc = regs.filter((r) => { const rn = normNombre(r.nombre).split(" ")[0], ra = normNombre(r.apellido); return rn === pn && ap.some((x) => ra.split(" ").includes(x)); });
-  return keys(parc).length === 1 ? parc.sort((a, b) => s(b.timestamp).localeCompare(s(a.timestamp)))[0] : null;
+  const ultima = (L: Row[]) => [...L].sort((a, b) => s(b.timestamp).localeCompare(s(a.timestamp)))[0];
+  if (exact.length && keys(exact).length === 1) return ultima(exact);
+  if (pn && ap.length) {
+    const parc = regs.filter((r) => { const rn = normNombre(r.nombre).split(" ")[0], ra = normNombre(r.apellido); return rn === pn && ap.some((x) => ra.split(" ").includes(x)); });
+    if (keys(parc).length === 1) return ultima(parc);
+  }
+  return fichaPorPalabras(regs, nombre, apellido, telefono);
+}
+const palabrasNombre = (v: unknown) => normNombre(v).replace(/[^a-z ]/g, " ").split(" ").filter((x) => x.length > 2 && !["del", "las", "los"].includes(x));
+const telDigitos = (v: unknown) => { const d = telefonoEc(v).replace(/\D/g, ""); return d.length >= 8 ? d.slice(-9) : ""; };
+function fichaPorPalabras(regs: Row[], nombre: string, apellido: string, telefono?: unknown): Row | null {
+  const pn = palabrasNombre(nombre), pa = palabrasNombre(apellido);
+  const keys = (L: Row[]) => [...new Set(L.map(claveRegistro))];
+  const ultima = (L: Row[]) => [...L].sort((a, b) => s(b.timestamp).localeCompare(s(a.timestamp)))[0];
+  const tel = telDigitos(telefono);
+  const conTel = (L: Row[]) => tel ? L.filter((r) => telDigitos(r.telefono) === tel) : [];
+  if (pn.length && pa.length) {
+    const cand = regs.filter((r) => {
+      const rn = palabrasNombre(r.nombre), ra = palabrasNombre(r.apellido), todo = rn.concat(ra);
+      return pn.some((x) => rn.includes(x) || (!ra.length && todo.includes(x))) && pa.some((x) => ra.includes(x) || todo.includes(x));
+    });
+    if (keys(cand).length === 1) return ultima(cand);
+    const t = conTel(cand);
+    if (t.length && keys(t).length === 1) return ultima(t);
+  }
+  // Mismo teléfono y al menos una palabra del nombre en común (nombres invertidos: «Isaac Mateo» / «Mateo Isaac»).
+  const todos = pn.concat(pa);
+  if (tel && todos.length) {
+    const t = conTel(regs).filter((r) => palabrasNombre(s(r.nombre) + " " + s(r.apellido)).some((x) => todos.includes(x)));
+    if (t.length && keys(t).length === 1) return ultima(t);
+  }
+  return null;
 }
 
 extend("ag_cita", "any", async (p, ctx, ses) => {
@@ -208,7 +239,7 @@ extend("ag_cita", "any", async (p, ctx, ses) => {
   const a = r.data as Row;
   if (!puedeCal(c, a.calendarID)) return { error: "Esa cita no es de tu calendario" };
   const regs = (await todas(ctx, "clientas_registro")).filter((x) => !x.borrado_at);
-  const f = fichaDeCita(regs, s(a.firstName), s(a.lastName));
+  const f = fichaDeCita(regs, s(a.firstName), s(a.lastName), a.phone);
   const ln = (await todas(ctx, "beta_citas_ticket")).find((x) => s(x.appointment_id) === s(a.id));
   const forms = (Array.isArray(a.forms) ? a.forms as Row[] : []).flatMap((fm) => (Array.isArray(fm.values) ? fm.values as Row[] : []).filter((v) => s(v.value)).map((v) => ({ campo: s(v.name), valor: s(v.value) })));
   const out = vistaCita(a, {
@@ -318,7 +349,7 @@ extend("ag_wa", "any", async (p, ctx, ses) => {
   const reconf = p.reconfirmar === true && et === "CONFIRMADA";
   if (etiquetaCerrada(et) && !reconf) return { error: "Esta cita ya está " + et.toLowerCase() };
   const regs = (await todas(ctx, "clientas_registro")).filter((x) => !x.borrado_at);
-  const ficha = fichaDeCita(regs, s(a.firstName), s(a.lastName));
+  const ficha = fichaDeCita(regs, s(a.firstName), s(a.lastName), a.phone);
   const ced = ficha ? normCedula(ficha.cedula) : "";
   const tksAll = (await todas(ctx, "tickets")).filter((t) => !t.borrado_at);
   const nueva = !visitasPrevias(tksAll, s(a.firstName), s(a.lastName), fechaCita(a) || hoyEc(ctx), ced);
