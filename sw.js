@@ -1,4 +1,4 @@
-const CACHE = "sunsu-2026-11-26-TK226";
+const CACHE = "sunsu-2026-11-26-PAQ1215";
 const FILES = ["/", "/index.html", "/descuento_justif.js", "/beta-screens.js", "/mc-rol.js", "/beta-inline.js", "/mc-productos.js",
   "/mc-nav.js", "/mc-movil.js", "/mc-promociones.js", "/mc-proveedores.js", "/mc-permisos.js", "/mc-protocolos.js", "/mc-buscar.js", "/mc-conteo.js", "/mc-transferencias.js", "/mc-ajustes.js", "/mc-wa.js", "/mc-tickets.js", "/mc-maestro.js", "/mc-empleados.js", "/mc-edit.js", "/mc-paquetes.js", "/mc-aperturas.js", "/mc-acceso.js", "/mc-barras.js", "/mc-caja.js", "/mc-giftcards.js", "/mc-multas.js", "/mc-clientes.js", "/mc-clientes-dup.js", "/mc-docpdf.js", "/mc-compras.js", "/mc-recepciones.js", "/mc-consignacion.js", "/mc-agenda.js", "/mc-staff-home.js", "/mc-aviso-tarde.js", "/mc-borradores.js", "/mc-portal.js", "/mc-portal-admin.js", "/mc-scan.js", "/vendor-zxing.js", "/vendor-qrcode.js", "/manifest.webmanifest", "/icon-beta.png", "/icon-beta.svg", "/icon-sunsu-64.png", "/icon-sunsu-180.png", "/icon-sunsu-192.png", "/icon-sunsu-512.png", "/assets/sunsu-logo-celeste.png"];
 

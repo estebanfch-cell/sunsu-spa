@@ -111,8 +111,8 @@ describe("TK225 · UI: compactos arriba, sin banner grande", () => {
   it("cache y scripts al día", () => {
     const html = file("index.html");
     const sw = file("sw.js");
-assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-26-TK226"/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-26-TK226"/);
+assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-26-PAQ1215"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-26-PAQ1215"/);
     assert.match(html, /beta-screens\.js\?v=20261126tk226/);
     assert.match(html, /mc-aviso-tarde\.js\?v=20261126tk226/);
   });
