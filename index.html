@@ -927,10 +927,13 @@
   .dash-al-x { flex: 0 0 34px; width: 34px; height: 34px; margin: 4px 2px; border: 0; border-radius: 50%; background: #F3F4F6; color: #374151; font-size: 1.15rem; line-height: 1; cursor: pointer; }
   .dash-al-x:active { background: #FEE2E2; color: #B91C1C; }
   /* TK224: avisos compactos al pie del dashboard (máx. 3 líneas, × persistente). */
-  .dash-av { max-width: 760px; margin: 10px auto 8px; padding: 0; width: 100%; box-sizing: border-box; }
-  .dash-av-it { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; padding: 6px 8px; border: 1px solid var(--cream-d, #E8DCC8); border-radius: 10px; background: #fff; box-sizing: border-box; }
+  .dash-av { max-width: 760px; margin: 0 auto 8px; padding: 8px 0 2px; width: 100%; box-sizing: border-box; }
+  .dash-av-it { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 4px; padding: 5px 8px; border: 1px solid var(--cream-d, #E8DCC8); border-radius: 10px; background: #fff; box-sizing: border-box; }
+  .dash-av-it.dash-av-eq { background: #FFF8E6; border-color: #E8C468; }
+  .dash-av-it:last-child { margin-bottom: 0; }
   .dash-av-go { flex: 1 1 auto; min-width: 0; background: none; border: 0; padding: 0; text-align: left; font: inherit; cursor: pointer; color: var(--navy-d, #2E4A66); }
-  .dash-av-tx { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; text-overflow: ellipsis; font-size: 0.7rem; font-weight: 650; line-height: 1.3; max-height: calc(1.3em * 3); }
+  .dash-av-tx { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; text-overflow: ellipsis; font-size: 0.68rem; font-weight: 650; line-height: 1.3; max-height: calc(1.3em * 2); }
+  .dash-av-it.exp .dash-av-tx { -webkit-line-clamp: unset; line-clamp: unset; max-height: none; overflow: visible; }
   .dash-av-x { flex: 0 0 28px; width: 28px; height: 28px; margin: 0; font-size: 1rem; }
   .ver-como-nav { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
   .top-user .dot { width: 8px; height: 8px; border-radius: 99px; margin-right: 6px; flex: 0 0 8px; background: #F4E3B2; }
@@ -3739,6 +3742,7 @@ async function montarSunsu(tab) {
     if (window.MCStaffHome) {
       c.innerHTML = await window.MCStaffHome.render();
       window.MCStaffHome.wire(c);
+      if (typeof montarAvisosDash === "function") montarAvisosDash(c);
       return;
     }
     c.innerHTML = htmlStaffHome();
@@ -3919,7 +3923,7 @@ async function draw() {
       await window.MCMaestro.after("proveedores", main, route);
     }
     if (route.kind === "mod" && route.mod === "agenda" && window.MCAgenda) window.MCAgenda.wire(main, route);
-    if (route.kind === "mod" && (route.mod === "inicio" || route.mod === "citas") && !state.admin && !esVisorRol() && window.MCStaffHome) window.MCStaffHome.wire(main, route);
+    if (route.kind === "mod" && (route.mod === "inicio" || route.mod === "citas") && !state.admin && !esVisorRol() && window.MCStaffHome) { window.MCStaffHome.wire(main, route); if (typeof montarAvisosDash === "function") montarAvisosDash(main); }
     if (route.kind === "mod" && route.mod === "personal" && route.sub === "empleados" && window.MCEmpleados) {
       if (window.MCMaestro && document.getElementById("ss-md-empleados")) await window.MCMaestro.after("empleados", main, route);
       else window.MCEmpleados.wire(main, route);
@@ -4164,7 +4168,7 @@ function alertasDashboard(apr, notif, ocultas, vouchers) {
   }));
   ((notif && notif.items) || []).forEach((n) => {
     if (!n || n.leida) return;
-    add({ key: "notif:" + n.id, notifId: n.id, icono: "🔔", texto: String(n.titulo || "Aviso"), detalle: String(n.cuerpo || ""), href: n.link || "" });
+    add({ key: "notif:" + n.id, notifId: n.id, icono: n.tipo === "aviso_equipo" ? "📢" : "🔔", texto: String(n.titulo || "Aviso"), detalle: String(n.cuerpo || ""), href: n.link || "" });
   });
   return out.slice(0, 25);
 }
@@ -4201,20 +4205,22 @@ if (!window._dashAlWired) {
     const b = t.closest("#dash-al-btn");
     if (b) { const dd = document.getElementById("dash-al-dd"); if (dd) { dd.hidden = !dd.hidden; b.setAttribute("aria-expanded", dd.hidden ? "false" : "true"); } return; }
     const g = t.closest("[data-al-go]");
-    if (g) { const h = g.getAttribute("data-al-go"); const dd = document.getElementById("dash-al-dd"); if (dd) dd.hidden = true; if (h) location.hash = h.replace(/^#?/, "#"); return; }
+    if (g) { ev.preventDefault(); const h = g.getAttribute("data-al-go"); const dd = document.getElementById("dash-al-dd"); if (dd) dd.hidden = true; if (h) location.hash = h.replace(/^#?/, "#"); else { const row = g.closest(".dash-av-it"); if (row) row.classList.toggle("exp"); } return; }
     const vc = t.closest("#dash-ver-como");
     if (vc && typeof abrirVerComo === "function") { ev.preventDefault(); abrirVerComo(); return; }
     const dd0 = document.getElementById("dash-al-dd");
     if (dd0 && !dd0.hidden && !t.closest("#dash-al")) dd0.hidden = true;
   });
 }
-/** TK224: avisos al pie del dashboard, compactos (máx. 3 líneas), con × y toque para abrir. */
+/** TK225: avisos compactos arriba del dashboard (máx. 2 líneas; toque para abrir o ampliar), con ×. */
 function htmlDashAvisosFoot(alertas, conteos) {
-  const av = (alertas || []).map((a) =>
-    `<div class="dash-av-it" data-al-key="${esc(a.key)}"${a.notifId != null ? ` data-al-notif="${esc(a.notifId)}"` : ""}>` +
-    `<button type="button" class="dash-av-go" data-al-go="${esc(a.href || "")}"><span class="dash-av-tx">${esc([a.texto, a.detalle].filter(Boolean).join(" — "))}</span></button>` +
-    `<button type="button" class="dash-al-x dash-av-x" data-al-x="${esc(a.key)}" title="Descartar" aria-label="Descartar">×</button></div>`
-  ).join("");
+  const av = (alertas || []).map((a) => {
+    const eq = String(a.notifId || a.key || "").indexOf("aviso:") >= 0;
+    const tx = [a.icono, a.texto, a.detalle].filter(Boolean).join(" · ");
+    return `<div class="dash-av-it${eq ? " dash-av-eq" : ""}" data-al-key="${esc(a.key)}"${a.notifId != null ? ` data-al-notif="${esc(a.notifId)}"` : ""}>` +
+    `<button type="button" class="dash-av-go" data-al-go="${esc(a.href || "")}"><span class="dash-av-tx">${esc(tx)}</span></button>` +
+    `<button type="button" class="dash-al-x dash-av-x" data-al-x="${esc(a.key)}" title="Descartar" aria-label="Descartar">×</button></div>`;
+  }).join("");
   const cf = (conteos || []).map((c) =>
     `<div class="dash-av-it">` +
     `<button type="button" class="dash-av-go" data-al-go="#/m/conteos/cf/${encodeURIComponent(c.id)}">` +
@@ -4243,7 +4249,17 @@ async function montarAvisosDash(c) {
   const box = c.querySelector("#dash-av") || document.getElementById("dash-av");
   if (!html) { if (box) box.remove(); return; }
   if (box) box.outerHTML = html;
-  else root.insertAdjacentHTML("beforeend", html);
+  else {
+    // Arriba del título DASHBOARD (primer hijo de .dsh-wrap) o justo bajo el saludo del personal.
+    const wrap = (root.classList && root.classList.contains("dsh-wrap")) ? root : (root.querySelector && root.querySelector(".dsh-wrap"));
+    const staff = (root.id === "mcsh-root") ? root : (root.querySelector && root.querySelector("#mcsh-root"));
+    if (wrap) wrap.insertAdjacentHTML("afterbegin", html);
+    else if (staff) {
+      const hola = staff.querySelector(":scope > .mcsh-hola");
+      if (hola) hola.insertAdjacentHTML("afterend", html);
+      else staff.insertAdjacentHTML("afterbegin", html);
+    } else root.insertAdjacentHTML("afterbegin", html);
+  }
 }
 async function renderInicioBeta() {
   if (esVisorRol()) {
@@ -4272,9 +4288,9 @@ async function renderInicioBeta() {
   const bajos = (data.bajos || []).slice(0, 8).map((b) => `<div class="row"><div class="sku">${esc(b.sku)}</div><div><div class="name">${esc(b.nombre)}</div></div><div class="meta">${esc(b.bodega)} · ${esc(b.stock)} / mín ${esc(b.stock_min)}</div></div>`).join("");
   const oc = acceso("compras") !== "no" ? `<div class="card"><div class="k">Órdenes abiertas</div><div class="v">${esc(data.ocAbiertas ?? 0)}</div></div>` : "";
   const ops = data.error && !data.bajos ? "" : `<div class="grid">${oc}<div class="card"><div class="k">Bajo mínimo</div><div class="v">${esc((data.bajos || []).length)}</div></div><div class="card"><div class="k">Avisos</div><div class="v">${esc((data.avisos || []).length)}</div></div></div><h2>Para reponer</h2><div class="list">${bajos || `<p class="note">Nada bajo el mínimo, o los mínimos todavía no están cargados.</p>`}</div>`;
-  // TK224: avisos compactos abajo, nunca la tarjeta grande «Asignado a ti» arriba.
-  const avisosFoot = state.admin ? htmlDashAvisosFoot(alertasDashboard(apr, notif, alertasOcultas(), vch), []) : "";
-  return homeFail + pulso + ops + avisosFoot;
+  // TK225: avisos compactos arriba, nunca la tarjeta grande «Asignado a ti» ni un banner de 4 líneas.
+  const avisosHead = state.admin ? htmlDashAvisosFoot(alertasDashboard(apr, notif, alertasOcultas(), vch), []) : "";
+  return homeFail + avisosHead + pulso + ops;
 }
 
 function codigoCat(sku) {
@@ -9057,7 +9073,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-26-TK224"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-26-TK225"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -9238,14 +9254,14 @@ window.SunsuUpdate.init();
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk195"></script>
-<script src="beta-screens.js?v=20261126tk224"></script>
+<script src="beta-screens.js?v=20261126tk225"></script>
 <script src="mc-rol.js?v=20261125tk232"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
 <script src="mc-nav.js?v=20261123tk216"></script>
 <script src="mc-permisos.js?v=20261120tk179"></script>
 <script src="mc-protocolos.js?v=20261120tk179"></script>
-<script src="mc-conteo.js?v=20261126tk224"></script>
+<script src="mc-conteo.js?v=20261126tk225"></script>
 <script src="mc-transferencias.js?v=20261120tk179"></script>
 <script src="mc-ajustes.js?v=20261120tk179"></script>
 <script src="vendor-qrcode.js?v=20261120tk179"></script>
@@ -9272,7 +9288,7 @@ window.SunsuUpdate.init();
 <script src="mc-promociones.js?v=20261120tk179"></script>
 <script src="mc-agenda.js?v=20261124tk217"></script>
 <script src="mc-staff-home.js?v=20261121tk210"></script>
-<script src="mc-aviso-tarde.js?v=20261121tk210"></script>
+<script src="mc-aviso-tarde.js?v=20261126tk225"></script>
 <script src="mc-borradores.js?v=20261120tk179"></script>
 <script src="mc-portal.js?v=20261120tk179"></script>
 <script src="mc-portal-admin.js?v=20261120tk179"></script><script>

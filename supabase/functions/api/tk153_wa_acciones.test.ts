@@ -150,7 +150,7 @@ describe("TK153 UI: Acciones, ícono WA y circulitos rojo/verde", () => {
     assert.match(html, /mc-wa\.js\?v=20261124tk217/);
     assert.match(html, /Mensajes de WhatsApp/);
     assert.match(html, /wa_tpl_facial|MENSAJE TARJETA TRATAMIENTO/);
-    assert.match(html, /sunsu-2026-11-26-TK224/);
+    assert.match(html, /sunsu-2026-11-26-TK225/);
     const lista = js("beta-screens.js");
     assert.match(lista, /_histActsHTML/);
     assert.doesNotMatch(lista, /listo\?'📷✓':'📷'/);
