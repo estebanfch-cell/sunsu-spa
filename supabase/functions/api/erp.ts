@@ -804,6 +804,7 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
     const pedidas = (await db.all("erp_oc_lineas")).filter((r) => r.oc_id === o.id);
     const ins = (body.lineas as Row[]) || [];
     if (!ins.length) return { error: "Indica qué se recibe" };
+    const famsOn = await famsConsigDb(db);
     const recId = id();
     const receps = await db.all("erp_recepciones");
     const numero = num(receps, "REC", enPrueba(db));
@@ -823,6 +824,8 @@ export async function runErp(op: string, body: Row, db: Db, actor: string, now =
       if (vendeDesdeCabina(p)) bodegaId = String(cabina?.id || BODEGA_CABINA);
       if (!vendeDesdeCabina(p) && !bodegaId && s(p.uso) === "cabina") bodegaId = String(cabina?.id || "");
       if (!vendeDesdeCabina(p) && !bodegaId && s(p.uso) === "venta") bodegaId = String(venta?.id || "");
+      // t974u: consignación no entra a Venta, aunque la línea o el cliente manden VENTA.
+      if (consigEfectiva(p, famsOn) && bod.get(BODEGA_CONSIGNACION)) bodegaId = BODEGA_CONSIGNACION;
       if (!bodegaId) return { error: `Elige bodega para ${s(p.sku)} (uso ambos)` };
       const b = bod.get(bodegaId);
       if (!b) return { error: "Bodega no existe" };

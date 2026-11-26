@@ -5,7 +5,7 @@ import { handle } from "./handlers.ts";
 import "./compras_api.ts";
 import "./compras_beta_api.ts";
 import "./recepciones_api.ts";
-import { agrupar, destinoDe, origenDe, repartir, BOD_CASA, BOD_VENTA } from "./recepciones.ts";
+import { agrupar, destinoDe, origenDe, repartir, BOD_CASA, BOD_CABINA, BOD_CONSIG, BOD_VENTA } from "./recepciones.ts";
 import type { Row } from "./domain.ts";
 
 function semilla() {
@@ -35,6 +35,10 @@ describe("recepciones (TK25)", () => {
     assert.equal(origenDe({ sku: "HT-007", beta_origen: "propio" }), "propio");
     assert.equal(destinoDe({ sku: "SU-001", uso: "venta" }).bodega_id, BOD_VENTA);
     assert.equal(destinoDe({ sku: "SU-002", uso: "cabina" }).bodega_id, BOD_CASA);
+    assert.equal(destinoDe({ sku: "HT-007", uso: "venta" }).bodega_id, BOD_CONSIG);
+    assert.equal(destinoDe({ sku: "VK-015", uso: "venta" }).bodega_id, BOD_VENTA, "VK sin interruptor del proveedor entra como propio");
+    assert.equal(destinoDe({ sku: "VK-015", uso: "venta" }, new Set(["VK"])).bodega_id, BOD_CONSIG);
+    assert.equal(destinoDe({ sku: "ML-011", uso: "ambos" }, new Set(["ML"])).bodega_id, BOD_CABINA);
     const prods = new Map<string, Row>([["a", { id: "a", sku: "JN-001", nombre: "Crema", uso: "venta" }]]);
     const g = agrupar([{ id: "l1", producto_id: "a", cantidad: 2, recibido: 0 }, { id: "l2", producto_id: "a", cantidad: 3, recibido: 1 }], prods, new Date());
     assert.equal(g.length, 1);
