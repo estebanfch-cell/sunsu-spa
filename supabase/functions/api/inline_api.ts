@@ -1758,14 +1758,20 @@ async function crearSolicitud(p: Row, ctx: Ctx, ses: Ses, prueba: { real: Ses; d
   return { ok: true, id };
 }
 
-extend("getSolicitudes", "any", async (_p, ctx, ses) => {
+extend("getSolicitudes", "any", async (p, ctx, ses) => {
+  // TK226: apaga solicitudes que ya no aplican antes de armar la lista.
+  try { await resolverAvisosObsoletos(ctx, actorOf(ses)); } catch { /* la lista igual se sirve */ }
   let rows: Row[] = [];
   try { rows = await ctx.db.all("solicitudes_cambio"); } catch { rows = []; }
   const admin = esAdmin(ses.rol);
-  const items = rows
+  const visibles = rows
     .filter((r) => r.prueba === true ? admin && s(r.prueba_para) === ses.uid : admin || s(r.solicitante_uid) === ses.uid || normNombre(s(r.solicitante)) === normNombre(ses.name))
     .sort((a, b) => s(b.creado).localeCompare(s(a.creado)));
-  return { ok: true, items, pendientes: items.filter((r) => s(r.estado) === "pendiente").length, pendientesPrueba: items.filter((r) => s(r.estado) === "pendiente" && r.prueba === true).length };
+  const pendientes = visibles.filter((r) => s(r.estado) === "pendiente");
+  const historial = visibles.filter((r) => s(r.estado) !== "pendiente");
+  // Por defecto solo las pendientes. El historial va en un link discreto «Ver historial».
+  const items = p && p.historial === true ? historial : pendientes;
+  return { ok: true, items, pendientes: pendientes.length, pendientesPrueba: pendientes.filter((r) => r.prueba === true).length, historial: historial.length };
 });
 
 extend("solicitud_resolver", "any", async (p, ctx, ses) => {

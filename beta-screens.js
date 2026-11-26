@@ -6438,7 +6438,7 @@ function _histCelda(t, c, showPrices, i){
   if(c.k==='iva') return '<td class="num">'+$(m.iva)+'</td>';
   if(c.k==='tot') return '<td class="num">'+$(m.tot)+'</td>';
   if(c.k==='pago') return '<td>'+_tkPagoPill(t)+'</td>';
-  if(c.k==='fac'){ var ff=_tkFacFull(t), pdf=_tkFacPdf(t); /* TK182c (Emilia t795u): si falta espacio, la factura muestra solo los últimos dígitos (completa en el title). */ var fc=String(ff||'').replace(/\D/g,'').slice(-6); return '<td>'+(ff?'<span class="tk-fac" title="'+_histEsc(ff)+'"><span class="tk-fac-full">'+_histEsc(ff)+'</span><span class="tk-fac-corta">…'+_histEsc(fc)+'</span></span>'+(pdf?' <span class="tk-facpdf" title="Factura PDF adjunta">📄</span>':''):(t.sin_cobro&&!_tkFaltaFactura(t)?_tkPill('gris','No aplica','Cortesía / consumo interno / canje de paquete en $0: no se factura'):_tkPagoDirecto(t)?_tkPill('gris','Pago directo','Pago directo EGB: $0 para Sunsu, sin factura. El stock sí se descuenta.'):_tkFaltaFactura(t)?_tkPill('faltafactura','Falta factura','Hay que facturar este ticket'):_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura')))+'</td>'; }
+  if(c.k==='fac'){ var ff=_tkFacFull(t), pdf=_tkFacPdf(t); /* TK182c (Emilia t795u): si falta espacio, la factura muestra solo los últimos dígitos (completa en el title). */ var fc=String(ff||'').replace(/\D/g,'').slice(-6); return '<td>'+(ff?'<span class="tk-fac" title="'+_histEsc(ff)+'"><span class="tk-fac-full">'+_histEsc(ff)+'</span><span class="tk-fac-corta">…'+_histEsc(fc)+'</span></span>'+(pdf?' <span class="tk-facpdf" title="Factura PDF adjunta">📄</span>':''):(t.sin_cobro&&!_tkFaltaFactura(t)?_tkPill('gris','No aplica','Cortesía / consumo interno / canje de paquete en $0: no se factura'):_tkPagoDirecto(t)?_tkPill('gris','Pago directo','Pago directo EGB: $0 para Sunsu, sin factura. El stock sí se descuenta.'):_tkFaltaFactura(t)?_tkPill('faltafactura','Falta factura','Hay que facturar este ticket'):_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura')))+(_tkDescuadreVoucher(t)?' '+_tkPill('descuadrevoucher','📷 Descuadre voucher', (function(){ var L=_tkLedOf(t)||{}; return typeof L.voucher_descuadre==='string'?L.voucher_descuadre:'El voucher no cuadra con el ticket'; })()):'')+'</td>'; }
   if(c.k==='reag'){ var Lr=_tkLedOf(t); if(!Lr) return '<td></td>'; return '<td>'+(Lr.g?_tkPill('pagado','Sí'):_tkPill(Lr.pr?'porcobrar':'gris','No'))+'</td>'; }
   if(c.k==='sal') return '<td class="num">'+$( _histSaldo(t)||0 )+'</td>';
   /* TK182 (Emilia t794u): en la computadora, cámara y WhatsApp de la tarjeta móvil, HORIZONTALES al final de la fila
@@ -6840,6 +6840,15 @@ function _tkFaltaVoucher(t){
   if(L.pagosFaltan&&L.pagosFaltan.length) return true;
   return !!(L.falta&&L.falta.some(function(x){ return /comprobante|voucher|transferencia/i.test(String(x)); }));
 }
+function _tkDescuadreVoucher(t){
+  var L=_tkLedOf(t)||{};
+  return !!(L.voucher_descuadre);
+}
+function _histVouchTag(t){
+  if(!_tkDescuadreVoucher(t)) return '';
+  var L=_tkLedOf(t)||{}, msg=typeof L.voucher_descuadre==='string'?L.voucher_descuadre:'';
+  return '<span class="mob-vouch-desc" title="'+_histEsc(msg||'El voucher no cuadra con el ticket')+'"> · 📷 Descuadre voucher</span>';
+}
 function _tkWaPendiente(t){
   if(!t) return false;
   var o=t.orig||{};
@@ -6865,7 +6874,7 @@ function _histCardHTML(t, i, showPrices){
   var tip=faltaFac?'Falta factura':(fl?'No cuadra: '+fl:fa?'Falta: '+fa.join(' · '):'');
   var tipExtra=tip&&tip!=='Falta factura';
   return '<div class="mob-card'+(_tkSolPend(t)?' tk-solpend':fl?' tk-flagged':fa?' tk-falta':'')+(waP?' tk-wapend':'')+'" role="button" tabindex="0"'+(tip?' title="'+_histEsc(tip)+'"':'')+' onclick="_histAbrirTicket('+i+')">'
-    +'<div class="mob-l1"><span class="mob-num">'+_histEsc(l1)+_histFacTag(t,facn,anul,true)+'</span><span class="mob-l1r">'+est+(who?'<span class="mob-who" style="color:'+_histEsc(colWho)+'" title="Creado por '+_histEsc(who)+'">'+_histEsc(who)+'</span>':'')+_histMenuHTML(t,i)+'</span></div>'
+    +'<div class="mob-l1"><span class="mob-num">'+_histEsc(l1)+_histFacTag(t,facn,anul,true)+_histVouchTag(t)+'</span><span class="mob-l1r">'+est+(who?'<span class="mob-who" style="color:'+_histEsc(colWho)+'" title="Creado por '+_histEsc(who)+'">'+_histEsc(who)+'</span>':'')+_histMenuHTML(t,i)+'</span></div>'
     +'<div class="mob-l2"><span class="mob-cli">'+_histEsc(nombre)+'</span><span class="mob-l3t">'+_histEsc(l2meta.join(' · '))+'</span></div>'
     +'<div class="mob-l3">'+_histThumbsHTML(t, res)+_histActsHTML(t,i)+'</div>'
     +(tipExtra?'<div class="mob-tip">'+_histEsc(tip)+'</div>':'')
@@ -6985,7 +6994,7 @@ function _histCerrarTicket(){
 }
 function _histTrasPintar(){ if(window.SunsuInline) SunsuInline.aplicar(); _tkCargarLeds(); if(typeof _migoPintarBandeja==='function') _migoPintarBandeja(); if(typeof _histCargarThumbs==='function') _histCargarThumbs(document.getElementById('tk-cards')||document); if(window.SunsuListaPos) window.SunsuListaPos.watch('tickets'); }
 // ── Lista de tickets v2 (Emilia 17/11): LED por fila, estados de colores, filas por corregir en rojo, Filtros ▾ ──
-var _TK_PILL={gris:'#8A93A6',dup:'#8A5A16',abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',pagomigo:'#1A6B8A',pendlun:'#6B7B99',sinfactura:'#D2603A',faltafactura:'#B91C1C',anulado:'#C0392B',porcompletar:'#C98A00',pendaprobar:'#8A6D00',edicionpend:'#3E7CB1'};
+var _TK_PILL={gris:'#8A93A6',dup:'#8A5A16',abierto:'#3E7CB1',cerrado:'#56627A',porcobrar:'#C98A00',pagado:'#2E8B57',pagomigo:'#1A6B8A',pendlun:'#6B7B99',sinfactura:'#D2603A',faltafactura:'#B91C1C',descuadrevoucher:'#B91C1C',anulado:'#C0392B',porcompletar:'#C98A00',pendaprobar:'#8A6D00',edicionpend:'#3E7CB1'};
 var _TK_FORMA={transferencia:'#3E7CB1',tarjeta:'#7B5EA7',efectivo:'#2E8B57',mixto:'#1F7A7A',canje:'#8A93A6',cortesia:'#C46B8A',no_registrado:'#8A93A6'};
 var _TK_FORMA_TXT={transferencia:'Transferencia',tarjeta:'Tarjeta',efectivo:'Efectivo',mixto:'Mixto',canje:'Canje',cortesia:'Cortesía',no_registrado:'Método no registrado',corte:'Método no registrado'};
 function _tkFormaNorm(v){
@@ -7063,6 +7072,7 @@ function _tkEstados(t){
   out.push(t.cob||_tkPagoMigo(t)?{c:'pagado',t:'Pagado'}:{c:'porcobrar',t:'Por cobrar'});
   var Lx=_tkLedOf(t);
   if(!_tkFacFull(t)) out.push(_tkFaltaFactura(t)?{c:'faltafactura',t:'Falta factura'}:_tkPendienteLunes(t)?{c:'pendlun',t:'Pendiente por lunes'}:{c:'sinfactura',t:'Sin factura'});
+  if(_tkDescuadreVoucher(t)) out.push({c:'descuadrevoucher',t:'Descuadre voucher'});
   return out;
 }
 var _TK_LEDS=[['p','Pagado','Por cobrar'],['r','Reporte enviado','Reporte no enviado'],['g','Reagendada: tiene próxima cita','Sin próxima cita en Acuity']];
@@ -7748,7 +7758,7 @@ function _dashCss(){
     +'.dsh-tbl{width:100%;border-collapse:collapse;font-size:0.62rem}.dsh-tbl th{color:var(--gray);font-weight:800;text-align:right;padding:4px 3px;border-bottom:1.2px solid var(--cream-d);position:sticky;top:0;background:#fff}.dsh-tbl th:first-child,.dsh-tbl td:first-child{text-align:left}.dsh-tbl td{padding:4px 3px;text-align:right;border-bottom:1px solid var(--gray-l);color:var(--text);font-weight:700}'
     +'.dsh-ptabs{display:flex;gap:3px;background:var(--blue-l);border-radius:10px;padding:3px;margin:6px 0}.dsh-ptabs button{flex:1;border:0;background:transparent;font-size:0.6rem;font-weight:800;color:var(--gray);padding:6px 2px;border-radius:8px;cursor:pointer}.dsh-ptabs button.on{background:var(--navy);color:#fff}'
     +'.dsh-ov{position:fixed;inset:0;background:rgba(20,30,50,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px}.dsh-ovb{background:#fff;border-radius:14px;max-width:860px;width:100%;max-height:88vh;overflow:hidden;padding:12px 14px;box-shadow:0 12px 40px rgba(0,0,0,.25)}.dsh-x{border:0;background:var(--blue-l);border-radius:50%;width:30px;height:30px;font-size:1.1rem;cursor:pointer}.dsh-dd:hover{background:var(--blue-l);border-radius:8px}.dsh-ovb .dsh-tbl td:nth-child(2),.dsh-ovb .dsh-tbl td:nth-child(3),.dsh-ovb .dsh-tbl th:nth-child(3),.dsh-ovb .dsh-tbl th:nth-child(4){text-align:left}'
-    +'.dash-av{max-width:760px;margin:0 auto 8px;padding:8px 0 2px;width:100%;box-sizing:border-box}.dash-av-it{display:flex;align-items:flex-start;gap:6px;margin:0 0 4px;padding:5px 8px;border:1px solid var(--cream-d,#E8DCC8);border-radius:10px;background:#fff;box-sizing:border-box}.dash-av-it.dash-av-eq{background:#FFF8E6;border-color:#E8C468}.dash-av-it:last-child{margin-bottom:0}.dash-av-go{flex:1 1 auto;min-width:0;background:none;border:0;padding:0;text-align:left;font:inherit;cursor:pointer;color:var(--navy-d,#2E4A66)}.dash-av-tx{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;text-overflow:ellipsis;font-size:0.68rem;font-weight:650;line-height:1.3;max-height:calc(1.3em * 2)}.dash-av-it.exp .dash-av-tx{-webkit-line-clamp:unset;line-clamp:unset;max-height:none;overflow:visible}.dash-av-x{flex:0 0 28px;width:28px;height:28px;margin:0;font-size:1rem}@media(max-width:520px){.dsh-grid{grid-template-columns:1fr}.dsh-v{font-size:1.3rem}}';
+    +'.dash-av{max-width:760px;margin:0 auto 8px;padding:8px 0 2px;width:100%;box-sizing:border-box}.dash-av-it{display:flex;align-items:flex-start;gap:6px;margin:0 0 4px;padding:5px 8px;border:1px solid var(--cream-d,#E8DCC8);border-radius:10px;background:#fff;box-sizing:border-box}.dash-av-it.dash-av-eq{background:#FFF8E6;border-color:#E8C468}.dash-av-it:last-child{margin-bottom:0}.dash-av-go{flex:1 1 auto;min-width:0;background:none;border:0;padding:0;text-align:left;font:inherit;cursor:pointer;color:var(--navy-d,#2E4A66)}.dash-av-tx{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;text-overflow:ellipsis;font-size:0.68rem;font-weight:650;line-height:1.3;max-height:calc(1.3em * 2)}.dash-av-it.exp .dash-av-tx{-webkit-line-clamp:unset;line-clamp:unset;max-height:none;overflow:visible}.dash-av-x{flex:0 0 28px;width:28px;height:28px;margin:0;font-size:1rem}.dash-av-extra{display:none}.dash-av.abierto .dash-av-extra{display:block}.dash-av-more{display:block;width:100%;margin:2px 0 0;padding:4px 8px;border:0;background:none;color:var(--navy-d,#2E4A66);font:inherit;font-size:0.68rem;font-weight:800;text-align:left;cursor:pointer}@media(max-width:520px){.dsh-grid{grid-template-columns:1fr}.dsh-v{font-size:1.3rem}}';
   document.head.appendChild(st);
 }
 function dashPeriodo(p){ _dashSt.periodo=p; renderInicio(document.getElementById('content')); }

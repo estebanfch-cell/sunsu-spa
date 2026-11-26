@@ -127,9 +127,124 @@ export async function cerrarSolicitudesTicketInactivo(ctx: Ctx, actor: string, i
   return n;
 }
 
+const OCULTOS_PROP = new Set(["__antes", "__campos", "__payload", "_via", "_campos", "_cambios", "edicion_form", "form", "paqPick", "colQ", "facial_hecho", "servicios_adicionales", "diff", "propuesta", "lineas", "totales", "datos"]);
+
+function normDato(v: unknown): string {
+  return s(v).replace(/\s+/g, " ").trim().toLowerCase()
+    .replace(/^(sí)$/i, "si").replace(/^(yes|true)$/i, "si").replace(/^(no|false)$/i, "no");
+}
+
+/** Extrae pares campo/después de una solicitud (sin claves internas). */
+export function cambiosPropuestos(sol: Row): { clave: string; despues: string }[] {
+  const prop = (sol.propuestos && typeof sol.propuestos === "object" ? sol.propuestos : {}) as Row;
+  const out: { clave: string; despues: string }[] = [];
+  const add = (clave: string, despues: unknown) => {
+    if (!clave || OCULTOS_PROP.has(clave) || clave.charAt(0) === "_") return;
+    if (despues == null || typeof despues === "object") return;
+    out.push({ clave, despues: s(despues) });
+  };
+  if (Array.isArray(prop._cambios)) {
+    for (const c of prop._cambios as Row[]) add(s(c.clave || c.campo || c.etiqueta), c.despues);
+  }
+  const P = (prop.propuesta && typeof prop.propuesta === "object" ? prop.propuesta : null) as Row | null;
+  const after = (P && P.despues && typeof P.despues === "object" ? P.despues as Row : null);
+  const datos = (prop.datos && typeof prop.datos === "object" ? prop.datos as Row : (after && after.datos && typeof after.datos === "object" ? after.datos as Row : null));
+  if (datos) for (const k of Object.keys(datos)) add(k, datos[k]);
+  if (after) {
+    for (const k of Object.keys(after)) {
+      if (k === "datos" || k === "lineas" || k === "totales" || k === "descuento") continue;
+      add(k, after[k]);
+    }
+    const tot = after.totales && typeof after.totales === "object" ? after.totales as Row : null;
+    if (tot && tot.total != null) add("total", tot.total);
+  }
+  for (const k of Object.keys(prop)) add(k, prop[k]);
+  // unique by clave, last wins
+  const seen = new Map<string, string>();
+  for (const c of out) seen.set(c.clave, c.despues);
+  return [...seen.entries()].map(([clave, despues]) => ({ clave, despues }));
+}
+
+function valorActual(actual: Row, clave: string): unknown {
+  if (clave in actual) return actual[clave];
+  const d = actual.datos && typeof actual.datos === "object" ? actual.datos as Row : null;
+  if (d && clave in d) return d[clave];
+  const aliases: Record<string, string[]> = {
+    autorizaFotos: ["autoriza_fotos", "autoriza fotos"],
+    autoriza_fotos: ["autorizaFotos"],
+    retorno: ["fechaRetorno", "fecha_retorno"],
+    total: ["estimado", "total"],
+  };
+  for (const a of aliases[clave] || []) {
+    if (a in actual) return actual[a];
+    if (d && a in d) return d[a];
+  }
+  return undefined;
+}
+
+/** true solo si hay cambios comparables y TODOS ya están en el registro actual. Si no hay certeza, false. */
+export function solicitudYaReflejada(sol: Row, actual: Row | null | undefined): boolean {
+  if (!actual) return false;
+  const cambios = cambiosPropuestos(sol);
+  if (!cambios.length) return false;
+  return cambios.every((c) => {
+    const v = valorActual(actual, c.clave);
+    if (v === undefined) return false;
+    return normDato(v) === normDato(c.despues);
+  });
+}
+
+async function actualDeSolicitud(ctx: Ctx, sol: Row): Promise<Row | null> {
+  const tabla = s(sol.tabla), fila = s(sol.fila);
+  if (!fila) return null;
+  if (tabla === "cliente_beta") {
+    const rows = await todas(ctx, "beta_clientes");
+    const hit = rows.find((r) => s(r.key) === fila || s(r.clave) === fila || s(r.id) === fila || s(r.cedula) === fila.replace(/^c:/, ""));
+    return hit || null;
+  }
+  if (tabla === "ticket_detalle") {
+    const cabs = await todas(ctx, "beta_tickets");
+    const cab = cabs.find((r) => s(r.clave) === fila || s(r.so_num) === fila);
+    if (cab) {
+      const d = (cab.datos && typeof cab.datos === "object" ? cab.datos as Row : {});
+      const tot = d.totales && typeof d.totales === "object" ? d.totales as Row : {};
+      return { ...d, datos: d, total: tot.total ?? d.total ?? cab.estimado, clave: s(cab.clave) };
+    }
+    const tks = await todas(ctx, "tickets");
+    const tk = tks.find((r) => s(r.clave) === fila || s(r.so_num) === fila);
+    return tk || null;
+  }
+  return null;
+}
+
+/** Cierra solicitudes pendientes cuyo cambio ya está aplicado. No toca el ticket ni la ficha. */
+export async function cerrarSolicitudesYaAplicadas(ctx: Ctx, actor: string): Promise<number> {
+  const sols = await todas(ctx, "solicitudes_cambio");
+  const now = ctx.now.toISOString();
+  let n = 0;
+  for (const r of sols) {
+    if (s(r.estado) !== "pendiente" || r.prueba === true) continue;
+    if (s(r.tabla) !== "cliente_beta" && s(r.tabla) !== "ticket_detalle") continue;
+    let actual: Row | null = null;
+    try { actual = await actualDeSolicitud(ctx, r); } catch { actual = null; }
+    if (!solicitudYaReflejada(r, actual)) continue;
+    try {
+      await ctx.db.write(actor, "solicitudes_cambio", "update", { id: r.id }, {
+        estado: "aprobado",
+        resuelto_at: now,
+        resuelto_por: actor,
+        comentario: "auto: el cambio ya estaba aplicado",
+      });
+      n++;
+    } catch { /* no frena la lista */ }
+  }
+  return n;
+}
+
 /** Marca leídas las notificaciones cuya condición ya no aplica. No borra tickets. */
 export async function resolverAvisosObsoletos(ctx: Ctx, actor: string): Promise<number> {
   try { await cerrarSolicitudesTicketInactivo(ctx, actor); } catch { /* sigue con los avisos */ }
+  try { await cerrarSolicitudesYaAplicadas(ctx, actor); } catch { /* sigue con los avisos */ }
   const rows = await todas(ctx, "beta_notificaciones");
   if (!rows.length) return 0;
   const data = await cargarDatosAvisos(ctx);

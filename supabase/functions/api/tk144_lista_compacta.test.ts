@@ -101,7 +101,7 @@ describe("TK144 tarjetas compactas de la lista", () => {
     assert.match(html, /white-space: nowrap; overflow: hidden; text-overflow: ellipsis/);
     assert.match(html, /\.tab-plus \{[^}]*width: 48px; height: 48px/);
     assert.doesNotMatch(html, /width: 66px; height: 66px/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-26-ROLMOD"/);
+assert.match(sw, /const CACHE = "sunsu-2026-11-26-TK226"/);
   });
 
   it("fila 1 es el número · Fac. corta; la fecha y el monto van en la línea 2; las acciones en la 3.ª", () => {
