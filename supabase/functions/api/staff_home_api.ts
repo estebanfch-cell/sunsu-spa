@@ -133,7 +133,7 @@ extend("staff_home", "any", async (p, ctx, ses) => {
   }
 
   const TK_SLIM = ["id", "timestamp", "nombre", "apellido", "facial_hecho", "notas", "notas_generales", "so_num", "beta_num", "sheet_row", "borrado_at", "id_3"];
-  const REG_SLIM = ["id", "cedula", "nombre", "apellido", "sheet_row", "borrado_at", "timestamp"];
+  const REG_SLIM = ["id", "cedula", "nombre", "apellido", "sheet_row", "borrado_at", "timestamp", "telefono"];
   const PAQ_SLIM = ["id", "cedula", "nombres", "apellidos", "completo", "borrado_at", "sku", "paquete", "codigo", "beta_codigo", "factura", "ano", "mes", "dia", "orig",
     "uso_1", "fecha_1", "uso_2", "fecha_2", "uso_3", "fecha_3", "uso4", "fecha_4", "uso_5", "fecha_5", "uso_6", "fecha_6"];
   const [links, tksRes, regsRes, kpisDash, paqsRes, giftsRes, catsRes, ajPaqRes, ajGiftRes] = await Promise.all([
@@ -187,7 +187,7 @@ extend("staff_home", "any", async (p, ctx, ses) => {
     const tkHoy = ln ? null : tks.find((t) => !t.borrado_at && ymdUtc(t.timestamp) === f && normNombre(s(t.nombre)) === normNombre(s(a.firstName)) && normNombre(s(t.apellido)).split(" ")[0] === normNombre(s(a.lastName)).split(" ")[0]);
     const ticket = ln ? s(ln.ticket_clave) : tkHoy ? claveDe(tkHoy, leerSerie(tkHoy, "so_num")) : "";
     const et = etiquetaDe(a);
-    const ficha = fichaDeCita(regs, s(a.firstName), s(a.lastName));
+    const ficha = fichaDeCita(regs, s(a.firstName), s(a.lastName), a.phone);
     const ced = ficha ? normCedula(ficha.cedula) : "";
     const nom = nomCompleto(s(a.firstName), s(a.lastName));
     const previas = ticketsPrevios(tks, { ced, nombre: s(a.firstName), apellido: s(a.lastName), antesDe: f || hoy });
