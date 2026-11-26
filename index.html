@@ -1666,6 +1666,18 @@ b + p.mcpq-hist { margin-top: 8px; border-top: 0; }
   .desc-preview table { width:100%; border-collapse:collapse; margin-top:4px; font-size:.8rem; }
   .desc-preview th, .desc-preview td { text-align:left; padding:3px 6px; border-bottom:1px solid var(--cream-d,#E6DCCB); vertical-align:top; }
   .desc-preview tr.desc-pagada td { color:var(--gray,#7a7268); }
+  #sunsu-pdf-entrega { position:fixed; inset:0; z-index:9999; display:flex; align-items:flex-end; justify-content:center; }
+  .sunsu-pdf-entrega-bg { position:absolute; inset:0; background:rgba(58,53,48,.45); }
+  .sunsu-pdf-entrega-card { position:relative; width:min(96vw, 520px); max-height:92vh; background:#fff; border-radius:16px 16px 0 0; padding:16px 14px 18px; box-shadow:0 -8px 28px rgba(61,90,122,.18); display:flex; flex-direction:column; gap:8px; }
+  .sunsu-pdf-entrega-tit { margin:0; font-weight:800; color:var(--navy,#3D5A7A); font-size:1.05rem; }
+  .sunsu-pdf-entrega-nom { margin:0; font-size:.8rem; color:var(--gray,#7a7268); word-break:break-all; }
+  .sunsu-pdf-entrega-fr { width:100%; height:min(58vh, 480px); border:1px solid var(--cream-d,#E6DCCB); border-radius:10px; background:#F5F0E8; }
+  .sunsu-pdf-entrega-acc { display:flex; flex-wrap:wrap; gap:8px; }
+  .rolx-aviso-snap { margin:0 0 8px; font-size:.78rem; }
+  @media (min-width:700px){
+    #sunsu-pdf-entrega { align-items:center; }
+    .sunsu-pdf-entrega-card { border-radius:16px; }
+  }
   .rol-firma, .rol-firma-ok { margin-top:12px; padding:10px; border:1.5px dashed var(--gold,#C4943A); border-radius:12px; background:#fff; }
   .rol-firma-canvas { width:100%; aspect-ratio:600/190; display:block; background:#fff; border:1px solid var(--cream-d,#E6DCCB); border-radius:8px; touch-action:none; -webkit-user-select:none; user-select:none; }
   .rol-firma-img { width:100%; max-width:360px; display:block; background:#fff; border-radius:6px; }
@@ -9080,7 +9092,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-26-PRESTAMO"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-26-PDFTODAS"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -9261,8 +9273,8 @@ window.SunsuUpdate.init();
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk195"></script>
-<script src="beta-screens.js?v=20261126prestamo"></script>
-<script src="mc-rol.js?v=20261126prestamo"></script>
+<script src="beta-screens.js?v=20261126pdftodas"></script>
+<script src="mc-rol.js?v=20261126pdftodas"></script>
 <script src="beta-inline.js?v=20261120tk179"></script>
 <script src="mc-productos.js?v=20261120tk179"></script>
 <script src="mc-nav.js?v=20261123tk216"></script>
