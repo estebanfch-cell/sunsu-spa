@@ -5504,7 +5504,7 @@ async function renderConfiguracion() {
     <h2 id="cfg-geocerca">Asistencia y geocerca</h2>
     ${await htmlAsisConfig()}
     <h2 id="cfg-comisiones">Comisiones</h2>
-    <p class="note">El porcentaje se escribe 5 para 5%. En un tramo, pct es % del neto de catálogo y fijo es un monto. Desde el 2026-10-26 cada paquete, x3 o x6, cuenta como 1 y el % se redondea hacia abajo.</p>
+    <p class="note">El porcentaje se escribe 5 para 5%. En un tramo, pct es % del subtotal real sin IVA (después de descuentos o ajustes, nunca el total con IVA) y fijo es un monto. Desde el 2026-10-26 cada paquete, x3 o x6, cuenta como 1 y el % se redondea hacia abajo.</p>
     <div class="card"><div class="card-title">Faciales</div><div class="list" id="cfg-facial">${faciales}</div>${ix && ix.edita() ? ix.mas("com_facial") : ""}</div>
     <div class="card" id="cfg-general"><div class="card-title">Resto de productos, extras y recepción</div>
       <p class="note">El % de productos aplica a los que no tienen fila propia. La recepción suma dólares por facial del día cuando se llega al mínimo. El lunes usa el otro mínimo.</p>
@@ -5514,7 +5514,7 @@ async function renderConfiguracion() {
       <div class="list" id="cfg-prod">${productos || `<p class="note">Sin productos en el catálogo. Agrega el SKU.</p>`}</div>
       ${ix && ix.edita() ? ix.mas("com_producto") : ""}</div>
     <div class="card" id="cfg-tramos"><div class="card-title">Tramos de paquete</div>
-      <p class="note">Desde el ciclo que abre el 2026-10-26: 1–10 al 5%, 11–20 al 8%, 21–30 al 11% y 31+ al 14% del neto de ese paquete. x3 y x6 cuentan como 1. El ciclo que cierra el 2026-10-25 no cambia. Guardar un tramo copia el resto de esa vigencia.</p>
+      <p class="note">Ciclo 26-oct-2026 → 25-nov-2026: 1–10 al 5%, 11–20 al 8%, 21–30 al 11% y 31+ al 14%. Desde el ciclo 26-nov-2026 → 25-dic-2026 (rol de diciembre): 1–12 al 5%, 13–27 al 8%, 28–47 al 11% y 48+ al 14%. El % se aplica al subtotal real sin IVA, después de descuentos o ajustes. x3 y x6 cuentan como 1. Guardar un tramo copia el resto de esa vigencia.</p>
       <div class="list" id="cfg-tramo">${tramos}</div>${ix && ix.edita() ? ix.mas("com_tramo") : ""}</div>
     ${htmlCfgWhatsApp()}</div>`;
 }
@@ -9112,7 +9112,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-26-TK226"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-26-PAQ1215"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;

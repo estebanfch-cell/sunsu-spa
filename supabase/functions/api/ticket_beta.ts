@@ -1,7 +1,7 @@
 // Cálculo del detalle de ticket de la beta (sin imports de handlers: lo usan la API y las comisiones).
 // Precios con IVA (como el PVP del catálogo). Total de línea = cantidad × precio − descuento de línea.
 // Total del ticket = Σ líneas − promo − descuento del ticket. Subtotal = total / 1.15; IVA = total − subtotal.
-import { IVA, n, packSesiones, round2, s, skuCode, skuSunsu, type FacialLinea, type PaqueteLinea, type Row } from "./domain.ts";
+import { IVA, PACK_X3, PACK_X6, facDigitosDe, facialSku, n, netoPaqueteReal, packSesiones, round2, s, skuCode, skuSunsu, type FacialLinea, type PaqueteLinea, type Row, type TicketIn } from "./domain.ts";
 
 export const IVA_TK = 1.15;
 export interface LineaTk { id?: string; tipo: string; sku: string; nombre?: string; cantidad: number; precio_unit: number; descuento_tipo?: string | null; descuento_valor?: number; excluir_comision?: boolean; estimado?: boolean; canje?: boolean; cortesia?: boolean; promo?: string; paqueteSesion?: string; consumoInterno?: boolean; valorNominal?: number; gcCodigo?: string }
@@ -105,11 +105,92 @@ function mergeExtras(legacy: string | undefined, L: Row[]): string {
   return out.join(" | ");
 }
 function netoPaqueteLinea(l: Row, cab: Row, tipo: "pack3" | "pack6"): number {
-  if (l.venta_neta != null && l.venta_neta !== "") return n(l.venta_neta);
-  if (n(l.total_linea) > 0) return round2(n(l.total_linea) / IVA);
-  if (tipo === "pack6" && cab.neto_pack6 != null && cab.neto_pack6 !== "") return n(cab.neto_pack6);
-  if (cab.neto_pack != null && cab.neto_pack !== "") return n(cab.neto_pack);
-  return 0;
+  const cabNeto = tipo === "pack6" && cab.neto_pack6 != null && cab.neto_pack6 !== "" ? n(cab.neto_pack6)
+    : (cab.neto_pack != null && cab.neto_pack !== "" ? n(cab.neto_pack) : 0);
+  return netoPaqueteReal({
+    ventaNeta: l.venta_neta != null && l.venta_neta !== "" ? n(l.venta_neta) : null,
+    totalLinea: n(l.total_linea) > 0 ? n(l.total_linea) : null,
+    catalogoSubtotal: cabNeto > 0 ? cabNeto : null,
+  });
+}
+
+/** Subtotal sin IVA de cada paquete facturado en Migo, indexado por dígitos de factura + SKU. */
+export function mapaSubtotalMigoPaquetes(facturas: Row[]): Map<string, Map<string, number>> {
+  const out = new Map<string, Map<string, number>>();
+  for (const f of facturas) {
+    const dig = facDigitosDe({ datos: { factura: f.factura } });
+    if (!dig) continue;
+    const lineas = Array.isArray(f.lineas) ? f.lineas as Row[] : [];
+    if (!lineas.length) continue;
+    let porSku = out.get(dig);
+    if (!porSku) { porSku = new Map(); out.set(dig, porSku); }
+    for (const l of lineas) {
+      const nombre = s(l.producto || l.nombre);
+      const sku = skuSunsu(l.codigo || l.sku, nombre);
+      const full = (facialSku(sku) || facialSku(nombre) || s(sku).toUpperCase()).trim();
+      const esPaq = PACK_X3.includes(full) || PACK_X6.includes(full) || (/PAQUETE/i.test(nombre) && packSesiones(sku, nombre) >= 3);
+      if (!esPaq) continue;
+      const sub = n(l.subtotal);
+      const tot = n(l.total);
+      const neto = sub > 0 ? round2(sub) : (tot > 0 ? round2(tot / IVA) : 0);
+      if (neto > 0 && full) {
+        porSku.set(full, neto);
+        const corto = skuCode(full);
+        if (corto && corto !== full) porSku.set(corto, neto);
+      }
+    }
+  }
+  return out;
+}
+
+function netoMigoDe(mapa: Map<string, Map<string, number>> | undefined, fac: string, texto: string): number {
+  if (!mapa || !fac) return 0;
+  const por = mapa.get(fac);
+  if (!por) return 0;
+  const sku = facialSku(texto) || skuSunsu(texto);
+  if (!sku) return 0;
+  return por.get(skuCode(sku)) || por.get(sku) || 0;
+}
+
+/** Si el ticket no tiene venta_neta, usa el subtotal real de la línea Migo (después de descuentos), nunca el total con IVA. */
+export function aplicarNetosRealesPaquete<T extends TicketIn>(
+  t: T,
+  r: Row,
+  mapa: Map<string, Map<string, number>>,
+  cab?: Row,
+): T {
+  const fac = facDigitosDe({ fac_7: r.fac_7, orig: r.orig, datos: cab && cab.datos }) || facDigitosDe({ datos: { factura: cab && (cab.datos as Row || {}).factura } });
+  if (!fac && !(t.paquetes && t.paquetes.length) && !t.pack3 && !t.pack6) return t;
+  const out = { ...t, paquetes: t.paquetes ? t.paquetes.map((p) => ({ ...p })) : t.paquetes };
+  const fix = (texto: string, actual: number) => netoPaqueteReal({
+    ventaNeta: null,
+    migoSubtotal: netoMigoDe(mapa, fac, texto) || null,
+    catalogoSubtotal: actual > 0 ? actual : null,
+  });
+  // Si ya hay venta_neta en las líneas de paquete, no la pisamos (netoPaqueteReal la prioriza vía caller).
+  if (out.paquetes && out.paquetes.length) {
+    out.paquetes = out.paquetes.map((p) => ({
+      ...p,
+      neto: netoPaqueteReal({
+        migoSubtotal: netoMigoDe(mapa, fac, p.texto) || null,
+        catalogoSubtotal: n(p.neto) > 0 ? n(p.neto) : null,
+      }),
+    }));
+    const p3 = out.paquetes.filter((p) => p.tipo === "pack3");
+    const p6 = out.paquetes.filter((p) => p.tipo === "pack6");
+    if (p3[0]) out.netoPack = p3[0].neto;
+    if (p6[0]) out.netoPack6 = p6[0].neto;
+    return out;
+  }
+  if (out.pack3) {
+    const n1 = fix(s(out.pack3), n(out.netoPack));
+    if (n1 > 0) out.netoPack = n1;
+  }
+  if (out.pack6) {
+    const n2 = fix(s(out.pack6), n(out.netoPack6) || n(out.netoPack));
+    if (n2 > 0) out.netoPack6 = n2;
+  }
+  return out;
 }
 function facialesDeLineas(L: Row[]): FacialLinea[] {
   const out: FacialLinea[] = [];
