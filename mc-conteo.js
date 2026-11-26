@@ -340,22 +340,9 @@
     }
   }
 
-  // ---------- Tarjeta «Asignado a ti» del inicio ----------
-  async function tarjetaInicio() {
-    css();
-    var r = await Promise.all([api("cf_list", { mios: true }), api("notif_mias", {})]);
-    var mios = (r[0] && r[0].items) || [], nt = (r[1] && r[1].items) || [];
-    var sinLeer = nt.filter(function (x) { return !x.leida; });
-    if (!mios.length && !sinLeer.length) return "";
-    var avisos = sinLeer.filter(function (x) { return !mios.some(function (c) { return x.link.indexOf(c.id) >= 0; }); }).slice(0, 4);
-    return '<div class="card mccf-dash" id="mccf-dash"><div class="card-title">📋 Asignado a ti' + (sinLeer.length ? ' <span class="mccf-chip r">' + sinLeer.length + " aviso" + (sinLeer.length > 1 ? "s" : "") + "</span>" : "") + "</div>" +
-      mios.map(function (c) {
-        var nuevo = sinLeer.some(function (x) { return x.link.indexOf(c.id) >= 0; });
-        return '<div class="row"><div><b>Conteo físico ' + e(c.numero) + "</b> " + chip(c) + (nuevo ? ' <span class="mccf-chip r">nuevo</span>' : "") + '<div class="mccf-sub">' + e(c.bodegaNombre) + (c.lineas ? " · " + e(c.contadas) + "/" + e(c.lineas) + " contados" : "") + (c.revisionNota ? " · devuelto: " + e(c.revisionNota) : "") + "</div></div>" +
-          '<button class="btn small" type="button" data-cf-abrir="' + e(c.id) + '">' + (c.estado === "asignado" ? "Abrir conteo" : "Seguir contando") + "</button></div>";
-      }).join("") +
-      avisos.map(function (x) { return '<div class="row"><div><b>' + e(x.titulo) + '</b><div class="mccf-sub">' + e(x.cuerpo) + " · " + e(fecha(x.fecha)) + '</div></div><button class="btn ghost small" type="button" data-cf-aviso="' + e(x.id) + '" data-link="' + e(x.link) + '">Abrir</button></div>'; }).join("") + "</div>";
-  }
+  // TK224: el dashboard ya no pinta esta tarjeta grande. Los avisos y conteos
+  // van al pie, compactos (htmlDashAvisosFoot / montarAvisosDash).
+  async function tarjetaInicio() { return ""; }
   document.addEventListener("click", function (ev) {
     var a = ev.target.closest && ev.target.closest("[data-cf-abrir]");
     if (a) {

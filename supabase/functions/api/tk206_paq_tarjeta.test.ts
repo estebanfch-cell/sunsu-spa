@@ -26,7 +26,7 @@ describe("TK206 · tarjeta de paquete lee usado/fecha y u/f", () => {
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     const enSw = (sw.match(/const CACHE = "([^"]+)"/) || [])[1];
     assert.equal(enHtml, enSw);
-    assert.equal(enSw, "sunsu-2026-11-25-DEV31M");
+    assert.equal(enSw, "sunsu-2026-11-26-TK224");
   });
 });
 
