@@ -16992,7 +16992,10 @@ function _rolDiasTotal(d){
 function _rolComisiones(d){
   d=d||{};
   var n=function(v){var x=Number(v);return isFinite(x)?x:0;};
-  return Math.round((n(d.comFaciales)+n(d.comExtras)+n(d.comPaquetes)+n(d.comProductos)+n(d.comRecepcion))*100)/100;
+  // Emilia 2026-11-26: comFaciales en el snapshot es el combinado (faciales+extras+recepción).
+  // Si viene comFacialesSolo, se usa ese (no el combinado) para no contar extras/recepción dos veces.
+  var fac = (d.comFacialesSolo!=null) ? n(d.comFacialesSolo) : n(d.comFaciales);
+  return Math.round((fac+n(d.comExtras)+n(d.comPaquetes)+n(d.comProductos)+n(d.comRecepcion))*100)/100;
 }
 function _htmlRolKpis(d){
   d=d||{};
