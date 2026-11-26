@@ -335,6 +335,10 @@ extend("asis_marcar", "any", async (p, ctx, ses) => {
   });
   const dia = calcularDia(fecha, marcajesDe(await ctx.db.all("asistencia_marcajes"), nombre), cfg, await feriadosDe(ctx), permisosDe(await ctx.db.all("permisos"), nombre));
   if (fotoAviso.length) await auditar(ctx, ses, "selfie_omitida", { nombre, marcaje_id: s(saved?.id), motivo: "Marca guardada sin foto: " + fotoAviso.join(" · "), despues: { tipo, ts } }).catch(() => null);
+  try {
+    const { programarRefrescoPreRol } = await import("./rol_admin_api.ts");
+    programarRefrescoPreRol(ctx, ses, [nombre]);
+  } catch { /* la marca ya quedó */ }
   return { ok: true, id: saved?.id, marcaje: { id: saved?.id, nombre, tipo, ts }, dia, sinFoto: fotoAviso.length ? true : undefined };
 });
 
@@ -605,6 +609,10 @@ extend("asis_marca_manual", "any", async (p, ctx, ses) => {
     dentro_radio: null, anulado: false, creado_por: ses.name, motivo_manual: s(p.motivo),
   });
   await auditar(ctx, ses, "marca_manual", { nombre, marcaje_id: s(saved?.id), despues: { tipo, ts: d.toISOString() }, motivo: s(p.motivo) });
+  try {
+    const { programarRefrescoPreRol } = await import("./rol_admin_api.ts");
+    programarRefrescoPreRol(ctx, ses, [nombre]);
+  } catch { /* la marca ya quedó */ }
   return { ok: true, id: saved?.id };
 });
 
@@ -997,6 +1005,11 @@ extend("asis_cierre_automatico", "any", async (_p, ctx, ses) => {
     await auditar(ctx, ses, "salida_automatica", { nombre, marcaje_id: saved && s((saved as Row).id), motivo: "Salida automática", despues: { ts: dec.tsSalida, hora_salida: hasta } });
     cerrados.push({ nombre, ts: dec.tsSalida });
   }
+  try {
+    const { programarRefrescoPreRol } = await import("./rol_admin_api.ts");
+    // Cada corrida del cron (≈15 min) deja los pre-roles al día, no solo las salidas que se cerraron.
+    programarRefrescoPreRol(ctx, ses);
+  } catch { /* el cierre ya quedó */ }
   return { ok: true, cerrados: cerrados.length, detalle: cerrados };
 });
 

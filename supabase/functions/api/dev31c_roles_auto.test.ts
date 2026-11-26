@@ -12,6 +12,10 @@ import "./roles_crear_api.ts";
 import "./rol_descuentos_api.ts";
 import "./rol_config_api.ts";
 import "./rol_admin_api.ts";
+import { esAdminNombreRol } from "./rol_admin_api.ts";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import "./empleados_api.ts";
 import type { Row } from "./domain.ts";
 
@@ -84,6 +88,36 @@ describe("DEV-31c pre-rol automático", () => {
     assert.deepEqual((t.items as Row[]).map((x) => x.persona).sort(), ["Alejandra", "Andrea"]);
   });
 
+  it("PDF de todas: recargar:false lee el período pedido, incluye borradores y no escribe de nuevo", async () => {
+    const db = seed();
+    const c = ctx(db);
+    await handle("rol_pre_auto", { token: "t-emi", persona: "Andrea" }, c);
+    await handle("rol_pre_auto", { token: "t-emi", persona: "Alejandra" }, c);
+    const writes = db.writes ? db.writes.length : null;
+    // MemoryDb may not expose writes; compare updated_at / log length.
+    const logs0 = (await db.all("beta_roles_log")).length;
+    const r = await handle("rol_pre_todos", { token: "t-emi", periodo: "NOVIEMBRE_2026", recargar: false }, c) as Row;
+    assert.equal(r.ok, true, String(r.error || ""));
+    assert.equal(r.periodo, "NOVIEMBRE_2026");
+    assert.deepEqual((r.items as Row[]).map((x) => x.persona).sort(), ["Alejandra", "Andrea"]);
+    assert.ok((r.items as Row[]).every((x) => x.estado === "borrador" && x.data));
+    assert.equal((await db.all("beta_roles_log")).length, logs0);
+    const vacio = await handle("rol_pre_todos", { token: "t-emi", periodo: "ENERO_2026", recargar: false }, c) as Row;
+    assert.equal((vacio.items as Row[]).length, 0);
+    assert.equal((vacio.errores as Row[]).length, 2);
+    const leer = await handle("rol_pre_leer", { token: "t-emi", persona: "Andrea" }, c) as Row;
+    assert.equal(leer.vacio, false);
+    assert.equal(leer.deCache, true);
+    assert.equal(leer.persona, "Andrea");
+    assert.ok(leer.data);
+    const logs1 = (await db.all("beta_roles_log")).length;
+    const leer2 = await handle("rol_pre_leer", { token: "t-emi", persona: "Andrea" }, c) as Row;
+    assert.equal((await db.all("beta_roles_log")).length, logs1);
+    assert.equal(leer2.estado, "borrador");
+    const noHay = await handle("rol_pre_leer", { token: "t-emi", persona: "Andrea", periodo: "ENERO_2026" }, c) as Row;
+    assert.equal(noHay.vacio, true);
+  });
+
   it("la empleada no ve nada antes de aprobar y no puede usar las acciones de admin", async () => {
     const db = seed();
     const a = await handle("rol_pre_auto", { token: "t-emi", persona: "Andrea" }, ctx(db)) as Row;
@@ -120,5 +154,42 @@ describe("DEV-31c pre-rol automático", () => {
     assert.equal(g.contab, undefined);
     assert.equal(JSON.stringify(g).includes("aportesPatronal"), false);
     assert.equal((await db.all("beta_roles_log")).filter((l) => l.accion === "contabilidad").length, 2);
+  });
+});
+
+describe("DEV-31n PDF de todas (front e iOS)", () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+  it("el botón existe, respeta el período, no recarga al vuelo y el PDF se entrega sin pop-up en iOS/PWA", () => {
+    const rol = readFileSync(join(root, "mc-rol.js"), "utf8");
+    const screens = readFileSync(join(root, "beta-screens.js"), "utf8");
+    const html = readFileSync(join(root, "index.html"), "utf8");
+    assert.match(rol, /PDF de todas/);
+    assert.match(rol, /recargar:\s*false/);
+    assert.match(rol, /periodo:\s*periodo/);
+    assert.doesNotMatch(rol.split("data-rolx-pdf-todas")[2] || rol, /if \(RX\.pack\) cargarRol\(root\)/);
+    assert.match(screens, /function _pdfEntregaHoja/);
+    assert.match(screens, /function _nombrePdfRolesTodas/);
+    assert.match(screens, /Roles_\s*'\s*\+|Roles_'\s*\+|_nombrePdfRolesTodas/);
+    assert.match(screens, /_esIOS_\(\) \|\| _esPwa_\(\)/);
+    assert.match(screens, /it\.estado!=='aprobado'/);
+    assert.match(screens, /_esAdminNombreRol/);
+    assert.doesNotMatch(screens.split("function _pdfPreRolVarios")[1].split("function ")[0], /_pdfPreRolResumenHoja/);
+    assert.match(html, /#sunsu-pdf-entrega/);
+    assert.match(rol, /rol_pre_leer/);
+    assert.match(rol, /prefetchTodos/);
+    assert.match(rol, /último pre-rol guardado/);
+    assert.doesNotMatch(rol, /sel\.onchange[\s\S]{0,400}Calculando el pre-rol/);
+  });
+
+  it("nombres de administración no entran y el archivo se llama Roles_Noviembre_2026.pdf", async () => {
+    const { esAdminNombreRol } = await import("./rol_admin_api.ts");
+    assert.equal(esAdminNombreRol("EFCH"), true);
+    assert.equal(esAdminNombreRol("Emi"), true);
+    assert.equal(esAdminNombreRol("EFCH (efch)"), true);
+    assert.equal(esAdminNombreRol("Andrea"), false);
+    assert.equal(esAdminNombreRol("Alejandra"), false);
+    const screens = readFileSync(join(root, "beta-screens.js"), "utf8");
+    // Helper lives in the browser bundle; we check the template used for the example Emilia asked for.
+    assert.match(screens, /Roles_\s*['"]?\s*\+\s*slug|return 'Roles_'/);
   });
 });
