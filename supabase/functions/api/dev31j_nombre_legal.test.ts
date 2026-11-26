@@ -78,4 +78,30 @@ describe("DEV-31k minitablero del rol (t929u/t930u)", () => {
     assert.match(html, /Neto/);
     assert.match(html, /\$1378\.02/);
   });
+
+  it("la tarjeta Comisiones no suma dos veces extras/recepción cuando viene comFacialesSolo (Alejandra)", () => {
+    const src = readFileSync(new URL("../../../beta-screens.js", import.meta.url), "utf8");
+    const pick = (name: string) => {
+      const i = src.indexOf("function " + name + "(");
+      let depth = 0, j = src.indexOf("{", i);
+      for (; j < src.length; j++) { if (src[j] === "{") depth++; else if (src[j] === "}" && --depth === 0) break; }
+      return src.slice(i, j + 1);
+    };
+    const fn = new Function(`${pick("_rolNum")}\n${pick("_rolHrs")}\n${pick("_rolDiasLinea")}\n${pick("_rolNombre")}\n${pick("_rolDiasTotal")}\n${pick("_rolComisiones")}\n${pick("_lineasRol")}\n${pick("_htmlRolKpis")}\nreturn { kpis: _htmlRolKpis, com: _rolComisiones };`)() as {
+      kpis: (d: unknown) => string; com: (d: unknown) => number;
+    };
+    const d = {
+      diasTrabajados: 15, diasFest: 2, diasDesc: 0, diasAsumidos: 3,
+      sueldo: 482, bono: 30,
+      comFaciales: 63.5, comFacialesSolo: 0, comFacialesExtrasRecep: 63.5,
+      comExtras: 1, comPaquetes: 0, comProductos: 54.06, comRecepcion: 62.5,
+      comisiones: 117.56, iess: 67.54, totalEgresos: 67.54, totalRecibir: 746.84,
+    };
+    assert.equal(fn.com(d), 117.56);
+    const html = fn.kpis(d);
+    assert.match(html, /Comisiones/);
+    assert.match(html, /\$117\.56/);
+    assert.equal(html.includes("181.06"), false);
+    assert.match(html, /\$746\.84/);
+  });
 });

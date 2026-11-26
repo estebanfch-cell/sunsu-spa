@@ -14,8 +14,8 @@ const file = (p: string) => readFileSync(join(root, p), "utf8");
 
 describe("TK159 Clientes: orden A→Z y Volver a la lista", () => {
   it("el pin de caché es TK160 y no toca sunsu.html", () => {
-    assert.match(file("sw.js"), /const CACHE = "sunsu-2026-11-26-TK225"/);
-    assert.match(file("index.html"), /window\.SUNSU_CACHE = "sunsu-2026-11-26-TK225"/);
+    assert.match(file("sw.js"), /const CACHE = "sunsu-2026-11-26-COMKPI"/);
+    assert.match(file("index.html"), /window\.SUNSU_CACHE = "sunsu-2026-11-26-COMKPI"/);
     assert.doesNotMatch(file("sunsu.html"), /TK160|TK159/);
   });
 
