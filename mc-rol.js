@@ -350,7 +350,8 @@
     var r = typeof _lineasRol === "function" ? _lineasRol(d) : { totalEgresos: d.totalEgresos, neto: d.totalRecibir };
     var tot = Number(d.diasTrabajados || 0) + Number(d.diasFest || 0) + Number(d.diasDesc || 0) + Number(d.diasAsumidos || 0);
     var sueldoBono = Math.round((Number(d.sueldo || 0) + Number(d.bono || 0)) * 100) / 100;
-    var com = Math.round((Number(d.comFaciales || 0) + Number(d.comExtras || 0) + Number(d.comPaquetes || 0) + Number(d.comProductos || 0) + Number(d.comRecepcion || 0)) * 100) / 100;
+    var fac = (d.comFacialesSolo != null) ? Number(d.comFacialesSolo || 0) : Number(d.comFaciales || 0);
+    var com = Math.round((fac + Number(d.comExtras || 0) + Number(d.comPaquetes || 0) + Number(d.comProductos || 0) + Number(d.comRecepcion || 0)) * 100) / 100;
     var k = function (a, b, cls) { return '<div class="rolx-k' + (cls ? " " + cls : "") + '"><span>' + a + "</span><b>" + b + "</b></div>"; };
     return '<div class="rolx-kpis">' + k("Días", esc(String(tot)) + (d.faltas ? ' <small class="err">' + esc(d.faltas) + " falta(s)</small>" : ""))
       + k("Sueldo + bono", "$" + m2(sueldoBono)) + k("Comisiones", "$" + m2(com))
