@@ -600,7 +600,7 @@
         }
       } catch (eL) {
         if (!packTieneDatos(RX.cache[persona])) {
-          body.innerHTML = '<p class="note">Preparando el pre-rol de ' + esc(persona) + "…</p>';
+          body.innerHTML = '<p class="note">Preparando el pre-rol de ' + esc(persona) + "…</p>";
         }
       }
     }

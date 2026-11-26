@@ -161,6 +161,7 @@ describe("DEV-31n PDF de todas (front e iOS)", () => {
   const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
   it("el botón existe, respeta el período, no recarga al vuelo y el PDF se entrega sin pop-up en iOS/PWA", () => {
     const rol = readFileSync(join(root, "mc-rol.js"), "utf8");
+    new Function(rol);
     const screens = readFileSync(join(root, "beta-screens.js"), "utf8");
     const html = readFileSync(join(root, "index.html"), "utf8");
     assert.match(rol, /PDF de todas/);
