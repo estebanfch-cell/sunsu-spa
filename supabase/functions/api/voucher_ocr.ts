@@ -126,14 +126,26 @@ export async function leerVoucherConClaude(imageBytes: Uint8Array | string, mime
   }
 }
 
+export type AbonoVoucher = {
+  ticket_clave?: string;
+  desde_ticket?: string;
+  factura?: string | null;
+  monto: number;
+  referencia?: string | null;
+  url?: string | null;
+  por?: string;
+  at?: string;
+};
 export type ContextoCruce = {
   totalTicket?: number | null;
   totalFacturaMigo?: number | null;
   facturaMigo?: string | null;
   /** Monto del pago al que está amarrado el voucher (pago parcial). */
   montoPago?: number | null;
-  /** Montos leídos de los OTROS vouchers vivos del mismo ticket. */
+  /** Montos atribuibles de los OTROS vouchers vivos del mismo ticket + abonos recibidos de otros tickets. */
   otrosMontos?: number[];
+  /** Parte de ESTA foto que queda en este ticket (monto OCR menos abonos asignados a otros tickets). */
+  montoAtribuible?: number | null;
   tolerancia?: number;
 };
 export type Cruce = {
@@ -141,58 +153,123 @@ export type Cruce = {
   descuadre_ticket: boolean; diff_ticket: number;
   descuadre_factura: boolean; diff_factura: number;
   monto: number | null; objetivo_ticket: number | null; total_factura: number | null; suma_vouchers: number | null;
+  monto_atribuible?: number | null;
   mensaje: string;
 };
 const $ = (v: number) => "$" + Math.abs(v).toFixed(2);
 const sg = (d: number) => (d >= 0 ? "+" : "-") + $(d);
 
-/** Cruce puro del monto leído contra ticket/pago y factura Migo (tolerancia $0.05). */
+/** Parte de un comprobante que cuenta en ESTE ticket (OCR menos abonos a otros tickets). */
+export function montoAtribuibleDe(item: Row): number {
+  const o = item.ocr && typeof item.ocr === "object" ? item.ocr as Row : null;
+  const bruto = o && o.monto != null ? n(o.monto) : 0;
+  const abonos = Array.isArray(item.abonos) ? item.abonos as Row[] : [];
+  const sal = abonos.reduce((a, x) => a + Math.max(0, n(x.monto)), 0);
+  return round2(Math.max(0, bruto - sal));
+}
+export function claveRefVoucher(item: Row): string {
+  const o = item.ocr && typeof item.ocr === "object" ? item.ocr as Row : (item as Row);
+  const ref = s(o.referencia || item.referencia);
+  if (ref) return "r:" + ref;
+  const url = s(item.url);
+  return url ? "u:" + url : "";
+}
+
+/** Suma, sin repetir la misma referencia, de lo atribuible en este ticket más abonos recibidos de otros. */
+export function sumaVouchersTicket(comps: Row[], abonosRecibidos: Row[] = []): { suma: number; nItems: number; refs: string[] } {
+  const vistos = new Set<string>();
+  let suma = 0, nItems = 0;
+  const refs: string[] = [];
+  for (const x of comps || []) {
+    const o = x.ocr && typeof x.ocr === "object" ? x.ocr as Row : null;
+    if (!o || s(o.estado) !== "ok" || !(n(o.monto) > 0)) continue;
+    const key = claveRefVoucher(x);
+    if (key && vistos.has(key)) continue;
+    if (key) vistos.add(key);
+    const m = montoAtribuibleDe(x);
+    if (!(m > 0)) continue;
+    suma = round2(suma + m);
+    nItems++;
+    if (s(o.referencia)) refs.push(s(o.referencia));
+  }
+  for (const a of abonosRecibidos || []) {
+    if (!(n(a.monto) > 0)) continue;
+    const ref = s(a.referencia);
+    const key = ref ? "r:" + ref : (s(a.url) ? "u:" + s(a.url) : "");
+    if (key && vistos.has(key)) continue;
+    if (key) vistos.add(key);
+    suma = round2(suma + n(a.monto));
+    nItems++;
+    if (ref) refs.push(ref);
+  }
+  return { suma, nItems, refs };
+}
+
+function fotoYSuma(foto: number, suma: number, haySuma: boolean): string {
+  if (haySuma && Math.abs(round2(foto - suma)) > 0.005) return "esta foto $" + foto.toFixed(2) + " · en este ticket suman $" + suma.toFixed(2);
+  return "voucher $" + foto.toFixed(2);
+}
+
+/** Cruce puro del monto leído (o su parte atribuible) contra ticket/pago y factura Migo (tolerancia $0.05). */
 export function cruzarVoucherConTicket(ocr: Partial<OcrVoucher> | null | undefined, c: ContextoCruce = {}): Cruce {
   const tol = c.tolerancia ?? TOLERANCIA_VOUCHER;
-  const base = { descuadre_ticket: false, diff_ticket: 0, descuadre_factura: false, diff_factura: 0, monto: null as number | null, objetivo_ticket: null as number | null, total_factura: null as number | null, suma_vouchers: null as number | null };
+  const base = { descuadre_ticket: false, diff_ticket: 0, descuadre_factura: false, diff_factura: 0, monto: null as number | null, objetivo_ticket: null as number | null, total_factura: null as number | null, suma_vouchers: null as number | null, monto_atribuible: null as number | null };
   if (!ocr || ocr.estado === "error") return { ...base, estado: "pendiente", mensaje: ocr && ocr.error ? "Sin lectura: " + ocr.error : "Voucher sin leer" };
   const monto = ocr.monto == null ? null : n(ocr.monto);
   if (ocr.tipo === "no_legible" || monto == null || !(monto > 0)) return { ...base, estado: "ilegible", mensaje: "No se pudo leer el monto del voucher" };
+  const propio = c.montoAtribuible != null && n(c.montoAtribuible) >= 0 ? round2(n(c.montoAtribuible)) : monto;
   const otros = (c.otrosMontos || []).map(n).filter((x) => x > 0);
-  const suma = round2(monto + otros.reduce((a, x) => a + x, 0));
+  const haySuma = otros.length > 0 || Math.abs(round2(propio - monto)) > 0.005;
+  const suma = round2(propio + otros.reduce((a, x) => a + x, 0));
   const pago = n(c.montoPago) > 0 ? round2(n(c.montoPago)) : 0;
   const tk = n(c.totalTicket) > 0 ? round2(n(c.totalTicket)) : 0;
   const fac = n(c.totalFacturaMigo) > 0 ? round2(n(c.totalFacturaMigo)) : 0;
-  const out: Cruce = { ...base, estado: "cuadra", monto, objetivo_ticket: pago || tk || null, total_factura: fac || null, suma_vouchers: otros.length ? suma : null, mensaje: "" };
+  const out: Cruce = { ...base, estado: "cuadra", monto, monto_atribuible: propio, objetivo_ticket: pago || tk || null, total_factura: fac || null, suma_vouchers: haySuma ? suma : null, mensaje: "" };
   const facN = c.facturaMigo ? " " + (s(c.facturaMigo).split("-").pop() || "").replace(/^0+/, "") : "";
   let parcial = false;
   // Ticket (o el pago parcial al que está amarrado).
   if (pago) {
-    const d = round2(monto - pago);
+    const d = round2(propio - pago);
     if (Math.abs(d) > tol) { out.descuadre_ticket = true; out.diff_ticket = d; }
   } else if (tk) {
-    const d1 = round2(monto - tk), ds = round2(suma - tk);
-    if (Math.abs(d1) <= tol || (otros.length && Math.abs(ds) <= tol)) { /* cuadra solo o sumado */ }
-    else if (ds < -tol && monto < tk) { parcial = true; out.diff_ticket = ds; }
-    else { out.descuadre_ticket = true; out.diff_ticket = otros.length ? ds : d1; }
+    const d1 = round2(propio - tk), ds = round2(suma - tk);
+    if (Math.abs(d1) <= tol || (haySuma && Math.abs(ds) <= tol)) { /* cuadra solo o sumado */ }
+    else if (ds < -tol && propio < tk) { parcial = true; out.diff_ticket = ds; }
+    else { out.descuadre_ticket = true; out.diff_ticket = haySuma ? ds : d1; }
   }
   // Factura Migo vinculada (todos los vouchers del ticket pagan la misma factura).
   if (fac) {
-    const x = otros.length ? suma : monto, d = round2(x - fac);
-    const okFac = Math.abs(round2(monto - fac)) <= tol || Math.abs(d) <= tol;
+    const x = haySuma ? suma : propio, d = round2(x - fac);
+    const okFac = Math.abs(round2(propio - fac)) <= tol || Math.abs(d) <= tol;
     const parcialFac = d < -tol && (parcial || (!!pago && !out.descuadre_ticket));
     if (!okFac && !parcialFac) { out.descuadre_factura = true; out.diff_factura = d; }
   }
   if (!pago && !tk && !fac) return { ...out, estado: "pendiente", mensaje: "Leído $" + monto.toFixed(2) + " · ticket sin total para cruzar" };
+  const etq = fotoYSuma(monto, suma, haySuma && !pago);
   if (out.descuadre_ticket || out.descuadre_factura) {
     out.estado = "descuadre";
     const partes: string[] = [];
-    if (out.descuadre_ticket) partes.push("Descuadre: voucher $" + monto.toFixed(2) + (otros.length && !pago ? " (suma $" + suma.toFixed(2) + ")" : "") + " vs " + (pago ? "pago $" + pago.toFixed(2) : "ticket $" + tk.toFixed(2)) + " (" + sg(out.diff_ticket) + ")");
-    if (out.descuadre_factura) partes.push((partes.length ? "" : "Descuadre: ") + "voucher $" + (otros.length ? suma : monto).toFixed(2) + " vs factura Migo" + facN + " $" + fac.toFixed(2) + " (" + sg(out.diff_factura) + ")");
+    if (out.descuadre_ticket) partes.push("Descuadre: " + (pago ? "voucher $" + monto.toFixed(2) : etq) + " vs " + (pago ? "pago $" + pago.toFixed(2) : "ticket $" + tk.toFixed(2)) + " (" + sg(out.diff_ticket) + ")");
+    if (out.descuadre_factura) partes.push((partes.length ? "" : "Descuadre: ") + etq + " vs factura Migo" + facN + " $" + fac.toFixed(2) + " (" + sg(out.diff_factura) + ")");
     out.mensaje = partes.join(" · ");
   } else if (parcial) {
     out.estado = "parcial";
-    out.mensaje = "Pago parcial: voucher" + (otros.length ? "s suman" : "") + " $" + suma.toFixed(2) + " de $" + tk.toFixed(2) + " (falta " + $(out.diff_ticket) + ")";
+    out.mensaje = "Pago parcial: " + (haySuma ? "en este ticket suman" : "voucher") + " $" + suma.toFixed(2) + " de $" + tk.toFixed(2) + " (falta " + $(out.diff_ticket) + ")";
   } else {
     const ref = pago || tk || fac;
-    out.mensaje = "Voucher cuadra con " + [pago ? "el pago" : tk ? "ticket" : "", fac ? "factura" : ""].filter(Boolean).join(" y ") + " ($" + (otros.length && !pago ? suma : ref).toFixed(2) + ")";
+    const con = [pago ? "el pago" : tk ? "ticket" : "", fac ? "factura" : ""].filter(Boolean).join(" y ");
+    out.mensaje = haySuma && !pago
+      ? "Esta foto $" + monto.toFixed(2) + ". En este ticket suman $" + suma.toFixed(2) + " y cuadra con " + con + " ($" + suma.toFixed(2) + ")"
+      : "Voucher cuadra con " + con + " ($" + (haySuma && !pago ? suma : ref).toFixed(2) + ")";
   }
   return out;
+}
+
+/** Cruce del ticket completo (suma de refs únicas + abonos recibidos) vs total y factura. */
+export function cruzarTicketVouchers(comps: Row[], c: ContextoCruce & { abonosRecibidos?: Row[] } = {}): Cruce {
+  const { suma, nItems } = sumaVouchersTicket(comps, c.abonosRecibidos || []);
+  if (!(suma > 0) && !nItems) return { estado: "pendiente", descuadre_ticket: false, diff_ticket: 0, descuadre_factura: false, diff_factura: 0, monto: null, objetivo_ticket: c.totalTicket != null ? n(c.totalTicket) || null : null, total_factura: c.totalFacturaMigo != null ? n(c.totalFacturaMigo) || null : null, suma_vouchers: null, mensaje: "Sin vouchers leídos" };
+  return cruzarVoucherConTicket({ estado: "ok", tipo: "voucher_tarjeta", monto: suma }, { ...c, montoAtribuible: suma, otrosMontos: [] });
 }
 
 /** Ficha liviana para la lista / alertas (sin datos sensibles). */
