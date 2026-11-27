@@ -100,6 +100,6 @@ describe("TK148 colores más visibles en iPhone", () => {
   });
 
   it("cache TK148", () => {
-assert.match(sw, /const CACHE = "sunsu-2026-11-27-TKCOLS"/);
+assert.match(sw, /const CACHE = "sunsu-2026-11-27-COMVTA"/);
   });
 });

@@ -88,7 +88,23 @@ describe("TK132 prellenado desde factura", () => {
     db.tables.set("inventario_base", []);
     const r = await h("and", "getCatalogo", {}) as unknown as Row[];
     const it = (Array.isArray(r) ? r : []).find((x) => x.sku === "SUNSU-AS-002")!;
-    assert.equal(it.comVta, 1.575);
+    // 30% × (16.51 − 11.26) = 1.575 → $1.58; se calcula, no se copia comi_producto_30
+    assert.equal(it.comVta, 1.58);
+    assert.equal(it.compra, undefined); assert.equal(it.com, undefined); assert.equal(it.compraReal, undefined);
+  });
+
+  it("getCatalogo comVta usa compra_comision y no la columna vieja comi_producto_30", async () => {
+    const { db, h } = semilla();
+    db.tables.set("catalogo", [{
+      sku: "SUNSU-ML-005", producto_servicio: "Whitening A Serum - Dr.esthe", tipo: "PRODUCTO",
+      subtotal: 82.61, total_con_iva: 95, precio_compra: 70.87, compra_comision: 76.54,
+      comi_producto_30: 3.522, activo: true,
+    }]);
+    db.tables.set("inventario_base", []);
+    const r = await h("and", "getCatalogo", {}) as unknown as Row[];
+    const it = (Array.isArray(r) ? r : []).find((x) => x.sku === "SUNSU-ML-005")!;
+    // 30% × (82.61 − 76.54) = 1.821 → $1.82 (Comisiones). La columna vieja era $3.52.
+    assert.equal(it.comVta, 1.82);
     assert.equal(it.compra, undefined); assert.equal(it.com, undefined); assert.equal(it.compraReal, undefined);
   });
 

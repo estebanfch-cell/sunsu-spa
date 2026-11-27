@@ -2832,7 +2832,7 @@ function updatePreview(){
 
   // Productos
   let estProd=0;
-  // Comisión de productos = valor REAL del catálogo (col I) por unidad, igual que Mi Avance
+  // Comisión de productos = comVta de getCatalogo (30% × max(0, venta s/IVA − compra para comisiones)) por unidad, igual que Comisiones
   PROVS.forEach(pv=>pv.prods.forEach(p=>{const q=T.productos[p.sku]||0;if(q>0){estProd+=p.p*q;comP+=(p._com||0)*q;}}));
 
   // Gift Card venta
