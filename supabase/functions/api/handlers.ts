@@ -25,7 +25,7 @@ import { facturaTxt } from "./ticket_total.ts";
 import { cargarAlias } from "./clientes_alias.ts";
 import { autorizaDe, autorizaFotosCorregidas, siNo } from "./consent_override.ts";
 import { cedVariantes, consultar, type Filtro } from "./query.ts";
-import { preciosDe, tipoDe, utilidadProducto } from "./productos.ts";
+import { comisionUnidad, preciosDe, tipoDe, utilidadProducto } from "./productos.ts";
 import { aplicarSnapsATicket, cargarPreciosOc, snapsPorClave } from "./costos_reales.ts";
 import { claveDe } from "./ticket_beta.ts";
 import { blancosGift, giftReactivable, normCod as normCodGc, vendidaGift as vendidaGc } from "./gift_beta.ts";
@@ -1604,13 +1604,16 @@ reg("getCatalogo", "any", async (_p, ctx) => {
     const sku = s(r.sku);
     if (!sku) continue;
     const sub = n(r.subtotal), tot = n(r.total_con_iva);
+    const comVta = comisionUnidad(sub, compraParaComision(r));
     items.push({
       sku, nombre: s(r.producto_servicio), tipo: s(r.tipo), subtotal: sub,
       total: tot > 0 ? tot : sub, compra: n(r.precio_compra),
-      compraReal: compra.get(skuCode(sku)) || 0, com: n(r.comi_producto_30),
+      compraReal: compra.get(skuCode(sku)) || 0, com: comVta,
       // TK132: comisión de venta por unidad (lo que gana la vendedora). No es un costo: Comisión estimada del ticket
       // la necesita para todos los roles (TK115 quitó «com» a quien no es Super Admin y Productos salía $0).
-      comVta: n(r.comi_producto_30), activo: activoVenta(est, sku, r.activo),
+      // Misma regla que Comisiones: 30% × max(0, subtotal − compraParaComision). No usar comi_producto_30,
+      // que puede quedar desfasada si solo se actualizó catalogo.compra_comision (TK161).
+      comVta, activo: activoVenta(est, sku, r.activo),
     });
   }
   return items;
