@@ -14,9 +14,9 @@ describe("DEV-34 lista de Tickets compacta (opción 1)", () => {
     const enSw = (sw.match(/const CACHE = "([^"]+)"/) || [])[1];
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     assert.equal(enSw, enHtml);
-assert.equal(enSw, "sunsu-2026-11-26-CONSUI");
-    assert.match(html, /beta-screens\.js\?v=20261125dev34c/);
-    assert.match(html, /mc-tickets\.js\?v=20261125dev34/);
+assert.equal(enSw, "sunsu-2026-11-27-TKCOLS");
+    assert.match(html, /beta-screens\.js\?v=20261127tkcols/);
+    assert.match(html, /mc-tickets\.js\?v=20261126tk226/);
   });
 
   it("línea 1: número · Fac. 3014 + estado + cosmetóloga a la derecha + menú ⋯", () => {
@@ -48,7 +48,7 @@ assert.equal(enSw, "sunsu-2026-11-26-CONSUI");
     assert.match(fac, /_histFacCortaTxt\(facn\)/);
     assert.match(fac, /title="'\+_histEsc\(facn\)/);
     assert.match(fac, / · '\+_histEsc\(_histFacCortaTxt\(facn\)\)/);
-    assert.match(screens, /tk-fac-full">'\+_histEsc\(ff\)/);
+    assert.match(screens, /tk-fac tk-muted" title="'\+_histEsc\(ff\)\+'">'\+_histEsc\(ff\)/);
     assert.match(html, /#tk-cards \.mob-num \.mob-fac \{[^}]*white-space: nowrap; overflow: visible; text-overflow: clip;/);
     assert.match(html, /#tk-cards \.mob-fac-full \{[^}]*font-family: ui-monospace/);
   });
@@ -90,7 +90,7 @@ assert.equal(enSw, "sunsu-2026-11-26-CONSUI");
     assert.match(fac, /Falta factura/);
     assert.match(fac, /Canje · sin factura/);
     assert.match(fac, /mob-fac-full/);
-    assert.match(html, /\.mob-fac-falta \{ color: #B91C1C; font-weight: 800; \}/);
+    assert.match(html, /\.mob-fac-falta, \.mob-vouch-desc \{ color: #B91C1C; font-weight: 800; \}/);
     assert.match(card, /var tipExtra=tip&&tip!=='Falta factura'/);
     assert.match(card, /tipExtra\?'<div class="mob-tip"/);
   });
