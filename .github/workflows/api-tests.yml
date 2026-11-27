@@ -1,0 +1,25 @@
+# El test de paridad de comisión vive en `npm test` (package.json).
+# Ese comando completo ya trae fallos previos en main, así que el chequeo de
+# cada pull request corre este archivo con el mismo runner de la suite.
+name: API tests
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: comisión estimada paridad
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Paridad Comisión estimada / Comisiones
+        run: node --experimental-strip-types --test supabase/functions/api/comision_estimada_paridad.test.ts
