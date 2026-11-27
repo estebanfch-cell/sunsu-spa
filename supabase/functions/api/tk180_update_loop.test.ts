@@ -13,7 +13,7 @@ describe("TK180 el banner de actualización nunca se queda pegado", () => {
     const enHtml = (html.match(/window\.SUNSU_CACHE = "([^"]+)"/) || [])[1];
     assert.ok(enSw && enHtml);
     assert.equal(enHtml, enSw);
-assert.equal(enSw, "sunsu-2026-11-26-CONSUI");
+assert.equal(enSw, "sunsu-2026-11-27-TKCOLS");
   });
   it("en la app nativa (TestFlight) no hay banner ni chequeo de SW", () => {
     assert.match(upd, /Capacitor\.isNativePlatform\(\)/);
@@ -49,20 +49,35 @@ describe("TK182 cámara y WhatsApp en la tabla de Tickets de la computadora", ()
 
 describe("TK182b factura completa en la tabla de Tickets", () => {
   const bs = readFileSync(new URL("beta-screens.js", root), "utf8");
-  it("Factura con ancho fijo y sin «…»", () => {
-    assert.match(html, /\.tk-table th\[data-c="fac"\] \{ width: 172px; \}/);
-    assert.match(html, /\.tk-table td\[data-c="fac"\] \{ overflow: visible; text-overflow: clip; white-space: nowrap; \}/);
+  it("Factura con ancho propio y sin «…»", () => {
+    assert.match(html, /\.tk-table th\[data-c="fac"\] \{ width: 14%; \}/);
+    assert.match(html, /\.tk-table td\[data-c="fac"\] \{ overflow: hidden; text-overflow: clip; white-space: nowrap; \}/);
     assert.match(bs, /replace\(\/\^<td\/,'<td data-c="'\+c\.k\+'"'\)/);
   });
 });
 
 describe("TK182c nombre de la clienta siempre completo", () => {
   const bs = readFileSync(new URL("beta-screens.js", root), "utf8");
-  it("Clienta sin «…»; en tabla angosta Forma de pago se corta y la factura muestra los últimos dígitos", () => {
-    assert.match(html, /td\[data-c="cli"\] \{ white-space: normal; overflow: visible; text-overflow: clip;/);
-    assert.match(html, /@container tklist \(max-width: 1100px\)/);
-    assert.match(html, /td\[data-c="fac"\] \.tk-fac-corta \{ display: inline; \}/);
-    assert.match(bs, /<span class="tk-fac-corta">…'\+_histEsc\(fc\)/);
-    assert.match(bs, /<span class="tk-fac" title="'\+_histEsc\(ff\)\+'">/);
+  it("Clienta sin «…»; la factura de escritorio va completa y las alertas en su columna", () => {
+    assert.match(html, /td\[data-c="cli"\] \{ white-space: normal; overflow: hidden; text-overflow: clip;/);
+    assert.match(bs, /class="tk-fac tk-muted" title="'\+_histEsc\(ff\)\+'">'\+_histEsc\(ff\)/);
+    assert.doesNotMatch(bs, /tk-fac-corta/);
+    assert.doesNotMatch(html, /tk-fac-corta/);
+  });
+});
+
+describe("TKCOLS columnas de Tickets en escritorio", () => {
+  const bs = readFileSync(new URL("beta-screens.js", root), "utf8");
+  it("Alertas es columna propia y no se apilan sobre la factura", () => {
+    assert.match(bs, /k:'alertas',t:'Alertas'/);
+    assert.match(bs, /function _histAlertasCell/);
+    assert.match(bs, /function _histFacCell/);
+    assert.match(html, /\.tk-table th\[data-c="alertas"\] \{ width: 12%; \}/);
+    const fac = bs.slice(bs.indexOf("function _histFacCell"), bs.indexOf("function _histAlertasCell"));
+    assert.doesNotMatch(fac, /faltafactura/);
+    assert.doesNotMatch(fac, /descuadrevoucher/);
+    const al = bs.slice(bs.indexOf("function _histAlertasCell"), bs.indexOf("function _histCelda"));
+    assert.match(al, /faltafactura/);
+    assert.match(al, /descuadrevoucher/);
   });
 });

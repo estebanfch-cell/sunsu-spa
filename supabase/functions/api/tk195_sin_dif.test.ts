@@ -32,9 +32,9 @@ describe("TK195 · nunca una línea DIF", () => {
   });
 
   it("cache TK195", () => {
-assert.match(html, /SUNSU_CACHE = "sunsu-2026-11-26-CONSUI"/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-26-CONSUI"/);
-    assert.match(html, /mc-tickets\.js\?v=20261120tk195/);
+assert.match(html, /SUNSU_CACHE = "sunsu-2026-11-27-TKCOLS"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-27-TKCOLS"/);
+    assert.match(html, /mc-tickets\.js\?v=20261126tk226/);
   });
 
   it("asignarCobradoGift usa lo cobrado y no el PVP muerto de \$34.50", () => {
