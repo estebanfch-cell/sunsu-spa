@@ -608,6 +608,24 @@ export function arr(v: unknown): Row[] {
  *  - si tiene varias, se prorratea el total cobrado según el precio de lista ("estimado").
  * Un facial usado de un paquete ("SI, 2/3") no se cobra en ese ticket y no entra al prorrateo.
  */
+/** Cantidad de un extra en servicios_adicionales. Ampolla SUNSU-15: una unidad por tipo tras el «·» (Ácido Ascórbico, PDRN, Hidratación = 3). También acepta «x3» / «×3». */
+export function qtyServicioAdicional(part: string, sku?: string): number {
+  const p = s(part);
+  const esAmp = /(?:^|\b)(?:SUNSU-)?15\b/i.test(sku || "") || /SUNSU-15\b/i.test(p);
+  if (esAmp) {
+    const m = p.match(/[·•]\s*([^\[\]|]+)/);
+    if (m) {
+      const nTipos = m[1].split(",").map((x) => x.trim()).filter(Boolean).length;
+      if (nTipos > 0) return nTipos;
+    }
+  }
+  const x = p.match(/(?:^|\s)(?:x|×)\s*(\d+)\b/i) || p.match(/\b(\d+)\s*(?:x|×)\b/i);
+  if (x) {
+    const q = parseInt(x[1], 10);
+    if (q > 1 && q < 100) return q;
+  }
+  return 1;
+}
 export type LineaTicket = { codigo: string; qty: number; lista: number; tipo: "producto" | "facial" | "extra" | "paquete" | "gift" };
 export function lineasTicket(t: Row, pvpDe: (codigo: string) => number): LineaTicket[] {
   const out: LineaTicket[] = [];
@@ -622,7 +640,11 @@ export function lineasTicket(t: Row, pvpDe: (codigo: string) => number): LineaTi
   const usoPaquete = /^\s*SI\b/i.test(s(t.paquete)) && !s(t.compra_pack_3) && !s(t.compra_pack_6);
   const fac = sunsu(t.facial_hecho)[0] || sunsu(t.fac)[0];
   if (fac) out.push({ codigo: fac, qty: 1, lista: usoPaquete ? 0 : pvpDe(fac), tipo: "facial" });
-  for (const c of sunsu(t.servicios_adicionales)) out.push({ codigo: c, qty: 1, lista: pvpDe(c), tipo: "extra" });
+  for (const part of s(t.servicios_adicionales).split("|")) {
+    const p = part.trim();
+    if (!p) continue;
+    for (const c of sunsu(p)) out.push({ codigo: c, qty: qtyServicioAdicional(p, c), lista: pvpDe(c), tipo: "extra" });
+  }
   for (const c of [...sunsu(t.compra_pack_3), ...sunsu(t.compra_pack_6)]) out.push({ codigo: c, qty: 1, lista: pvpDe(c), tipo: "paquete" });
   // TK195: NUNCA usar SUNSU-34 ($34.50, gift de $30 inactiva) como PVP de una venta de gift card.
   // El valor real sale de la factura Migo o, si es la línea cobrada, de lo cobrado en el ticket.
