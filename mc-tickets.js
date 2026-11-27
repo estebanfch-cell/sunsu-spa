@@ -419,7 +419,18 @@
     // TK157: lectura Claude Vision de cada voucher (verde cuadra / rojo descuadre / botón «🔍 Leer voucher»).
     var clv = (d.ticket && d.ticket.clave) || d.clave || "";
     var och = window.MCOcr ? comps.filter(function (x) { return !/\.pdf(\?|$)/i.test(String(x.url || "")); }).map(function (x) { return window.MCOcr.chip(x, clv); }).join("") : "";
-    if (vh) h += '<div class="mctk-pv-sec"><div class="mctk-pv-t">Voucher y factura</div><div class="mctk-pv-row">' + vh + "</div>" + (och ? '<div class="mctk-pv-ocr" id="mctk-pv-ocr">' + och + "</div>" : "") + "</div>";
+    var recA = d.abonos_recibidos || (d.ticket && d.ticket.abonos_recibidos) || [];
+    if (recA.length) {
+      och += recA.map(function (a) {
+        return '<div class="ocr-abono ocr-abono-in">Abono recibido $' + Number(a.monto).toFixed(2) + (a.desde_ticket ? " de " + a.desde_ticket : "") + (a.referencia ? " · Ref " + a.referencia : "") + "</div>";
+      }).join("");
+    }
+    var ct = d.cruce_ticket || (d.ticket && d.ticket.cruce_ticket);
+    if (ct && ct.mensaje) {
+      var cls = ct.estado === "descuadre" ? "ocr-mal" : (ct.estado === "parcial" ? "ocr-par" : (ct.estado === "cuadra" ? "ocr-ok" : "ocr-gris"));
+      och += '<span class="ocr-chip ' + cls + '" title="' + e(ct.mensaje) + '">' + (ct.estado === "descuadre" ? "⚠️ " : ct.estado === "cuadra" ? "✓ " : ct.estado === "parcial" ? "◐ " : "") + e(ct.mensaje) + "</span>";
+    }
+    if (vh || och) h += '<div class="mctk-pv-sec"><div class="mctk-pv-t">Voucher y factura</div>' + (vh ? '<div class="mctk-pv-row">' + vh + "</div>" : "") + (och ? '<div class="mctk-pv-ocr" id="mctk-pv-ocr">' + och + "</div>" : "") + "</div>";
     var t = d.ticket || {}, pdf = "";
     if (t.sheetRow || t.cliente || conTratamiento()) pdf += '<button type="button" class="mctk-pv-pdf" data-doc="tarjeta">📄<span>Tarjeta del cliente</span></button>';
     var pq0 = d.paquete || {}; if ((window.SunsuWa && SunsuWa.conPaq(pq0)) || (pq0.vigentes && pq0.vigentes.length) || pq0.uso || pq0.compra || (pq0.delTicket && pq0.delTicket.length)) pdf += '<button type="button" class="mctk-pv-pdf" data-doc="paquete">🎴<span>Control de paquete</span></button>';

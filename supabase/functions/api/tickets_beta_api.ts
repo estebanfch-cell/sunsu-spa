@@ -363,7 +363,10 @@ export async function vistaTicket(ctx: Ctx, ses: Ses, r: Row): Promise<Row> {
     descuento: { tipo: s(cab?.descuento_tipo) || null, valor: n(cab?.descuento_valor) }, promo: promo ? promo.nombre : "",
     excluirCosmetologa: cab?.excluir_cosmetologa === true, excluirNota: s(cab?.excluir_nota), exclSistema,
     editado: !!cab, lineasBeta: cab?.lineas_beta === true, historial: Array.isArray(cab?.historial) ? cab!.historial : [],
-    documentos: [...docsDe(r), ...docsBeta(cab)], faltan: [...faltaDe(r, (cab?.datos || {}) as Row), ...(cab?.lineas_beta === true && ymdUtc(r.timestamp) >= FALTA_DESDE ? alertaCanje(r, calc.lineas as unknown as Row[], await paquetesDe(ctx.db, normCedula(s(r.id_3)), normNombre(s(r.nombre) + " " + s(r.apellido))).catch(() => []), !!parseGcCanje(r.gift_card) && !/^\s*SI\b/i.test(s(r.paquete))) : []), ...(avisoCobro ? [avisoCobro] : [])], promos, puedeEditar: admin && !anulado, puedeCancelar: admin && !anulado, puedePedir: !admin && !esVisor(ses.rol), soloLectura: esVisor(ses.rol),
+    documentos: [...docsDe(r), ...docsBeta(cab)],
+    ...(((cab?.datos || {}) as Row).cruce_ticket ? { cruce_ticket: ((cab!.datos || {}) as Row).cruce_ticket } : {}),
+    ...(Array.isArray(((cab?.datos || {}) as Row).abonos_recibidos) ? { abonos_recibidos: ((cab!.datos || {}) as Row).abonos_recibidos } : {}),
+    faltan: [...faltaDe(r, (cab?.datos || {}) as Row), ...(cab?.lineas_beta === true && ymdUtc(r.timestamp) >= FALTA_DESDE ? alertaCanje(r, calc.lineas as unknown as Row[], await paquetesDe(ctx.db, normCedula(s(r.id_3)), normNombre(s(r.nombre) + " " + s(r.apellido))).catch(() => []), !!parseGcCanje(r.gift_card) && !/^\s*SI\b/i.test(s(r.paquete))) : []), ...(avisoCobro ? [avisoCobro] : [])], promos, puedeEditar: admin && !anulado, puedeCancelar: admin && !anulado, puedePedir: !admin && !esVisor(ses.rol), soloLectura: esVisor(ses.rol),
     productosSistema: productQtys(r).length,
     ...(await extrasTicket(ctx, ses, r, cab, calc.total)),
     ...(await cuadreVista(ctx, r, calc.lineas as unknown as Row[], cab)),
@@ -478,7 +481,13 @@ export function fotoPendienteDe(d: Row | undefined): Row | undefined {
   return [...compsVivos(d)].reverse().find((x) => !s(x.pago_id));
 }
 /** TK157: lectura Claude Vision al subir (lo llena voucher_ocr_api.ts). Muta el item con ocr + cruce; nunca tumba la subida. */
-export const OCR_HOOK: { leer?: (ctx: Ctx, r: Row, cab: Row | undefined, datos: Row, item: Row, img: string, extra?: { montoPago?: number; total?: number }) => Promise<void> } = {};
+export const OCR_HOOK: {
+  leer?: (ctx: Ctx, r: Row, cab: Row | undefined, datos: Row, item: Row, img: string, extra?: { montoPago?: number; total?: number }) => Promise<void>;
+  /** Recalcula el cruce de todos los vouchers vivos del ticket (sin repetir el OCR). */
+  recomputar?: (ctx: Ctx, r: Row, cab: Row | undefined, datos: Row, totalHint?: number) => Promise<void>;
+  /** Al quitar un voucher: limpia abonos en el otro ticket y recalcula ambos. */
+  trasQuitar?: (ctx: Ctx, ses: Ses, r: Row, cab: Row, datos: Row, hit: Row) => Promise<void>;
+} = {};
 /** Guarda la foto (app_archivos + copia en Storage si se puede) y la agrega a beta_tickets.datos.comprobantes. */
 export async function agregarComprobante(ctx: Ctx, ses: Ses, r: Row, imagen: unknown, nombre: string, detalle: string, pagoId?: string, extra?: { montoPago?: number; total?: number }): Promise<Row> {
   const img = s(imagen);
@@ -503,7 +512,7 @@ export async function agregarComprobante(ctx: Ctx, ses: Ses, r: Row, imagen: unk
   // TK212: voucher de un día anterior a la subida del ticket → «Subido tarde» (solo tickets desde el deploy de TK210).
   let tarde: Row | undefined;
   if (item.ocr && r.id != null) { try { const { evaluarTardeAuto } = await import("./tarde_auto.ts"); tarde = (await evaluarTardeAuto(ctx, actor, { ids: [n(r.id)] }))[0]; } catch { /* la foto ya quedó */ } }
-  return { ok: true, url: "archivo:" + id, datos, archivo_id: id, ...(item.ocr ? { ocr: item.ocr, cruce: item.cruce } : {}), ...(tarde ? { subido_tarde: tarde } : {}) };
+  return { ok: true, url: "archivo:" + id, datos, archivo_id: id, ...(item.ocr ? { ocr: item.ocr, cruce: item.cruce } : {}), ...(datos.cruce_ticket ? { cruce_ticket: datos.cruce_ticket } : {}), ...(tarde ? { subido_tarde: tarde } : {}) };
 }
 /** Enlaza una foto del ticket (la indicada, o la última pendiente) a un pago de la beta. */
 export async function vincularComprobante(ctx: Ctx, ses: Ses, r: Row, pagoId: string, url?: string): Promise<Row> {
@@ -535,13 +544,16 @@ export async function quitarComprobante(ctx: Ctx, ses: Ses, r: Row, url: string)
   hit.borrado = true;
   hit.borrado_por = ses.name;
   hit.borrado_at = now;
+  if (OCR_HOOK.trasQuitar) { try { await OCR_HOOK.trasQuitar(ctx, ses, r, cab, datos, hit); } catch { /* el cruce no bloquea la baja */ } }
+  else if (OCR_HOOK.recomputar) { try { await OCR_HOOK.recomputar(ctx, r, cab, datos); } catch { /* ok */ } }
   const hist = [...(Array.isArray(cab.historial) ? cab.historial as Row[] : []), { fecha: now, actor, accion: "documento", detalle: "quitó comprobante" }].slice(-100);
   await ctx.db.write(actor, "beta_tickets", "update", { clave }, { datos, historial: hist, actualizado_por: actor, updated_at: now });
   if (s(hit.pago_id)) {
     try { await ctx.db.write(actor, "beta_pagos", "update", { id: s(hit.pago_id) }, { comprobante_id: null }); } catch { /* ok */ }
   }
   try { await logAccion(ctx.db, actor, "COMPROBANTE QUITAR", clave + " · " + s(url)); } catch { /* ok */ }
-  return { ok: true };
+  const ct = datos.cruce_ticket && typeof datos.cruce_ticket === "object" ? datos.cruce_ticket : undefined;
+  return { ok: true, ...(ct ? { cruce_ticket: ct } : {}) };
 }
 extend("tk_quitar_doc", "any", async (p, ctx, ses) => {
   if (!(await hay(ctx))) return { error: FALTA };
@@ -882,7 +894,7 @@ export function docsBeta(cab: Row | undefined): Row[] {
     const t = Date.parse(s(x.fecha));
     return !L0.some((y) => y !== x && s(y.pago_id) && s(y.por) === s(x.por) && Number.isFinite(t) && Math.abs(Date.parse(s(y.fecha)) - t) <= 15000);
   });
-  const out: Row[] = L.map((x, i) => ({ tipo: "comprobante", nombre: "Comprobante subido " + (i + 1) + (x.por ? " · " + s(x.por) : ""), url: s(x.url), ...(x.ocr ? { ocr: x.ocr } : {}), ...(x.cruce ? { cruce: x.cruce } : {}), ...(s(x.pago_id) ? { pago_id: s(x.pago_id) } : {}) }));
+  const out: Row[] = L.map((x, i) => ({ tipo: "comprobante", nombre: "Comprobante subido " + (i + 1) + (x.por ? " · " + s(x.por) : ""), url: s(x.url), ...(x.ocr ? { ocr: x.ocr } : {}), ...(x.cruce ? { cruce: x.cruce } : {}), ...(s(x.pago_id) ? { pago_id: s(x.pago_id) } : {}), ...(Array.isArray(x.abonos) && (x.abonos as Row[]).length ? { abonos: x.abonos } : {}) }));
   const pdfs = Array.isArray(d.factura_pdfs) ? d.factura_pdfs as Row[] : (d.factura_pdf && typeof d.factura_pdf === "object" ? [d.factura_pdf as Row] : []);
   for (const x of pdfs) {
     if (!s(x.url)) continue;
