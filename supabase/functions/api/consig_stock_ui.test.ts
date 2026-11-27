@@ -7,7 +7,7 @@ const js = readFileSync(new URL("mc-productos.js", root), "utf8");
 const html = readFileSync(new URL("index.html", root), "utf8");
 const sw = readFileSync(new URL("sw.js", root), "utf8");
 
-const CACHE = "sunsu-2026-11-26-CONSUI";
+const CACHE = "sunsu-2026-11-27-TKCOLS";
 
 describe("Productos: stock de consignación se ve en Venta (t973u)", () => {
   it("la versión de la página coincide con el service worker", () => {

@@ -6406,6 +6406,7 @@ var _HIST_COLS=[
   {k:'tot',t:'Total',num:1,v:function(t){return _histMontos(t).tot;}},
   {k:'pago',t:'Pago',v:function(t){return t.anulado?-1:(t.cob?2:(_tkPagoMigo(t)?1:0));}},
   {k:'fac',t:'Factura',v:function(t){return _tkFacFull(t)||'~';}},
+  {k:'alertas',t:'Alertas',v:function(t){return (_tkFaltaFactura(t)?'1':'0')+(_tkDescuadreVoucher(t)?'1':'0');}},
   {k:'reag',t:'Reagendada',v:function(t){var L=_tkLedOf(t);return L?(L.g?1:0):-1;}},
   {k:'sal',t:'Saldo',num:1,v:function(t){return _histSaldo(t);}}
 ];
@@ -6423,6 +6424,22 @@ function _histSortBy(k){
   var esStaff=!(CU&&(CU.role==='admin'||CU.role==='admin_master'||CU.role==='super_admin'));
   _histActualizarRes(esStaff);
 }
+
+function _histFacCell(t){
+  var ff=_tkFacFull(t), pdf=_tkFacPdf(t);
+  if(ff) return '<td><span class="tk-fac tk-muted" title="'+_histEsc(ff)+'">'+_histEsc(ff)+'</span>'+(pdf?' <span class="tk-facpdf" title="Factura PDF adjunta">📄</span>':'')+'</td>';
+  if(t.sin_cobro&&!_tkFaltaFactura(t)) return '<td>'+_tkPill('gris','No aplica','Cortesía / consumo interno / canje de paquete en $0: no se factura')+'</td>';
+  if(_tkPagoDirecto(t)) return '<td>'+_tkPill('gris','Pago directo','Pago directo EGB: $0 para Sunsu, sin factura. El stock sí se descuenta.')+'</td>';
+  if(_tkFaltaFactura(t)) return '<td></td>';
+  if(_tkPendienteLunes(t)) return '<td>'+_tkPill('pendlun','Pendiente por lunes')+'</td>';
+  return '<td>'+_tkPill('sinfactura','Sin factura')+'</td>';
+}
+function _histAlertasCell(t){
+  var bits=[];
+  if(_tkFaltaFactura(t)) bits.push(_tkPill('faltafactura','Falta factura','Hay que facturar este ticket'));
+  if(_tkDescuadreVoucher(t)) bits.push(_tkPill('descuadrevoucher','Descuadre voucher', (function(){ var L=_tkLedOf(t)||{}; return typeof L.voucher_descuadre==='string'?L.voucher_descuadre:'El voucher no cuadra con el ticket'; })()));
+  return '<td class="tk-alertas">'+(bits.join(' ')||'')+'</td>';
+}
 function _histCelda(t, c, showPrices, i){
   var m=_histMontos(t);
   var nombre=((t.nombre||'')+' '+(t.apellido||'')).trim();
@@ -6438,7 +6455,8 @@ function _histCelda(t, c, showPrices, i){
   if(c.k==='iva') return '<td class="num">'+$(m.iva)+'</td>';
   if(c.k==='tot') return '<td class="num">'+$(m.tot)+'</td>';
   if(c.k==='pago') return '<td>'+_tkPagoPill(t)+'</td>';
-  if(c.k==='fac'){ var ff=_tkFacFull(t), pdf=_tkFacPdf(t); /* TK182c (Emilia t795u): si falta espacio, la factura muestra solo los últimos dígitos (completa en el title). */ var fc=String(ff||'').replace(/\D/g,'').slice(-6); return '<td>'+(ff?'<span class="tk-fac" title="'+_histEsc(ff)+'"><span class="tk-fac-full">'+_histEsc(ff)+'</span><span class="tk-fac-corta">…'+_histEsc(fc)+'</span></span>'+(pdf?' <span class="tk-facpdf" title="Factura PDF adjunta">📄</span>':''):(t.sin_cobro&&!_tkFaltaFactura(t)?_tkPill('gris','No aplica','Cortesía / consumo interno / canje de paquete en $0: no se factura'):_tkPagoDirecto(t)?_tkPill('gris','Pago directo','Pago directo EGB: $0 para Sunsu, sin factura. El stock sí se descuenta.'):_tkFaltaFactura(t)?_tkPill('faltafactura','Falta factura','Hay que facturar este ticket'):_tkPendienteLunes(t)?_tkPill('pendlun','Pendiente por lunes'):_tkPill('sinfactura','Sin factura')))+(_tkDescuadreVoucher(t)?' '+_tkPill('descuadrevoucher','📷 Descuadre voucher', (function(){ var L=_tkLedOf(t)||{}; return typeof L.voucher_descuadre==='string'?L.voucher_descuadre:'El voucher no cuadra con el ticket'; })()):'')+'</td>'; }
+  if(c.k==='fac') return _histFacCell(t);
+  if(c.k==='alertas') return _histAlertasCell(t);
   if(c.k==='reag'){ var Lr=_tkLedOf(t); if(!Lr) return '<td></td>'; return '<td>'+(Lr.g?_tkPill('pagado','Sí'):_tkPill(Lr.pr?'porcobrar':'gris','No'))+'</td>'; }
   if(c.k==='sal') return '<td class="num">'+$( _histSaldo(t)||0 )+'</td>';
   /* TK182 (Emilia t794u): en la computadora, cámara y WhatsApp de la tarjeta móvil, HORIZONTALES al final de la fila
