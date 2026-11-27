@@ -8,7 +8,7 @@ import { resolverAvisosObsoletos } from "./avisos_auto.ts";
 import { acceso, esAdmin, esPropio, matrizDe, MODULOS, normalizarRol, puedeVerContacto, ROLES } from "./permisos.ts";
 import { runErp } from "./erp.ts";
 import { compraParaComision, ecuadorParts, IVA, n, normCedula, normNombre, PCT_COMISION_PRODUCTO, round2, s, skuCode, ymdUtc, type Row } from "./domain.ts";
-import { utilidadProducto } from "./productos.ts";
+import { comisionUnidad, utilidadProducto } from "./productos.ts";
 import { cargarHorarios, guardarHorario, horarioDesde, pushAPersonas, validar } from "./horarios_api.ts";
 import { diasDeVacacion, instanteEcuador, validarSolicitudVacacion } from "./asistencia.ts";
 import { saldoDe } from "./asistencia_api.ts";
@@ -237,7 +237,8 @@ async function catalogoDe(ctx: Ctx, fila: string): Promise<Row | null> {
 function vistaCatalogo(row: Row): Row {
   return {
     sku: s(row.sku), nombre: s(row.producto_servicio), tipo: s(row.tipo),
-    subtotal: n(row.subtotal), compra: n(row.precio_compra), com: n(row.comi_producto_30),
+    subtotal: n(row.subtotal), compra: n(row.precio_compra),
+    com: comisionUnidad(n(row.subtotal), compraParaComision(row)),
     activo: row.activo !== false,
   };
 }

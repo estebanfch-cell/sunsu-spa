@@ -32,8 +32,8 @@ describe("TK195 · nunca una línea DIF", () => {
   });
 
   it("cache TK195", () => {
-assert.match(html, /SUNSU_CACHE = "sunsu-2026-11-27-TKCOLS"/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-27-TKCOLS"/);
+assert.match(html, /SUNSU_CACHE = "sunsu-2026-11-27-COMVTA"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-27-COMVTA"/);
     assert.match(html, /mc-tickets\.js\?v=20261126tk226/);
   });
 
