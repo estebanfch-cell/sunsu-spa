@@ -145,9 +145,9 @@ describe("TK226 · cierre automático si el cambio ya está aplicado", () => {
   it("cache al día", () => {
     const html = file("index.html");
     const sw = file("sw.js");
-    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-26-CONSUI"/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-26-CONSUI"/);
+    assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-27-TKCOLS"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-27-TKCOLS"/);
     assert.match(html, /beta-inline\.js\?v=20261126tk226/);
-    assert.match(html, /beta-screens\.js\?v=20261126tk226/);
+    assert.match(html, /beta-screens\.js\?v=20261127tkcols/);
   });
 });

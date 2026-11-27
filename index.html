@@ -1200,35 +1200,48 @@
   .mob-cam.ok, .mob-wa.ok, #content label.mob-cam.ok, #content .mob-wa.ok { color: #16A34A !important; border-color: #16A34A !important; }
   .mob-cam svg, .mob-cam svg *, .mob-wa svg, .mob-wa svg * { fill: currentColor !important; stroke: none !important; color: inherit !important; }
   /* TK182 (Emilia t794u): en la tabla de la computadora van lado a lado (cámara, luego WhatsApp), columna compacta al final. */
-  .tk-table th.tk-acc-h, .tk-table td.tk-acc { width: 78px; padding: 4px 8px 4px 4px; text-align: right; white-space: nowrap; }
-  /* TK182b (Emilia): la factura SIEMPRE completa con todos los ceros (001-001-000002976), sin «…».
-     Anchos fijos a las columnas cortas; Clienta toma el resto. */
-  .tk-table th[data-c="num"] { width: 96px; } .tk-table th[data-c="fecha"] { width: 84px; }
-  .tk-table th[data-c="cos"] { width: 112px; } .tk-table th[data-c="fpago"] { width: 130px; }
-  .tk-table th[data-c="tot"] { width: 78px; } .tk-table th[data-c="pago"] { width: 92px; }
-  .tk-table th[data-c="sal"] { width: 72px; } .tk-table th[data-c="fac"] { width: 172px; }
-  .tk-table th[data-c="acc"] { width: 78px; }
-  .tk-table td[data-c="fac"] { overflow: visible; text-overflow: clip; white-space: nowrap; }
-  /* TK186: la cosmetóloga va con su primer nombre completo, nunca con «…». */
-  .tk-table td[data-c="cos"] { overflow: visible; text-overflow: clip; white-space: nowrap; }
-  .tk-table td[data-c="cos"] .mc-cos { max-width: none; overflow: visible; text-overflow: clip; }
+  .tk-table th.tk-acc-h, .tk-table td.tk-acc { width: 7.5%; padding: 4px 8px 4px 4px; text-align: right; white-space: nowrap; }
+  /* TKCOLS (Emilia t979u): la tabla usa todo el ancho; cada dato en su columna.
+     Factura SIEMPRE completa con todos los ceros (001-001-000002976), color muted, sin «…».
+     Falta factura y Descuadre voucher van en Alertas, nunca encima de la factura ni del total. */
+  .tk-table th[data-c="num"] { width: 8.5%; }
+  .tk-table th[data-c="cli"] { width: 9%; }
+  .tk-table th[data-c="fecha"] { width: 9%; }
+  .tk-table th[data-c="cos"] { width: 9%; }
+  .tk-table th[data-c="fpago"] { width: 10%; }
+  .tk-table th[data-c="tot"] { width: 6.5%; }
+  .tk-table th[data-c="pago"] { width: 8.5%; }
+  .tk-table th[data-c="fac"] { width: 14%; }
+  .tk-table th[data-c="alertas"] { width: 12%; }
+  .tk-table th[data-c="sal"] { width: 6.5%; }
+  .tk-table th[data-c="acc"] { width: 7%; }
+  .tk-table.nowrap-table th { white-space: normal; line-height: 1.2; }
+  .tk-table th[data-c="fecha"],
+  .tk-table td[data-c="fecha"] { white-space: nowrap; overflow: hidden; text-overflow: clip; }
+  .tk-table td[data-c="fac"] { overflow: hidden; text-overflow: clip; white-space: nowrap; }
+  .tk-table td[data-c="fac"] .tk-fac { font-size: 0.72rem; letter-spacing: 0; color: var(--gray, #8A93A6); font-weight: 500; }
+  /* TK186: la cosmetóloga va con su primer nombre completo, nunca con «…» (baja de línea si hace falta). */
+  .tk-table td[data-c="cos"] { overflow: hidden; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+  .tk-table td[data-c="cos"] .mc-cos { max-width: 100%; overflow: hidden; text-overflow: clip; }
   /* TK188: siguiente código de gift card visible (no reserva) */
   .gc-sig-hint { margin-top: 6px; padding: 6px 10px; border-radius: 9px; background: #FFF4E5; border: 1.5px solid #E8B04B; color: #7A4E00; font-size: 0.78rem; }
   .gc-sig-hint b { font-size: 0.95rem; letter-spacing: .02em; }
-  .tk-table td[data-c="fac"] .tk-fac { font-size: 0.72rem; letter-spacing: 0; }
-  /* TK182c (Emilia t795u): el nombre de la clienta SIEMPRE completo (puede bajar de línea, nunca «…»).
-     Si la tabla es angosta (menú lateral), primero se acorta Forma de pago y la factura muestra solo los últimos dígitos. */
-  .tk-list { container-type: inline-size; container-name: tklist; }
-  .tk-table td[data-c="cli"] { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.25; }
-  .tk-fac-corta { display: none; }
-  @container tklist (max-width: 1100px) {
-    .tk-table th[data-c="fac"] { width: 92px; }
-    .tk-table th[data-c="fpago"] { width: 96px; }
-    .tk-table td[data-c="fpago"] { overflow: hidden; text-overflow: ellipsis; }
-    .tk-table td[data-c="fpago"] > * { max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
-    .tk-table td[data-c="fac"] .tk-fac-full { display: none; }
-    .tk-table td[data-c="fac"] .tk-fac-corta { display: inline; }
+  /* TK182c (Emilia t795u): el nombre de la clienta SIEMPRE completo (puede bajar de línea, nunca «…»). */
+  .tk-table td[data-c="cli"] { white-space: normal; overflow: hidden; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.25; }
+  .tk-table td[data-c="fpago"],
+  .tk-table td[data-c="pago"],
+  .tk-table td[data-c="alertas"] { overflow: hidden; white-space: normal; line-height: 1.45; }
+  .tk-table td[data-c="fpago"] .tk-pill,
+  .tk-table td[data-c="pago"] .tk-pill,
+  .tk-table td[data-c="alertas"] .tk-pill {
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: normal;
+    vertical-align: middle;
   }
+  .content:has(.tk-list) { padding-left: 12px; padding-right: 12px; }
   .mob-acts.tk-acts-row { flex-direction: row; gap: 8px; justify-content: flex-end; vertical-align: middle; }
   /* TK183: tabla Campo | Antes | Después en Aprobaciones (ficha de clienta). */
   .apr-camb { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin: 6px 0; }
@@ -9112,7 +9125,7 @@ window.addEventListener("hashchange", () => {
     if (k) setTimeout(function () { window.SunsuListaPos.restore(k); }, 0);
   }
 });
-window.SUNSU_CACHE = "sunsu-2026-11-26-CONSUI"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
+window.SUNSU_CACHE = "sunsu-2026-11-27-TKCOLS"; /* TK180: SIEMPRE igual a const CACHE de sw.js (test tk180_update_loop) */
 window.SunsuUpdate = (function () {
   var POLL_MS = 180000, FOCUS_MS = 30000;
   var lastFocus = 0, clicked = false, updating = false;
@@ -9293,7 +9306,7 @@ window.SunsuUpdate.init();
 <script src="mc-scan.js?v=20261120tk179"></script>
 <script src="mc-buscar.js?v=20261120tk179"></script>
 <script src="descuento_justif.js?v=20261120tk195"></script>
-<script src="beta-screens.js?v=20261126tk226"></script>
+<script src="beta-screens.js?v=20261127tkcols"></script>
 <script src="mc-rol.js?v=20261126rolmod"></script>
 <script src="beta-inline.js?v=20261126tk226"></script>
 <script src="mc-productos.js?v=20261126consui"></script>
