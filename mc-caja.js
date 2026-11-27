@@ -182,22 +182,48 @@
   /* TK157 (Emilia t696u): lectura Claude Vision del voucher → ficha verde (cuadra) / roja (descuadre) / botón «Leer voucher». */
   var MCOcr = {
     dm: function (f) { var m = String(f || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + "/" + m[2] : ""; },
+    leidoTxt: function (o, c) {
+      var foto = o && o.monto != null ? Number(o.monto) : NaN;
+      var suma = c && c.suma_vouchers != null ? Number(c.suma_vouchers) : foto;
+      if (isFinite(foto) && isFinite(suma) && Math.abs(foto - suma) > 0.005) {
+        return "esta foto $" + foto.toFixed(2) + " · en este ticket suman $" + suma.toFixed(2);
+      }
+      return isFinite(foto) ? "$" + foto.toFixed(2) : "";
+    },
+    abonoHtml: function (x, clave) {
+      var o = x && x.ocr, url = (x && x.url) || "", h = "", i, a, L = (x && x.abonos) || [];
+      for (i = 0; i < L.length; i++) {
+        a = L[i];
+        h += '<div class="ocr-abono">Abono $' + Number(a.monto).toFixed(2) + " a " + e(a.ticket_clave || "") + (clave && url ? ' <button type="button" class="ocr-abono-x" data-abono-quitar="' + e(url) + '" data-abono-clave="' + e(clave) + '" data-abono-hacia="' + e(a.ticket_clave || "") + '" title="Retirar abono">×</button>' : "") + "</div>";
+      }
+      if (clave && url && o && o.estado === "ok" && Number(o.monto) > 0) {
+        h += '<div class="ocr-abono-form"><button type="button" class="ocr-leer" data-abono-abrir="1">Asignar parte a otro ticket</button>'
+          + '<span class="ocr-abono-campos" hidden style="display:none;margin-top:4px">'
+          + '<input class="ocr-abono-tk" placeholder="Ticket (TK-SO-2000)" size="16" style="margin-right:4px"> '
+          + '<input class="ocr-abono-monto" placeholder="Monto" inputmode="decimal" size="7" style="margin-right:4px"> '
+          + '<button type="button" class="ocr-leer" data-abono-ok="' + e(url) + '" data-abono-clave="' + e(clave) + '">Asignar</button></span></div>';
+      }
+      return h;
+    },
     chip: function (x, clave) {
       var o = x && x.ocr, c = (x && x.cruce) || {}, url = (x && x.url) || "";
-      if (!o) return /^archivo:/.test(url) && clave ? '<button type="button" class="ocr-leer" data-ocr-leer="' + e(url) + '" data-ocr-clave="' + e(clave) + '">🔍 Leer voucher</button>' : "";
-      if (o.estado !== "ok") return '<span class="ocr-chip ocr-gris">⚠️ No se pudo leer' + (o.error ? " (" + e(o.error) + ")" : "") + '</span>' + (clave && /^archivo:/.test(url) ? '<button type="button" class="ocr-leer" data-ocr-leer="' + e(url) + '" data-ocr-clave="' + e(clave) + '">🔍 Reintentar</button>' : "");
+      var extra = MCOcr.abonoHtml(x, clave);
+      if (!o) return (/^archivo:/.test(url) && clave ? '<button type="button" class="ocr-leer" data-ocr-leer="' + e(url) + '" data-ocr-clave="' + e(clave) + '">🔍 Leer voucher</button>' : "") + extra;
+      if (o.estado !== "ok") return '<span class="ocr-chip ocr-gris">⚠️ No se pudo leer' + (o.error ? " (" + e(o.error) + ")" : "") + '</span>' + (clave && /^archivo:/.test(url) ? '<button type="button" class="ocr-leer" data-ocr-leer="' + e(url) + '" data-ocr-clave="' + e(clave) + '">🔍 Reintentar</button>' : "") + extra;
       var monto = o.monto != null ? "$" + Number(o.monto).toFixed(2) : "";
+      var leido = MCOcr.leidoTxt(o, c);
       var info = [monto, o.referencia ? "Ref " + o.referencia : "", o.banco_red || "", MCOcr.dm(o.fecha)].filter(Boolean).map(e).join(" · ");
+      if (c.suma_vouchers != null && Math.abs(Number(c.suma_vouchers) - Number(o.monto || 0)) > 0.005) info += " · En este ticket suman $" + Number(c.suma_vouchers).toFixed(2);
       if (c.estado === "descuadre") {
         var vs = [];
         if (c.descuadre_ticket && c.objetivo_ticket) vs.push("vs " + (x.pago_id ? "pago" : "ticket") + " $" + Number(c.objetivo_ticket).toFixed(2));
         if (c.descuadre_factura && c.total_factura) vs.push("vs factura Migo $" + Number(c.total_factura).toFixed(2));
-        return '<span class="ocr-chip ocr-mal" role="alert" title="' + e(c.mensaje || "") + '">⚠️ Descuadre voucher: leído ' + e(monto) + " " + e(vs.join(" · ")) + (o.referencia ? " · Ref " + e(o.referencia) : "") + "</span>";
+        return '<span class="ocr-chip ocr-mal" role="alert" title="' + e(c.mensaje || "") + '">⚠️ Descuadre voucher: leído ' + e(leido) + " " + e(vs.join(" · ")) + (o.referencia ? " · Ref " + e(o.referencia) : "") + "</span>" + extra;
       }
-      if (c.estado === "parcial") return '<span class="ocr-chip ocr-par" title="' + e(c.mensaje || "") + '">◐ ' + e(c.mensaje || ("Leído: " + info)) + "</span>";
-      if (c.estado === "ilegible") return '<span class="ocr-chip ocr-gris">⚠️ Voucher ilegible: no se ve el monto</span>';
-      if (c.estado === "cuadra") return '<span class="ocr-chip ocr-ok" title="' + e(c.mensaje || "") + '">✓ Leído: ' + info + "</span>";
-      return '<span class="ocr-chip ocr-gris">🔍 Leído: ' + info + "</span>";
+      if (c.estado === "parcial") return '<span class="ocr-chip ocr-par" title="' + e(c.mensaje || "") + '">◐ ' + e(c.mensaje || ("Leído: " + info)) + "</span>" + extra;
+      if (c.estado === "ilegible") return '<span class="ocr-chip ocr-gris">⚠️ Voucher ilegible: no se ve el monto</span>' + extra;
+      if (c.estado === "cuadra") return '<span class="ocr-chip ocr-ok" title="' + e(c.mensaje || "") + '">✓ Leído: ' + info + "</span>" + extra;
+      return '<span class="ocr-chip ocr-gris">🔍 Leído: ' + info + "</span>" + extra;
     },
     leer: async function (clave, url, total) {
       var b = { clave: clave, url: url }; if (total) b.total = total;
@@ -213,10 +239,50 @@
             var r = await MCOcr.leer(b.getAttribute("data-ocr-clave"), b.getAttribute("data-ocr-leer"), typeof total === "function" ? total() : total);
             if (!r || r.error || !r.ocr) { b.disabled = false; b.textContent = "🔍 Leer voucher"; toast2((r && r.error) || "No se pudo leer", 1); return; }
             var tmp = document.createElement("span");
-            tmp.innerHTML = MCOcr.chip({ url: r.url, ocr: r.ocr, cruce: r.cruce, pago_id: (r.items && r.items[0] && r.items[0].pago_id) || "" }, b.getAttribute("data-ocr-clave"));
+            tmp.innerHTML = MCOcr.chip({ url: r.url, ocr: r.ocr, cruce: r.cruce, pago_id: (r.items && r.items[0] && r.items[0].pago_id) || "", abonos: (r.items && r.items[0] && r.items[0].abonos) || r.abonos }, b.getAttribute("data-ocr-clave"));
             b.replaceWith.apply(b, Array.prototype.slice.call(tmp.childNodes));
+            MCOcr.wire(tmp.parentNode || root, total, onDone);
             if (onDone) onDone(r);
           } catch (x) { b.disabled = false; b.textContent = "🔍 Leer voucher"; toast2((x && x.message) || "No se pudo leer", 1); }
+        };
+      });
+      (root || document).querySelectorAll("[data-abono-abrir]").forEach(function (b) {
+        if (b._abW) return; b._abW = 1;
+        b.onclick = function (ev) {
+          ev.preventDefault(); ev.stopPropagation();
+          var cam = b.parentNode && b.parentNode.querySelector(".ocr-abono-campos");
+          if (!cam) return;
+          var on = cam.getAttribute("hidden") != null || cam.style.display === "none";
+          if (on) { cam.removeAttribute("hidden"); cam.style.display = "inline"; b.textContent = "Cancelar"; }
+          else { cam.setAttribute("hidden", ""); cam.style.display = "none"; b.textContent = "Asignar parte a otro ticket"; }
+        };
+      });
+      (root || document).querySelectorAll("[data-abono-ok]").forEach(function (b) {
+        if (b._abOk) return; b._abOk = 1;
+        b.onclick = async function (ev) {
+          ev.preventDefault(); ev.stopPropagation();
+          var form = b.parentNode, tk = form && form.querySelector(".ocr-abono-tk"), mon = form && form.querySelector(".ocr-abono-monto");
+          var hacia = tk ? String(tk.value || "").trim() : "", monto = mon ? Number(String(mon.value || "").replace(",", ".")) : 0;
+          if (!hacia) { toast2("Escribe el ticket (por ejemplo TK-SO-2000)", 1); return; }
+          if (!(monto > 0)) { toast2("Escribe el monto a asignar", 1); return; }
+          b.disabled = true;
+          try {
+            var r = await api("tk_voucher_abono", { clave: b.getAttribute("data-abono-clave"), url: b.getAttribute("data-abono-ok"), hacia_clave: hacia, monto: monto });
+            if (!r || r.error) { toast2((r && r.error) || "No se pudo asignar", 1); b.disabled = false; return; }
+            toast2("Abono de $" + monto.toFixed(2) + " asignado a " + (r.hacia_clave || hacia));
+            if (onDone) onDone(r);
+          } catch (x) { toast2((x && x.message) || "No se pudo asignar", 1); b.disabled = false; }
+        };
+      });
+      (root || document).querySelectorAll("[data-abono-quitar]").forEach(function (b) {
+        if (b._abQ) return; b._abQ = 1;
+        b.onclick = async function (ev) {
+          ev.preventDefault(); ev.stopPropagation();
+          if (!confirm("¿Retirar este abono?")) return;
+          var r = await api("tk_voucher_abono", { clave: b.getAttribute("data-abono-clave"), url: b.getAttribute("data-abono-quitar"), hacia_clave: b.getAttribute("data-abono-hacia"), quitar: true });
+          if (!r || r.error) { toast2((r && r.error) || "No se pudo retirar", 1); return; }
+          toast2("Abono retirado");
+          if (onDone) onDone(r);
         };
       });
     },
