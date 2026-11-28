@@ -383,7 +383,7 @@ window.PROVS=PROVS; window.EXTRAS=EXTRAS; window.PAQ3=PAQ3; window.PAQ6=PAQ6;
 
 // ══════ STATE ══════
 let CU=null, pinInput='', selUID=null;
-function newT(){return{lineDesc:{},fotosAntes:[],fotosDespues:[],esSunsu:false,tipoIdentificacion:'cedula',cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',gcAplica:0,gcSaldo:0,_gcUsado:0,_gcDif:0,_gcFacial:'',_gcEtiqueta:'',justificacionDescuento:'',justificacionMotivo:'',justificacionOtra:'',usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',paq2gcSlots:[],paq2gcSlots3:[],paq2gcSlots6:[],paq2gcN:0,extras:{},extrasCourtesy:{},extrasCourtesyReason:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,caja:false,codigo:'',nota:'',cortesia:false},descuento:{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}};}
+function newT(){return{lineDesc:{},fotosAntes:[],fotosDespues:[],esSunsu:false,tipoIdentificacion:'cedula',cedula:'',nombre:'',apellido:'',factura:'',fechaRet:'',estado:'',recom:'',notas:'',facial:null,cobro:null,canjeOtro:false,notaCanje:'',codigoGC:'',gcAplica:0,gcSaldo:0,_gcUsado:0,_gcDif:0,_gcFacial:'',_gcEtiqueta:'',justificacionDescuento:'',justificacionMotivo:'',justificacionOtra:'',gcPagoLinea:null,usoPaq:'',pack3:null,pack6:null,paq2gc:false,paq2gcNota:'',paq2gcSlots:[],paq2gcSlots3:[],paq2gcSlots6:[],paq2gcN:0,extras:{},extrasCourtesy:{},extrasCourtesyReason:{},otroExtra:'',productos:{},gcVenta:{activo:false,tipo:'digital',valor:65,caja:false,codigo:'',nota:'',cortesia:false},descuento:{tipo:null,pct:0,custom:0,customMode:'valor',customPct:0,customTarget:'Total'}};}
 let T=newT();
 let GC={tipo:'digital',valor:65,caja:false,nota:'',codigo:'',nombre:'',apellido:'',cedula:''};
 
@@ -1795,6 +1795,10 @@ function _paqPintarHintCobro(){
     html='<div class="cobro-pack-hint ok">Vendiste un paquete en este ticket. El facial queda en $0 como canje (sesión 1 del paquete nuevo), para no cobrar el facial y el paquete a la vez. Si la clienta ya tiene un paquete activo, puedes elegir ese abajo.</div>';
   } else if(T.facial && T.cobro==='cobrado'){
     html='<div class="cobro-pack-hint warn">⚠️ El facial está en «Se cobra» y también vendes un paquete: el total suma los dos y puede no cuadrar con la factura de Migo. <button type="button" class="cobro-pack-switch" onclick="T._cobroPackManual=false;if(typeof _paqSetCobroPaquete===\'function\')_paqSetCobroPaquete();">Tocar «Paquete» — facial $0, sesión 1</button></div>';
+  } else if(T.facial && T.gcPagoLinea && typeof _gcLineaEsPack==='function' && _gcLineaEsPack(T.gcPagoLinea.sku)){
+    html='<div class="cobro-pack-hint ok">La gift card se cruza con el paquete (la clienta paga menos). El facial queda como sesión 1, en $0 — no se cobra aparte.</div>';
+  } else if(T.facial && T.cobro==='giftcard' && typeof _paqHayVenta==='function' && _paqHayVenta()){
+    html='<div class="cobro-pack-hint warn">⚠️ La gift card está aplicada al facial, no al paquete. Si quieres cruzarla con el paquete y dejar el facial como sesión 1 ($0), pulsa «Aplicar gift card» en la línea del paquete.</div>';
   } else if(!T.facial){
     html='<div class="cobro-pack-hint info">Si hoy usas la 1.ª sesión del paquete que vendes, elige el facial y cobra como «Paquete» (facial $0). Si dejas «Se cobra», se sumaría el facial al paquete.</div>';
   }
@@ -2687,6 +2691,154 @@ function _promoBeta(){
     T._promoSigAuto=''; _promoBetaAuto();
   }});
 }
+function _gcLineaEsPack(sku){
+  var L=typeof _ldLineas==='function'?_ldLineas():[];
+  var l=L.find(function(x){return x.k===sku;});
+  return !!(l&&l.b==='pack');
+}
+function _gcBuscarCodigo(q){
+  q=String(q||'').trim();
+  if(q.length<3) return Promise.resolve(null);
+  var call=(typeof api==='function'?api:(typeof window.api==='function'?window.api:null));
+  var p=call?Promise.resolve(call('buscarGiftCards',{q:q})):Promise.reject(new Error('sin api'));
+  function pick(d){
+    var lista=(d&&d.resultados)||[];
+    var low=q.toLowerCase();
+    return lista.find(function(x){return String(x.codigo).toLowerCase()===low;})||lista[0]||null;
+  }
+  return p.then(pick).catch(function(){
+    if(typeof APPS_SCRIPT_URL==='undefined'||!APPS_SCRIPT_URL) return null;
+    return fetch(APPS_SCRIPT_URL+'?action=buscarGiftCards&q='+encodeURIComponent(q))
+      .then(function(r){return r.json();})
+      .then(pick)
+      .catch(function(){return null;});
+  });
+}
+function _gcCruzarCerrar(){
+  var ov=document.getElementById('gc-cruzar-ov'); if(ov) ov.remove();
+}
+function _gcCruzarQuitar(sku){
+  T.lineDesc=T.lineDesc||{};
+  if(sku&&T.lineDesc[sku]&&T.lineDesc[sku].gc) delete T.lineDesc[sku];
+  if(!sku){
+    Object.keys(T.lineDesc).forEach(function(k){ if(T.lineDesc[k]&&T.lineDesc[k].gc) delete T.lineDesc[k]; });
+  }
+  T.gcPagoLinea=null; T.codigoGC=''; T.gcAplica=0; T.gcSaldo=0; T._gcLookup=false; T._gcEtiqueta='';
+  if(typeof _ldSig!=='undefined') _ldSig='';
+  if(typeof updatePreview==='function') updatePreview();
+  toast('Gift card quitada de la línea','#C9A227');
+}
+function _gcCruzarAplicar(sku,codigo,monto,etiqueta){
+  monto=Math.round(Number(monto)*100)/100;
+  if(!(monto>0)){ toast('Indica el monto a cruzar','#B86B6B'); return false; }
+  T.lineDesc=T.lineDesc||{};
+  Object.keys(T.lineDesc).forEach(function(k){ if(T.lineDesc[k]&&T.lineDesc[k].gc) delete T.lineDesc[k]; });
+  T.lineDesc[sku]={m:'$',v:monto,promo:'Gift card '+codigo+(etiqueta?(' · '+etiqueta):''),gc:true};
+  T.codigoGC=codigo;
+  T.gcAplica=monto;
+  T.gcPagoLinea={sku:sku,codigo:codigo,monto:monto};
+  if(!String(T.justificacionDescuento||'').trim()) T.justificacionDescuento='Gift card '+codigo+' cruzada con la línea';
+  var linea=(typeof _ldLineas==='function'?_ldLineas():[]).find(function(l){return l.k===sku;});
+  if(linea&&linea.b==='pack'&&T.facial){
+    T._cobroPackManual=false;
+    if(typeof _paqSetCobroPaquete==='function') _paqSetCobroPaquete();
+  } else if(linea&&linea.b==='f'){
+    T.cobro='giftcard';
+    if(typeof _paqPintarCobroUI==='function') _paqPintarCobroUI();
+  }
+  if(typeof _ldSig!=='undefined') _ldSig='';
+  if(typeof updatePreview==='function') updatePreview();
+  toast('🎁 Gift card '+codigo+' cruzada: $'+monto.toFixed(2)+' en '+((linea&&linea.n)||'la línea'),'var(--green)');
+  return true;
+}
+function _gcCruzarElegir(){
+  if(T.esSunsu){ toast('Consumo interno: sin gift card','#C9A227'); return; }
+  var L=typeof _ldLineas==='function'?_ldLineas():[];
+  if(!L.length){ toast('Agrega un paquete, producto o servicio primero','#C9A227'); return; }
+  var pack=L.find(function(l){return l.b==='pack';});
+  if(L.length===1){ _gcCruzarAbrir(L[0].k); return; }
+  var prev=document.getElementById('gc-cruzar-ov'); if(prev) prev.remove();
+  var ov=document.createElement('div');
+  ov.id='gc-cruzar-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(58,53,48,0.45);z-index:320;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto';
+  ov.innerHTML='<div role="dialog" aria-label="Aplicar gift card" style="background:#fff;border-radius:16px;padding:18px;max-width:420px;width:100%;box-shadow:0 12px 40px rgba(58,53,48,.18);margin-top:8vh">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3 style="margin:0;font-size:1.05rem;color:var(--navy)">Aplicar gift card</h3>'+
+    '<button type="button" class="gc-cruzar-x" style="background:var(--gray-l);border:none;border-radius:50%;width:32px;height:32px;font-size:1.1rem;cursor:pointer">×</button></div>'+
+    '<p style="margin:8px 0 12px;font-size:.82rem;color:var(--gray)">¿Con qué línea quieres cruzar la gift card? El valor se descuenta de esa línea.</p>'+
+    L.map(function(l){ var sug=pack&&l.k===pack.k; return '<button type="button" class="gc-cruzar-pick" data-sku="'+_tkEsc(l.k)+'" style="display:block;width:100%;text-align:left;margin:0 0 8px;padding:12px 14px;min-height:44px;border:1.5px solid '+(sug?'#C9A227':'var(--cream-d)')+';background:'+(sug?'#fbf4e4':'#fff')+';border-radius:12px;font:inherit;font-weight:700;cursor:pointer">'+_tkEsc(l.n)+' · $'+(Math.round(l.g*100)/100).toFixed(2)+(sug?' · sugerido (paquete)':'')+'</button>'; }).join('')+
+    '<div style="display:flex;justify-content:flex-end"><button type="button" class="modal-btn cancel gc-cruzar-x">Cancelar</button></div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click',function(e){ if(e.target===ov) _gcCruzarCerrar(); });
+  ov.querySelectorAll('.gc-cruzar-x').forEach(function(b){ b.onclick=function(){ _gcCruzarCerrar(); }; });
+  ov.querySelectorAll('.gc-cruzar-pick').forEach(function(b){ b.onclick=function(){ _gcCruzarCerrar(); _gcCruzarAbrir(b.getAttribute('data-sku')); }; });
+}
+function _gcCruzarAbrir(sku){
+  if(T.esSunsu){ toast('Consumo interno: sin gift card','#C9A227'); return; }
+  var linea=(typeof _ldLineas==='function'?_ldLineas():[]).find(function(l){return l.k===sku;});
+  if(!linea){ toast('Elige una línea del ticket','#B86B6B'); return; }
+  if(T.gcPagoLinea&&T.gcPagoLinea.sku===sku){ _gcCruzarQuitar(sku); return; }
+  var prev=document.getElementById('gc-cruzar-ov'); if(prev) prev.remove();
+  var ov=document.createElement('div');
+  ov.id='gc-cruzar-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(58,53,48,0.45);z-index:320;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto';
+  var bruto=Math.round(linea.g*100)/100;
+  ov.innerHTML='<div role="dialog" aria-label="Cruzar con gift card" style="background:#fff;border-radius:16px;padding:18px;max-width:420px;width:100%;box-shadow:0 12px 40px rgba(58,53,48,.18);margin-top:8vh">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3 style="margin:0;font-size:1.05rem;color:var(--navy)">Aplicar gift card</h3>'+
+    '<button type="button" class="gc-cruzar-x" style="background:var(--gray-l);border:none;border-radius:50%;width:32px;height:32px;font-size:1.1rem;cursor:pointer">×</button></div>'+
+    '<p style="margin:8px 0 12px;font-size:.82rem;color:var(--gray)">Cruza el código con <b>'+_tkEsc(linea.n)+'</b> ($'+bruto.toFixed(2)+'). El valor de la gift se descuenta de esa línea (paquete, producto u otro). Si es el paquete de este ticket y hoy usan la 1.ª sesión, el facial queda en $0 — no se cobra aparte.</p>'+
+    '<label style="font-size:.75rem;font-weight:700;color:var(--navy)">Código de gift card</label>'+
+    '<input id="gc-cruzar-cod" type="text" autocomplete="off" placeholder="ej. 26-160" style="width:100%;margin:4px 0 8px;padding:10px 12px;min-height:44px;border:1.5px solid var(--cream-d);border-radius:10px;font:inherit">'+
+    '<div id="gc-cruzar-hint" style="display:none;font-size:.78rem;font-weight:700;margin:0 0 8px"></div>'+
+    '<label style="font-size:.75rem;font-weight:700;color:var(--navy)">Monto a cruzar</label>'+
+    '<input id="gc-cruzar-monto" type="number" inputmode="decimal" min="0" step="0.01" style="width:100%;margin:4px 0 14px;padding:10px 12px;min-height:44px;border:1.5px solid var(--cream-d);border-radius:10px;font:inherit">'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">'+
+      '<button type="button" class="modal-btn cancel gc-cruzar-x">Cancelar</button>'+
+      '<button type="button" id="gc-cruzar-ok" class="modal-btn primary" style="min-height:44px">Cruzar con gift card</button>'+
+    '</div></div>';
+  document.body.appendChild(ov);
+  var hint=document.getElementById('gc-cruzar-hint');
+  var inpC=document.getElementById('gc-cruzar-cod');
+  var inpM=document.getElementById('gc-cruzar-monto');
+  var hit=null;
+  function pintarHint(ok,txt){ if(!hint) return; hint.style.display=txt?'block':'none'; hint.style.color=ok?'var(--green)':'#B86B6B'; hint.textContent=txt||''; }
+  function buscar(){
+    var q=(inpC&&inpC.value||'').trim();
+    if(q.length<3){ hit=null; pintarHint(false,''); return; }
+    _gcBuscarCodigo(q).then(function(r){
+      if((inpC&&inpC.value||'').trim().toLowerCase()!==q.toLowerCase()) return;
+      hit=r;
+      if(!r){ pintarHint(false,'Gift card no encontrada'); return; }
+      if(r.usado){ pintarHint(false,'Esa gift card ya está usada'); hit=null; return; }
+      var saldo=Number(r.saldo); if(!isFinite(saldo)||saldo<0) saldo=0;
+      if(!(saldo>0)){ pintarHint(false,'Esa gift card no tiene saldo'); hit=null; return; }
+      var aplica=Math.min(saldo,bruto);
+      if(inpM&&document.activeElement!==inpM) inpM.value=aplica.toFixed(2);
+      pintarHint(true,(r.etiqueta||('Gift card '+r.codigo))+' · saldo $'+saldo.toFixed(2));
+    });
+  }
+  var tBus;
+  if(inpC){ inpC.addEventListener('input',function(){ clearTimeout(tBus); tBus=setTimeout(buscar,280); }); setTimeout(function(){ inpC.focus(); },50); }
+  ov.addEventListener('click',function(e){ if(e.target===ov) _gcCruzarCerrar(); });
+  ov.querySelectorAll('.gc-cruzar-x').forEach(function(b){ b.onclick=function(){ _gcCruzarCerrar(); }; });
+  var ok=document.getElementById('gc-cruzar-ok');
+  if(ok) ok.onclick=function(){
+    var codigo=(inpC&&inpC.value||'').trim();
+    var monto=Number(inpM&&inpM.value);
+    if(!codigo){ toast('Escribe el código de la gift card','#B86B6B'); return; }
+    function go(r){
+      if(!r){ toast('Gift card no encontrada','#B86B6B'); return; }
+      if(r.usado){ toast('Esa gift card ya está usada','#B86B6B'); return; }
+      var saldo=Number(r.saldo); if(!isFinite(saldo)||saldo<0) saldo=0;
+      if(!(saldo>0)){ toast('Esa gift card no tiene saldo','#B86B6B'); return; }
+      if(!(monto>0)) monto=Math.min(saldo,bruto);
+      if(monto-saldo>0.009){ toast('El saldo de la gift es $'+saldo.toFixed(2),'#B86B6B'); return; }
+      if(monto-bruto>0.009){ toast('El monto no puede ser mayor a la línea ($'+bruto.toFixed(2)+')','#B86B6B'); return; }
+      if(_gcCruzarAplicar(sku,r.codigo||codigo,monto,r.etiqueta||'')) _gcCruzarCerrar();
+    }
+    if(hit&&String(hit.codigo).toLowerCase()===codigo.toLowerCase()) go(hit);
+    else _gcBuscarCodigo(codigo).then(go);
+  };
+}
 function _ldRender(){
   var box=document.getElementById('ld-card'); if(!box) return;
   var L=T.esSunsu?[]:_ldLineas();
@@ -2696,18 +2848,26 @@ function _ldRender(){
   var sig=L.map(function(l){return l.k+':'+l.g;}).join('|');
   if(sig!==_ldSig){
     _ldSig=sig;
-    box.innerHTML='<div class="ld-h" style="display:flow-root">🏷️ Descuento por línea <small>opcional · escribe 10% o 5 ($)</small> <button type="button" onclick="_promoBeta()" style="float:right;border:1.5px solid #C9A227;background:#fbf4e4;color:#7a5c12;border-radius:9px;padding:4px 10px;font:inherit;font-size:.72rem;font-weight:800;cursor:pointer">🏷️ Promociones</button></div>'+
+    box.innerHTML='<div class="ld-h" style="display:flow-root">🏷️ Descuento por línea <small>opcional · escribe 10% o 5 ($)</small> <span style="float:right;display:flex;gap:6px;flex-wrap:wrap">'+
+      '<button type="button" onclick="_gcCruzarElegir()" style="border:1.5px solid #7A5FA0;background:#f4f0fb;color:#5a4478;border-radius:9px;padding:6px 10px;min-height:44px;font:inherit;font-size:.72rem;font-weight:800;cursor:pointer">🎁 Aplicar gift card</button>'+
+      '<button type="button" onclick="_promoBeta()" style="border:1.5px solid #C9A227;background:#fbf4e4;color:#7a5c12;border-radius:9px;padding:6px 10px;min-height:44px;font:inherit;font-size:.72rem;font-weight:800;cursor:pointer">🏷️ Promociones</button></span></div>'+
       L.map(function(l){
         var _pmL=T.lineDesc[l.k]&&T.lineDesc[l.k].promo;
-        return '<div class="ld-row" data-k="'+_tkEsc(l.k)+'"><span class="ld-n">'+l.e+' '+_tkEsc(l.n)+(_pmL?'<br><small style="color:#8A6D1F;font-weight:700" title="'+_tkEsc(_pmL)+'">🏷️ '+_tkEsc(String(_pmL).split(' · ')[0])+'</small>':'')+'</span><span class="ld-g">'+$(l.g)+'</span>'+
-          '<span class="ld-in"><input type="text" inputmode="decimal" placeholder="—" value="'+_tkEsc(_ldTxt(T.lineDesc[l.k]))+'" data-ld="'+_tkEsc(l.k)+'"></span><span class="ld-net" data-net="'+_tkEsc(l.k)+'"></span></div>';
+        var _esGc=T.lineDesc[l.k]&&T.lineDesc[l.k].gc;
+        return '<div class="ld-row" data-k="'+_tkEsc(l.k)+'"><span class="ld-n">'+l.e+' '+_tkEsc(l.n)+(_pmL?'<br><small style="color:#8A6D1F;font-weight:700" title="'+_tkEsc(_pmL)+'">'+(_esGc?'🎁 ':'🏷️ ')+_tkEsc(String(_pmL).split(' · ')[0])+'</small>':'')+'</span><span class="ld-g">'+$(l.g)+'</span>'+
+          '<span class="ld-in"><input type="text" inputmode="decimal" placeholder="—" value="'+_tkEsc(_ldTxt(T.lineDesc[l.k]))+'" data-ld="'+_tkEsc(l.k)+'"></span>'+
+          '<button type="button" class="ld-gc" data-gc-sku="'+_tkEsc(l.k)+'" style="border:1.5px solid #7A5FA0;background:'+(_esGc?'#efe8f8':'#f4f0fb')+';color:#5a4478;border-radius:9px;padding:6px 8px;min-height:44px;font:inherit;font-size:.68rem;font-weight:800;cursor:pointer;white-space:nowrap">'+(_esGc?'Quitar gift':'Cruzar con gift card')+'</button>'+
+          '<span class="ld-net" data-net="'+_tkEsc(l.k)+'"></span></div>';
       }).join('');
     box.querySelectorAll('[data-ld]').forEach(function(inp){
       inp.oninput=function(){
         var k=inp.getAttribute('data-ld'), d=_ldParse(inp.value);
-        if(d) T.lineDesc[k]=d; else delete T.lineDesc[k];
+        if(d){ if(T.lineDesc[k]&&T.lineDesc[k].gc) d.gc=true; T.lineDesc[k]=d; } else delete T.lineDesc[k];
         updatePreview();
       };
+    });
+    box.querySelectorAll('[data-gc-sku]').forEach(function(btn){
+      btn.onclick=function(){ _gcCruzarAbrir(btn.getAttribute('data-gc-sku')); };
     });
   }
   L.forEach(function(l){
@@ -3362,8 +3522,9 @@ function enviarTicket(){
   const _fac=FACIALES.find(f=>f.sku===T.facial)||{sku:'',n:''};
   const facialTxt=T.facial?(_fac.sku+' '+_fac.n).trim():'';
 
-  // Col Q: Canje de paquete — SOLO cuando el facial se cobra con paquete
-  // Formato: "SI, 1/3, nota"
+  // Col Q: canje de paquete cuando el facial se cobra con paquete, O cuando
+  // confirmaron una sesión (paquete nuevo o activo) aunque la gift se cruce
+  // con el paquete u otra línea (TK2002). Formato: "SI, 1/3, nota"
   let colQ='';
   if(T.cobro==='paquete'){
     colQ='SI';
@@ -3371,14 +3532,18 @@ function enviarTicket(){
     if(T.canjeOtro&&T.notaCanje) colQ+=', '+T.notaCanje;
   } else if(T.cobro==='cortesia'){
     colQ='CORTESIA';
+  } else if(T.paqConfirmado&&T.paqPick&&T.paqPick.fila&&T.paqPick.fila!=='luego'&&T.usoPaq){
+    // Gift cruzada con el paquete + sesión 1 del pack nuevo: no dejar col Q vacía
+    colQ='SI, '+T.usoPaq;
   }
-  // Si compran paquete nuevo pero NO lo usan para cobrar el facial → col Q vacía, solo va en U/V
+  // Si compran paquete nuevo pero NO lo usan hoy (sin sesión confirmada) → col Q vacía, solo va en U/V
 
-  // Col R: Gift Card canje (cobran facial con GC) O conversión de sesiones a GC
+  // Col R: Gift Card canje (facial con GC), gift cruzada con una línea, O conversión de sesiones a GC
   let colR='';
-  if(T.cobro==='giftcard'){
-    var _usaGc=Number(T._gcUsado)||Number(T.gcAplica)||0;
-    colR='SI'+(T.codigoGC?', '+T.codigoGC:'')+(_usaGc>0?', aplica '+_usaGc.toFixed(2):'');
+  if(T.cobro==='giftcard'||T.gcPagoLinea){
+    var _usaGc=Number(T._gcUsado)||Number(T.gcAplica)||(T.gcPagoLinea&&Number(T.gcPagoLinea.monto))||0;
+    var _codGc=(T.codigoGC||(T.gcPagoLinea&&T.gcPagoLinea.codigo)||'').trim();
+    colR='SI'+(_codGc?', '+_codGc:'')+(_usaGc>0?', aplica '+_usaGc.toFixed(2):'');
   } else if(T.paq2gc && (T.paq2gcSlots3&&T.paq2gcSlots3.length || T.paq2gcSlots6&&T.paq2gcSlots6.length)){
     var _allSlots=(T.paq2gcSlots3||[]).concat(T.paq2gcSlots6||[]);
     var _gcCodes=_allSlots.filter(function(s){return s&&s.codigo;}).map(function(s){return s.codigo+(s.tipo==='fisica'?'[F]':'');});
@@ -3536,7 +3701,8 @@ function enviarTicket(){
     tienePaquete:   !!(T.pack3||T.pack6),
     facial:         facialTxt,
     facialPrecio:   (FACIALES.find(f=>f.sku===T.facial)||{p:0}).p,
-    gcAplica:       T.cobro==='giftcard'?(Number(T._gcUsado)||Number(T.gcAplica)||0):0,
+    gcAplica:       (T.cobro==='giftcard'||T.gcPagoLinea)?(Number(T._gcUsado)||Number(T.gcAplica)||(T.gcPagoLinea&&Number(T.gcPagoLinea.monto))||0):0,
+    gcPagoLinea:    T.gcPagoLinea||null,
     pack3:          pack3Txt,
     pack6:          pack6Txt,
     extras:         extrasTexto,
@@ -3738,13 +3904,13 @@ function enviarTicket(){
     var _gcEsDigital=_gcVendida&&_gcV.tipo!=='fisica';
     var _gcPre={codigo:(_gcV&&_gcV.codigo)||'', de:((payload.nombre||'')+' '+(payload.apellido||'')).trim()};
     // Canjes: datos capturados ANTES de resetear el ticket
-    var _cobro=T.cobro, _codGC=(T.codigoGC||'').trim(), _paqPick=T.paqPick||null;
+    var _cobro=T.cobro, _codGC=(T.codigoGC||(T.gcPagoLinea&&T.gcPagoLinea.codigo)||'').trim(), _paqPick=T.paqPick||null, _gcPago=T.gcPagoLinea||null;
     var _cedCli=payload.cedula||'', _cliNom=((payload.nombre||'')+' '+(payload.apellido||'')).trim();
     if(typeof _ticketNuevoEnBlanco==='function') _ticketNuevoEnBlanco(); else T=newT();
     // ── Canje con GIFT CARD: marcarla usada automáticamente por su código ──
-    if(_cobro==='giftcard'&&_codGC&&d&&d.gc&&d.gc.ok){
+    if((_cobro==='giftcard'||_gcPago)&&_codGC&&d&&d.gc&&d.gc.ok){
       toast('🎁 GC '+_codGC+' · aplicado $'+Number(d.gc.aplicado||0).toFixed(2)+' · saldo $'+Number(d.gc.saldo||0).toFixed(2),'var(--green)');
-    } else if(_cobro==='giftcard'&&_codGC){
+    } else if((_cobro==='giftcard'||_gcPago)&&_codGC){
       var _pd=function(n){return String(n).padStart(2,'0');};
       var _hd=new Date();
       var _fUso=_pd(_hd.getDate())+'/'+_pd(_hd.getMonth()+1)+'/'+String(_hd.getFullYear()).slice(2)+' '+(facialTxt||'facial')+' · '+(CU?CU.name:'—');
@@ -3773,11 +3939,13 @@ function enviarTicket(){
     // Redirección pendiente (canjes) para DESPUÉS de terminar la cola
     window._gcdPostCola=null;
     var _cosmeT=payload.cosmetologa||(CU?CU.name:'');
-    if(_packsNuevos.length && !(_cobro==='paquete'&&_paqPick&&_paqPick.fila&&_paqPick.fila!=='nuevo')) _ofrecerPrimeraSesion(_packsNuevos, _cedCli, _facialNombre, (d&&(d.ticket||d.beta_num))||'', _cliNom, _cosmeT);
+    if(_paqPick&&_paqPick.fila==='nuevo'&&d&&d.uso_paquete&&d.uso_paquete.ok){
+      toast('📦 Sesión 1/'+(_paqPick.total||'')+' descargada en el paquete nuevo','var(--green)');
+    } else if(_packsNuevos.length && !(_paqPick&&_paqPick.fila==='nuevo')) _ofrecerPrimeraSesion(_packsNuevos, _cedCli, _facialNombre, (d&&(d.ticket||d.beta_num))||'', _cliNom, _cosmeT);
     // Canje contra un paquete ELEGIDO en el ticket: se marca su siguiente sesión sola.
     if(_cobro==='paquete'&&_paqPick&&_paqPick.fila==='luego'){
       window._gcdPostCola={tab:'buscar-paquetes', prefill:_cedCli||_cliNom, prefVar:'_paqPrefill', toastMsg:'📋 Marca la sesión usada en el paquete correcto de '+(_cliNom||'la clienta'), color:'#7A5FA0'};
-    } else if(_cobro==='paquete'&&_paqPick&&_paqPick.fila!=='nuevo'){
+    } else if(_paqPick&&_paqPick.fila&&_paqPick.fila!=='nuevo'&&_paqPick.fila!=='luego'&&(_cobro==='paquete'||_gcPago)){
       if(d&&d.uso_paquete&&d.uso_paquete.ok){
         toast('📦 Sesión '+(_paqPick.idx+1)+'/'+_paqPick.total+' descargada en '+(_paqPick.nombre||'el paquete'),'var(--green)');
       } else {
