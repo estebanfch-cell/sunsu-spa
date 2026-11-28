@@ -15,7 +15,7 @@ import {
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const file = (p: string) => readFileSync(join(root, p), "utf8");
-const CACHE = "sunsu-2026-11-27-VOUCHER";
+const CACHE = "sunsu-2026-11-27-TK2002GC";
 
 function ctx(db: MemoryDb, rol = "admin", uid = "emi", name = "Emi") {
   const token = "t-" + uid;

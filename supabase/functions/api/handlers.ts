@@ -1001,12 +1001,16 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   let gcAplicada: R | null = null;
   if (s(p.colR)) {
     const { consumirGiftAlCrear } = await import("./ventas_api.ts");
-    gcAplicada = await consumirGiftAlCrear(ctx, ses, s(p.colR), identRef, s(p.nombre), n(p.facialPrecio), s(p.facial));
+    const pagoLinea = p.gcPagoLinea && typeof p.gcPagoLinea === "object" ? p.gcPagoLinea as R : null;
+    const giftSobreFacial = !pagoLinea || !s(pagoLinea.sku) || s(pagoLinea.sku) === s(p.facial);
+    // TK2002: si la gift se cruza con el paquete u otra línea, no la capamos ni ajustamos como si fuera el facial.
+    gcAplicada = await consumirGiftAlCrear(ctx, ses, s(p.colR), identRef, s(p.nombre), giftSobreFacial ? n(p.facialPrecio) : 0, s(p.facial));
     if (gcAplicada && gcAplicada.error && /alcanza|saldo|aplica|cubre|especif/i.test(s(gcAplicada.error))) return gcAplicada;
     if (gcAplicada && gcAplicada.ok) {
       (base.orig as R).gc_aplica = gcAplicada.aplicado;
       (base.orig as R).gc_facial_cobro = gcAplicada.facialCobro;
-      if (n(gcAplicada.facialCobro) === 0 && n(p.facialPrecio) > 0) {
+      if (pagoLinea && s(pagoLinea.sku)) (base.orig as R).gc_pago_linea = { sku: s(pagoLinea.sku), codigo: s(pagoLinea.codigo), monto: n(pagoLinea.monto) };
+      if (giftSobreFacial && n(gcAplicada.facialCobro) === 0 && n(p.facialPrecio) > 0) {
         base.estimado = Math.max(0, Math.round((n(p.estimado) - n(p.facialPrecio) + n(p.gcAplica)) * 100) / 100);
       }
     }
@@ -1034,6 +1038,17 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   base.so_num = soNum;
   const errGc = await validarVentaGift(ctx, p);
   if (errGc) return { error: errGc };
+  // TK2002: si confirmaron una sesión (pack nuevo o activo) y colQ llegó vacío
+  // (p.ej. gift cruzada con el paquete, cobro distinto de «paquete»), no dejar `paquete` vacío
+  // o el facial se cobra como línea aparte.
+  if (!s(base.paquete)) {
+    const pickQ = p.paqPick && typeof p.paqPick === "object" ? p.paqPick as R : null;
+    if (pickQ && s(pickQ.fila) && s(pickQ.fila) !== "luego") {
+      const tot = n(pickQ.total) || (s(p.pack6) ? 6 : s(p.pack3) ? 3 : 0);
+      const idx = pickQ.idx != null && pickQ.idx !== "" ? n(pickQ.idx) : 0;
+      if (tot > 0) base.paquete = "SI, " + (idx + 1) + "/" + tot;
+    }
+  }
   const saved = await ctx.db.write(actor, "tickets", "insert", {}, base);
   const ticket = ident.beta_num;
   let ventaGc: { hechos: R[]; errores: string[] } = { hechos: [], errores: [] };
@@ -1096,12 +1111,15 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
   // TK141: si la chica eligió paquete + sesión en el formulario, se descarga exactamente esa sesión (no la «siguiente libre»).
   try {
     const pick = p.paqPick && typeof p.paqPick === "object" ? p.paqPick as R : null;
-    if (pick && pick.fila && pick.fila !== "luego" && pick.fila !== "nuevo" && (pick.idx != null && pick.idx !== "")) {
-      const { aplicarUsoExplicit } = await import("./ticket_edicion_api.ts");
-      const cosm = s(base.atendido_por) || actor;
-      const facial = s(p.facial);
-      const nota = (fAt.tarde ? fAt.fecha : ecuadorParts(ctx.now).ymd).split("-").reverse().map((x, i) => i === 2 ? x.slice(-2) : x).join("/") + " " + (facial || "Facial") + " · " + cosm;
-      out.uso_paquete = await aplicarUsoExplicit(ctx, actor, { fila: pick.fila, idx: pick.idx, ticket: soNum || ticket, nota, cosm });
+    if (pick && pick.fila && pick.fila !== "luego" && (pick.idx != null && pick.idx !== "")) {
+      const filaUso = s(pick.fila) === "nuevo" ? paqueteFila : pick.fila;
+      if (filaUso) {
+        const { aplicarUsoExplicit } = await import("./ticket_edicion_api.ts");
+        const cosm = s(base.atendido_por) || actor;
+        const facial = s(p.facial);
+        const nota = (fAt.tarde ? fAt.fecha : ecuadorParts(ctx.now).ymd).split("-").reverse().map((x, i) => i === 2 ? x.slice(-2) : x).join("/") + " " + (facial || "Facial") + " · " + cosm;
+        out.uso_paquete = await aplicarUsoExplicit(ctx, actor, { fila: filaUso, idx: pick.idx, ticket: soNum || ticket, nota, cosm });
+      }
     }
   } catch { /* el ticket ya quedó */ }
   // TK139: «¡plac!» — cuadre al instante y la factura sale de Borradores.
