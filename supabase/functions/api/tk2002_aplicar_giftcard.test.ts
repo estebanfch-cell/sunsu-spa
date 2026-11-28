@@ -8,7 +8,7 @@ const html = readFileSync(new URL("index.html", root), "utf8");
 const sw = readFileSync(new URL("sw.js", root), "utf8");
 const handlers = readFileSync(new URL("supabase/functions/api/handlers.ts", root), "utf8");
 
-const CACHE = "sunsu-2026-11-27-TK2002GC";
+const CACHE = "sunsu-2026-11-27-GCVALOR";
 
 describe("TK2002 · aplicar / cruzar gift card en la creación del ticket", () => {
   it("hay un botón claro «Aplicar gift card» y «Cruzar con gift card» por línea", () => {
@@ -29,7 +29,7 @@ describe("TK2002 · aplicar / cruzar gift card en la creación del ticket", () =
   });
 
   it("la gift se puede cruzar con el paquete o cualquier otra línea (por código)", () => {
-    assert.match(js, /T\.gcPagoLinea=\{sku:sku,codigo:codigo,monto:monto\}/);
+    assert.match(js, /T\.gcPagoLinea=\{sku:sku,codigo:codigo,monto:monto,valor:/);
     assert.match(js, /promo:'Gift card '/);
     assert.match(js, /Cruza el código con/);
     assert.match(js, /paquete, producto u otro/);
@@ -74,6 +74,55 @@ describe("TK2002 · aplicar / cruzar gift card en la creación del ticket", () =
     const enSw = (sw.match(/const CACHE = "([^"]+)"/) || [])[1];
     assert.equal(enHtml, CACHE);
     assert.equal(enSw, CACHE);
-    assert.match(html, /beta-screens\.js\?v=20261127tk2002gc/);
+    assert.match(html, /beta-screens\.js\?v=20261127gcvalor/);
+  });
+});
+
+describe("TK2002 · valor Automático o Manual al cruzar la gift", () => {
+  it("el formulario tiene el toggle «Valor: Automático / Manual» y un monto", () => {
+    assert.match(js, /function _gcSaldoConocido\(/);
+    assert.match(js, /function _gcSinValorRegistrado\(/);
+    assert.match(js, />Valor:</);
+    assert.match(js, /id="gc-val-auto"/);
+    assert.match(js, />Automático</);
+    assert.match(js, /id="gc-val-manual"/);
+    assert.match(js, />Manual</);
+    assert.match(js, /id="gc-cruzar-monto"/);
+    assert.match(js, /Manual es para cuando la gift viene con otro valor/);
+    assert.match(js, /Esta gift no tiene un valor registrado. Elige Manual y escribe el monto/);
+    assert.match(js, /El monto no puede ser mayor al saldo restante/);
+    const ui = js.slice(js.indexOf("function _gcCruzarAbrir"), js.indexOf("function _ldRender"));
+    assert.doesNotMatch(ui, /ligar/i);
+  });
+
+  it("guarda el monto aplicado y si fue automático o manual", () => {
+    assert.match(js, /T\.gcPagoLinea=\{sku:sku,codigo:codigo,monto:monto,valor:Math\.round\(Number\(valor!=null\?valor:monto\)\*100\)\/100,modo:modo==='manual'\?'manual':'automatico'\}/);
+    assert.match(handlers, /modo: s\(pagoLinea\.modo\) === "manual" \? "manual" : "automatico"/);
+    assert.match(handlers, /n\(pagoLinea && pagoLinea\.valor\) > 0 \? n\(pagoLinea\.valor\)/);
+  });
+
+  it("si no hay valor registrado, el backend acepta el monto Manual y no inventa un saldo", async () => {
+    const { MemoryDb } = await import("./db.ts");
+    const { aplicarGiftCard, infoSaldoGift } = await import("./ventas.ts");
+    const card = { sheet_row: 900, codigo_gc: "26-999", sku: "", valor: "Gift Card", saldo: null, usado: false, notas: "De: Ana. Para: Bea." };
+    assert.equal(infoSaldoGift(card, []).origen, "ninguno");
+    assert.equal(infoSaldoGift(card, []).saldo, 0);
+    const db = new MemoryDb({ catalogo: [], gift_cards: [card], log_acciones: [], gift_card_movimientos: [] });
+    const sin = await aplicarGiftCard(db, "Andrea Robles", {
+      codigo: "26-999", aplica: null, ticket: "TK-SO-2099", usadoPor: "Cristina", facialPrecio: 0,
+    });
+    assert.match(String(sin.error || ""), /valor registrado|monto a aplicar/i);
+    const r = await aplicarGiftCard(db, "Andrea Robles", {
+      codigo: "26-999", aplica: 50, valor: 80, ticket: "TK-SO-2099", usadoPor: "Cristina", facialPrecio: 0,
+    });
+    assert.equal(r.error, undefined, String(r.error || ""));
+    assert.equal(r.aplicado, 50);
+    assert.equal(r.saldo, 30);
+    const vacia = { sheet_row: 901, codigo_gc: "26-000", sku: "", valor: "Gift Card", saldo: 0, usado: false, notas: "SALDO:0.00" };
+    const db0 = new MemoryDb({ catalogo: [], gift_cards: [vacia], log_acciones: [], gift_card_movimientos: [] });
+    const no = await aplicarGiftCard(db0, "Andrea Robles", {
+      codigo: "26-000", aplica: 20, valor: 20, ticket: "TK-SO-2100", usadoPor: "Cristina", facialPrecio: 0,
+    });
+    assert.match(String(no.error || ""), /no tiene saldo|ya está usada/i);
   });
 });

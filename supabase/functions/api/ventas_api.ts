@@ -202,11 +202,12 @@ extend("oc_consignacion", "any", async (p, ctx, ses) => {
   return { ...saved, snap, qLabel: draft.qLabel };
 });
 
-export async function consumirGiftAlCrear(ctx: Ctx, ses: Ses, colR: string, ticket: string, usadoPor: string, facialPrecio: number, facialNombre = ""): Promise<Row | null> {
+export async function consumirGiftAlCrear(ctx: Ctx, ses: Ses, colR: string, ticket: string, usadoPor: string, facialPrecio: number, facialNombre = "", valorGift: number | null = null): Promise<Row | null> {
   const { parseGcCanje } = await import("./ventas.ts");
   const gc = parseGcCanje(colR);
   if (!gc || !gc.codigo) return null;
   return aplicarGiftCard(ctx.db, actorOf(ses), {
     codigo: gc.codigo, aplica: gc.aplica, ticket, usadoPor, facialPrecio, now: ctx.now, facialNombre,
+    valor: valorGift != null && valorGift > 0 ? valorGift : null,
   });
 }

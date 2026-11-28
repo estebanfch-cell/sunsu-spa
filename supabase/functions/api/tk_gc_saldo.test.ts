@@ -91,15 +91,18 @@ describe("aplicarGiftCard · canje de una SUNSU-35 virgen (caso Daniela)", () =>
     const r = await aplicarGiftCard(db, "Daniela Mora", {
       codigo: "26-157", aplica: 65, ticket: "TK-SO-TEMP", usadoPor: "Daniela Mora", facialPrecio: 95,
     });
-    assert.equal(r.error, "Esa gift card no tiene saldo");
+    assert.equal(r.error, "Esa gift card ya está usada");
   });
 
-  it("sin el arreglo (sin catálogo) la misma gift virgen fallaba", async () => {
-    const db = new MemoryDb({ catalogo: [], gift_cards: [{ ...virgen }], log_acciones: [] });
+  it("sin catálogo, el monto indicado (Manual) sí se aplica", async () => {
+    const db = new MemoryDb({ catalogo: [], gift_cards: [{ ...virgen }], log_acciones: [], gift_card_movimientos: [] });
     const r = await aplicarGiftCard(db, "Daniela Mora", {
       codigo: "26-157", aplica: 65, ticket: "TK-SO-TEMP", usadoPor: "Daniela Mora", facialPrecio: 95,
     });
-    assert.equal(r.error, "Esa gift card no tiene saldo");
+    assert.equal(r.error, undefined, String(r.error || ""));
+    assert.equal(r.aplicado, 65);
+    assert.equal(r.facialCobro, 30);
+    assert.equal(r.saldo, 0);
   });
 });
 
