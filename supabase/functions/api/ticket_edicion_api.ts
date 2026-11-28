@@ -168,6 +168,23 @@ function notaSesion(facial: string, cosm: string, now: Date): string {
 }
 
 /** Marca exactamente la sesión elegida. No elige «la siguiente libre» por su cuenta. */
+/**
+ * Paquete al que apunta `fila` en un canje. Un número es SIEMPRE el sheet_row (así lo manda la pantalla);
+ * un texto tipo PACK-661 / PQ-0053 es solo el código. Nunca se cruza un número con `id`: en los paquetes
+ * importados sheet_row = id + 2, y el cruce marcaba la sesión en el paquete de otra clienta
+ * (TK-SO-2030 de Marisol cayó en PACK-663 de Emely, 27-nov-2026).
+ */
+export function paqueteDeFila(rows: Row[], fila: unknown): Row | null {
+  const t = s(fila).trim();
+  if (!t) return null;
+  if (/^-?\d+(\.0+)?$/.test(t)) {
+    const sr = Number(t);
+    return rows.find((x) => x.sheet_row != null && s(x.sheet_row) !== "" && Number(x.sheet_row) === sr) || null;
+  }
+  const cod = t.toUpperCase().replace(/^PACK(?!-)\s*/, "PACK-");
+  return rows.find((x) => [s(x.codigo), s(x.beta_codigo)].some((c) => c && c.toUpperCase() === cod)) || null;
+}
+
 export async function aplicarUsoExplicit(ctx: Ctx, actor: string, opts: {
   fila: unknown; idx: unknown; ticket: string; nota: string; cosm: string;
 }): Promise<Row> {
@@ -179,7 +196,7 @@ export async function aplicarUsoExplicit(ctx: Ctx, actor: string, opts: {
     else if (!(s(opts.fila))) return { error: "Falta el paquete" };
   }
   const rows = await ctx.db.all("paquetes").catch(() => [] as Row[]);
-  const row = rows.find((x) => n(x.sheet_row) === n(opts.fila) || s(x.codigo) === s(opts.fila) || s(x.beta_codigo) === s(opts.fila) || s(x.id) === s(opts.fila)) || null;
+  const row = paqueteDeFila(rows, opts.fila);
   if (!row || row.borrado_at) return { error: "Paquete no encontrado" };
   if (idx < 0 || idx > 5) return { error: "Elige una sesión del paquete" };
   const [u, f] = USO_FIELDS[idx];
