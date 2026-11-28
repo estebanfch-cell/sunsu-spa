@@ -19,7 +19,7 @@ import type { Row } from "./domain.ts";
 
 const root = new URL("../../../", import.meta.url);
 const file = (p: string) => readFileSync(new URL(p, root), "utf8");
-const CACHE = "sunsu-2026-11-27-VOUCHER";
+const CACHE = "sunsu-2026-11-27-TK2002GC";
 
 describe("TK227 cantidad de ampollas en líneas sintéticas", () => {
   it("qtyServicioAdicional lee los tipos tras el · (Ácido Ascórbico, PDRN, Hidratación = 3)", () => {
@@ -188,7 +188,7 @@ describe("TK227 API de abono entre tickets", () => {
     const och = tk.slice(tk.indexOf("Abono recibido"), tk.indexOf("Abono recibido") + 800);
     assert.doesNotMatch(och, /\bligar\b/i);
   });
-  it("caché PWA sunsu-2026-11-27-VOUCHER", () => {
+  it("caché PWA sunsu-2026-11-27-TK2002GC", () => {
     const html = file("index.html"), sw = file("sw.js");
     assert.match(html, new RegExp('window\\.SUNSU_CACHE = "' + CACHE + '"'));
     assert.match(sw, new RegExp('const CACHE = "' + CACHE + '"'));
