@@ -170,8 +170,8 @@ describe("TK223 · UI", () => {
     assert.match(html, /api\("voucher_alertas"/);
     assert.match(html, /asis_permiso_resolver[\s\S]{0,400}pintarBadgeNotif/);
     assert.match(html, /solicitud_resolver[\s\S]{0,250}pintarBadgeNotif/);
-assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-27-TK2002GC"/);
-    assert.match(sw, /const CACHE = "sunsu-2026-11-27-TK2002GC"/);
+assert.match(html, /window\.SUNSU_CACHE = "sunsu-2026-11-27-GCVALOR"/);
+    assert.match(sw, /const CACHE = "sunsu-2026-11-27-GCVALOR"/);
   });
 });
 

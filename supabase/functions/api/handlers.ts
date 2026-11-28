@@ -1004,12 +1004,12 @@ export async function crearTicket(p: R, ctx: Ctx, ses: Ses): Promise<R> {
     const pagoLinea = p.gcPagoLinea && typeof p.gcPagoLinea === "object" ? p.gcPagoLinea as R : null;
     const giftSobreFacial = !pagoLinea || !s(pagoLinea.sku) || s(pagoLinea.sku) === s(p.facial);
     // TK2002: si la gift se cruza con el paquete u otra línea, no la capamos ni ajustamos como si fuera el facial.
-    gcAplicada = await consumirGiftAlCrear(ctx, ses, s(p.colR), identRef, s(p.nombre), giftSobreFacial ? n(p.facialPrecio) : 0, s(p.facial));
+    gcAplicada = await consumirGiftAlCrear(ctx, ses, s(p.colR), identRef, s(p.nombre), giftSobreFacial ? n(p.facialPrecio) : 0, s(p.facial), n(pagoLinea && pagoLinea.valor) > 0 ? n(pagoLinea.valor) : null);
     if (gcAplicada && gcAplicada.error && /alcanza|saldo|aplica|cubre|especif/i.test(s(gcAplicada.error))) return gcAplicada;
     if (gcAplicada && gcAplicada.ok) {
       (base.orig as R).gc_aplica = gcAplicada.aplicado;
       (base.orig as R).gc_facial_cobro = gcAplicada.facialCobro;
-      if (pagoLinea && s(pagoLinea.sku)) (base.orig as R).gc_pago_linea = { sku: s(pagoLinea.sku), codigo: s(pagoLinea.codigo), monto: n(pagoLinea.monto) };
+      if (pagoLinea && s(pagoLinea.sku)) (base.orig as R).gc_pago_linea = { sku: s(pagoLinea.sku), codigo: s(pagoLinea.codigo), monto: n(pagoLinea.monto), valor: n(pagoLinea.valor) || n(pagoLinea.monto), modo: s(pagoLinea.modo) === "manual" ? "manual" : "automatico" };
       if (giftSobreFacial && n(gcAplicada.facialCobro) === 0 && n(p.facialPrecio) > 0) {
         base.estimado = Math.max(0, Math.round((n(p.estimado) - n(p.facialPrecio) + n(p.gcAplica)) * 100) / 100);
       }
