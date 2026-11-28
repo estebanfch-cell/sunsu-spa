@@ -444,7 +444,7 @@ export function notasConSaldo(prev: string, saldo: number): string {
 
 export async function aplicarGiftCard(db: Db, actor: string, p: {
   codigo: string; aplica: number | null; ticket: string; usadoPor: string; facialPrecio: number; now?: Date;
-  facialSku?: string; facialNombre?: string;
+  facialSku?: string; facialNombre?: string; valor?: number | null;
 }): Promise<Row> {
   const codigo = s(p.codigo).trim();
   if (!codigo) return { error: "Falta el código de la gift card" };
@@ -468,8 +468,15 @@ export async function aplicarGiftCard(db: Db, actor: string, p: {
   const aj = ajs.find((a) => String(a.gift_id) === String(row.id) || s(a.codigo).trim().toUpperCase() === codigo.toUpperCase());
   const extra = { facial: dig?.facial, servicio: aj?.servicio };
   const info = infoSaldoGift(row, cats, packs, extra);
-  const saldo = info.saldo;
-  if (!(saldo > 0)) return { error: "Esa gift card no tiene saldo" };
+  // TK2002: si no hay valor registrado (origen ninguno), se acepta el monto Manual.
+  let saldo = info.saldo;
+  if (!(saldo > 0) && info.origen === "ninguno") {
+    const declared = p.valor != null && n(p.valor) > 0 ? round2(n(p.valor)) : (p.aplica != null ? round2(p.aplica) : 0);
+    if (!(declared > 0)) return { error: "Esta gift no tiene un valor registrado. Indica el monto a aplicar." };
+    saldo = declared;
+  } else if (!(saldo > 0)) {
+    return { error: info.origen === "usado" || bUsado(row) ? "Esa gift card ya está usada" : "Esa gift card no tiene saldo" };
+  }
   let aplicado: number;
   let facialCobro: number;
   if (info.origen === "servicio") {

@@ -2714,6 +2714,21 @@ function _gcBuscarCodigo(q){
       .catch(function(){return null;});
   });
 }
+function _gcSaldoConocido(hit){
+  if(!hit||hit.usado) return 0;
+  var origen=String(hit.saldoOrigen||hit.origen||'');
+  if(origen==='ninguno'||origen==='usado') return 0;
+  var s=Number(hit.saldo);
+  return (isFinite(s)&&s>0)?Math.round(s*100)/100:0;
+}
+function _gcSinValorRegistrado(hit){
+  if(!hit||hit.usado) return false;
+  var origen=String(hit.saldoOrigen||hit.origen||'');
+  if(origen==='ninguno') return true;
+  if(origen==='usado'||origen==='saldo'||origen==='valor'||origen==='catalogo'||origen==='notas'||origen==='facial'||origen==='paquete'||origen==='servicio') return false;
+  var s=Number(hit.saldo);
+  return !(isFinite(s)&&s>0) && (hit.saldo==null||hit.saldo==='');
+}
 function _gcCruzarCerrar(){
   var ov=document.getElementById('gc-cruzar-ov'); if(ov) ov.remove();
 }
@@ -2728,7 +2743,7 @@ function _gcCruzarQuitar(sku){
   if(typeof updatePreview==='function') updatePreview();
   toast('Gift card quitada de la línea','#C9A227');
 }
-function _gcCruzarAplicar(sku,codigo,monto,etiqueta){
+function _gcCruzarAplicar(sku,codigo,monto,etiqueta,modo,valor){
   monto=Math.round(Number(monto)*100)/100;
   if(!(monto>0)){ toast('Indica el monto a cruzar','#B86B6B'); return false; }
   T.lineDesc=T.lineDesc||{};
@@ -2736,7 +2751,7 @@ function _gcCruzarAplicar(sku,codigo,monto,etiqueta){
   T.lineDesc[sku]={m:'$',v:monto,promo:'Gift card '+codigo+(etiqueta?(' · '+etiqueta):''),gc:true};
   T.codigoGC=codigo;
   T.gcAplica=monto;
-  T.gcPagoLinea={sku:sku,codigo:codigo,monto:monto};
+  T.gcPagoLinea={sku:sku,codigo:codigo,monto:monto,valor:Math.round(Number(valor!=null?valor:monto)*100)/100,modo:modo==='manual'?'manual':'automatico'};
   if(!String(T.justificacionDescuento||'').trim()) T.justificacionDescuento='Gift card '+codigo+' cruzada con la línea';
   var linea=(typeof _ldLineas==='function'?_ldLineas():[]).find(function(l){return l.k===sku;});
   if(linea&&linea.b==='pack'&&T.facial){
@@ -2782,58 +2797,114 @@ function _gcCruzarAbrir(sku){
   ov.id='gc-cruzar-ov';
   ov.style.cssText='position:fixed;inset:0;background:rgba(58,53,48,0.45);z-index:320;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto';
   var bruto=Math.round(linea.g*100)/100;
+  var btnEst=function(on){ return 'min-height:44px;padding:8px 14px;border-radius:10px;font:inherit;font-size:.78rem;font-weight:800;cursor:pointer;border:1.5px solid '+(on?'#7A5FA0':'var(--cream-d)')+';background:'+(on?'#efe8f8':'#fff')+';color:'+(on?'#5a4478':'var(--gray)'); };
   ov.innerHTML='<div role="dialog" aria-label="Cruzar con gift card" style="background:#fff;border-radius:16px;padding:18px;max-width:420px;width:100%;box-shadow:0 12px 40px rgba(58,53,48,.18);margin-top:8vh">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3 style="margin:0;font-size:1.05rem;color:var(--navy)">Aplicar gift card</h3>'+
     '<button type="button" class="gc-cruzar-x" style="background:var(--gray-l);border:none;border-radius:50%;width:32px;height:32px;font-size:1.1rem;cursor:pointer">×</button></div>'+
     '<p style="margin:8px 0 12px;font-size:.82rem;color:var(--gray)">Cruza el código con <b>'+_tkEsc(linea.n)+'</b> ($'+bruto.toFixed(2)+'). El valor de la gift se descuenta de esa línea (paquete, producto u otro). Si es el paquete de este ticket y hoy usan la 1.ª sesión, el facial queda en $0 — no se cobra aparte.</p>'+
     '<label style="font-size:.75rem;font-weight:700;color:var(--navy)">Código de gift card</label>'+
     '<input id="gc-cruzar-cod" type="text" autocomplete="off" placeholder="ej. 26-160" style="width:100%;margin:4px 0 8px;padding:10px 12px;min-height:44px;border:1.5px solid var(--cream-d);border-radius:10px;font:inherit">'+
-    '<div id="gc-cruzar-hint" style="display:none;font-size:.78rem;font-weight:700;margin:0 0 8px"></div>'+
-    '<label style="font-size:.75rem;font-weight:700;color:var(--navy)">Monto a cruzar</label>'+
-    '<input id="gc-cruzar-monto" type="number" inputmode="decimal" min="0" step="0.01" style="width:100%;margin:4px 0 14px;padding:10px 12px;min-height:44px;border:1.5px solid var(--cream-d);border-radius:10px;font:inherit">'+
+    '<div id="gc-cruzar-hint" style="display:none;font-size:.78rem;font-weight:700;margin:0 0 10px"></div>'+
+    '<div style="font-size:.75rem;font-weight:700;color:var(--navy);margin-bottom:6px">Valor:</div>'+
+    '<div id="gc-cruzar-modos" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'+
+      '<button type="button" id="gc-val-auto" data-modo="automatico" style="'+btnEst(true)+'">Automático</button>'+
+      '<button type="button" id="gc-val-manual" data-modo="manual" style="'+btnEst(false)+'">Manual</button>'+
+    '</div>'+
+    '<p id="gc-cruzar-valor-ayuda" style="margin:0 0 8px;font-size:.75rem;color:var(--gray)">Automático usa el saldo o el valor de catálogo. Manual es para cuando la gift viene con otro valor.</p>'+
+    '<label style="font-size:.75rem;font-weight:700;color:var(--navy)" for="gc-cruzar-monto">Monto a cruzar</label>'+
+    '<input id="gc-cruzar-monto" type="number" inputmode="decimal" min="0" step="0.01" style="width:100%;margin:4px 0 14px;padding:10px 12px;min-height:44px;border:1.5px solid var(--cream-d);border-radius:10px;font:inherit;background:#f7f5f2">'+
     '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">'+
       '<button type="button" class="modal-btn cancel gc-cruzar-x">Cancelar</button>'+
       '<button type="button" id="gc-cruzar-ok" class="modal-btn primary" style="min-height:44px">Cruzar con gift card</button>'+
     '</div></div>';
   document.body.appendChild(ov);
   var hint=document.getElementById('gc-cruzar-hint');
+  var ayuda=document.getElementById('gc-cruzar-valor-ayuda');
   var inpC=document.getElementById('gc-cruzar-cod');
   var inpM=document.getElementById('gc-cruzar-monto');
   var hit=null;
+  var modo='automatico';
   function pintarHint(ok,txt){ if(!hint) return; hint.style.display=txt?'block':'none'; hint.style.color=ok?'var(--green)':'#B86B6B'; hint.textContent=txt||''; }
+  function pintarModos(){
+    var auto=document.getElementById('gc-val-auto'), man=document.getElementById('gc-val-manual');
+    if(auto) auto.setAttribute('style', btnEst(modo==='automatico'));
+    if(man) man.setAttribute('style', btnEst(modo==='manual'));
+    if(inpM){
+      inpM.readOnly=modo==='automatico';
+      inpM.style.background=modo==='automatico'?'#f7f5f2':'#fff';
+    }
+    var saldo=_gcSaldoConocido(hit);
+    var sin=_gcSinValorRegistrado(hit);
+    if(ayuda){
+      if(sin) ayuda.textContent='Esta gift no tiene un valor registrado. Elige Manual y escribe el monto.';
+      else if(saldo>0&&modo==='automatico') ayuda.textContent='Automático: se usa el saldo registrado ($'+saldo.toFixed(2)+'), o el de la línea si es menor.';
+      else if(saldo>0) ayuda.textContent='Manual: escribe el valor. No puede ser mayor al saldo restante ($'+saldo.toFixed(2)+').';
+      else ayuda.textContent='Automático usa el saldo o el valor de catálogo. Manual es para cuando la gift viene con otro valor.';
+    }
+  }
+  function setModo(m,opts){
+    modo=m==='manual'?'manual':'automatico';
+    var saldo=_gcSaldoConocido(hit);
+    if(modo==='automatico'&&inpM){
+      inpM.value=saldo>0?Math.min(saldo,bruto).toFixed(2):'';
+    } else if(modo==='manual'&&inpM&&!(Number(inpM.value)>0)&&saldo>0&&!(opts&&opts.keep)){
+      inpM.value=Math.min(saldo,bruto).toFixed(2);
+    }
+    pintarModos();
+    if(modo==='manual'&&inpM&&!(opts&&opts.silent)) setTimeout(function(){ inpM.focus(); inpM.select&&inpM.select(); },30);
+  }
   function buscar(){
     var q=(inpC&&inpC.value||'').trim();
-    if(q.length<3){ hit=null; pintarHint(false,''); return; }
+    if(q.length<3){ hit=null; pintarHint(false,''); pintarModos(); return; }
     _gcBuscarCodigo(q).then(function(r){
       if((inpC&&inpC.value||'').trim().toLowerCase()!==q.toLowerCase()) return;
       hit=r;
-      if(!r){ pintarHint(false,'Gift card no encontrada'); return; }
-      if(r.usado){ pintarHint(false,'Esa gift card ya está usada'); hit=null; return; }
-      var saldo=Number(r.saldo); if(!isFinite(saldo)||saldo<0) saldo=0;
-      if(!(saldo>0)){ pintarHint(false,'Esa gift card no tiene saldo'); hit=null; return; }
-      var aplica=Math.min(saldo,bruto);
-      if(inpM&&document.activeElement!==inpM) inpM.value=aplica.toFixed(2);
+      if(!r){ pintarHint(false,'Gift card no encontrada'); pintarModos(); return; }
+      if(r.usado){ pintarHint(false,'Esa gift card ya está usada'); hit=null; pintarModos(); return; }
+      var saldo=_gcSaldoConocido(r);
+      var sin=_gcSinValorRegistrado(r);
+      if(sin){
+        pintarHint(true,(r.etiqueta||('Gift card '+r.codigo))+' · sin valor registrado');
+        setModo('manual',{silent:true});
+        return;
+      }
+      if(!(saldo>0)){ pintarHint(false,'Esa gift card no tiene saldo'); hit=null; pintarModos(); return; }
       pintarHint(true,(r.etiqueta||('Gift card '+r.codigo))+' · saldo $'+saldo.toFixed(2));
+      if(modo==='automatico'&&inpM&&document.activeElement!==inpM) inpM.value=Math.min(saldo,bruto).toFixed(2);
+      pintarModos();
     });
   }
   var tBus;
   if(inpC){ inpC.addEventListener('input',function(){ clearTimeout(tBus); tBus=setTimeout(buscar,280); }); setTimeout(function(){ inpC.focus(); },50); }
+  var bAuto=document.getElementById('gc-val-auto'), bMan=document.getElementById('gc-val-manual');
+  if(bAuto) bAuto.onclick=function(){ setModo('automatico'); };
+  if(bMan) bMan.onclick=function(){ setModo('manual'); };
   ov.addEventListener('click',function(e){ if(e.target===ov) _gcCruzarCerrar(); });
   ov.querySelectorAll('.gc-cruzar-x').forEach(function(b){ b.onclick=function(){ _gcCruzarCerrar(); }; });
+  pintarModos();
   var ok=document.getElementById('gc-cruzar-ok');
   if(ok) ok.onclick=function(){
     var codigo=(inpC&&inpC.value||'').trim();
-    var monto=Number(inpM&&inpM.value);
     if(!codigo){ toast('Escribe el código de la gift card','#B86B6B'); return; }
     function go(r){
       if(!r){ toast('Gift card no encontrada','#B86B6B'); return; }
       if(r.usado){ toast('Esa gift card ya está usada','#B86B6B'); return; }
-      var saldo=Number(r.saldo); if(!isFinite(saldo)||saldo<0) saldo=0;
-      if(!(saldo>0)){ toast('Esa gift card no tiene saldo','#B86B6B'); return; }
-      if(!(monto>0)) monto=Math.min(saldo,bruto);
-      if(monto-saldo>0.009){ toast('El saldo de la gift es $'+saldo.toFixed(2),'#B86B6B'); return; }
-      if(monto-bruto>0.009){ toast('El monto no puede ser mayor a la línea ($'+bruto.toFixed(2)+')','#B86B6B'); return; }
-      if(_gcCruzarAplicar(sku,r.codigo||codigo,monto,r.etiqueta||'')) _gcCruzarCerrar();
+      var saldo=_gcSaldoConocido(r);
+      var sin=_gcSinValorRegistrado(r);
+      if(!sin && !(saldo>0)){ toast('Esa gift card no tiene saldo','#B86B6B'); return; }
+      var valor, monto;
+      if(modo==='automatico'){
+        if(!(saldo>0)){ toast('Esta gift no tiene un valor registrado. Elige Manual y escribe el monto.','#C9A227'); setModo('manual'); return; }
+        valor=saldo;
+        monto=Math.min(saldo,bruto);
+      } else {
+        valor=Math.round(Number(inpM&&inpM.value)*100)/100;
+        if(!(valor>0)){ toast('Escribe el valor de la gift card','#B86B6B'); return; }
+        if(saldo>0 && valor-saldo>0.009){ toast('El monto no puede ser mayor al saldo restante ($'+saldo.toFixed(2)+')','#B86B6B'); return; }
+        monto=Math.min(valor,bruto);
+      }
+      if(!(monto>0)){ toast('Indica el monto a cruzar','#B86B6B'); return; }
+      if(_gcCruzarAplicar(sku,r.codigo||codigo,monto,r.etiqueta||'',modo,valor)) _gcCruzarCerrar();
     }
     if(hit&&String(hit.codigo).toLowerCase()===codigo.toLowerCase()) go(hit);
     else _gcBuscarCodigo(codigo).then(go);
